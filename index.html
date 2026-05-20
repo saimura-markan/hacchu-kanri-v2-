@@ -1,0 +1,4320 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>E-Li 工事 受発注システム</title>
+  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"
+    onerror="showLoadError('React')"></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"
+    onerror="showLoadError('ReactDOM')"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.6/babel.min.js"
+    onerror="showLoadError('Babel')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+    onerror="showLoadError('Supabase')"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f0f4f9; }
+    ::-webkit-scrollbar-thumb { background: #c0cce0; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="loading-screen" style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#0a1f5c;">
+      <div style="text-align:center">
+        <div style="font-size:36px;margin-bottom:16px">⚙️</div>
+        <div style="font-size:18px;font-weight:700">システムを読み込み中...</div>
+        <div style="font-size:13px;color:#8a9cc5;margin-top:8px">インターネット接続が必要です</div>
+        <div id="error-msg" style="display:none;margin-top:20px;padding:16px;background:#fff0f0;border:2px solid #e63946;border-radius:8px;color:#e63946;font-size:14px;max-width:400px;text-align:left;white-space:pre-wrap;"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function showLoadError(lib) {
+      document.getElementById('error-msg').style.display = 'block';
+      document.getElementById('error-msg').textContent =
+        '❌ ' + lib + ' の読み込みに失敗しました。\n\n' +
+        'インターネット接続を確認してください。\n' +
+        'またはブラウザのキャッシュをクリアして再試行してください。';
+    }
+    window.onerror = function(msg, src, line, col, err) {
+      var el = document.getElementById('error-msg');
+      if (el) {
+        el.style.display = 'block';
+        el.textContent = '❌ JavaScriptエラー:\n' + msg + '\n(行: ' + line + ')';
+      }
+    };
+    // Timeout: if React doesn't render in 30s, show error
+    setTimeout(function() {
+      var root = document.getElementById('root');
+      var loading = document.getElementById('loading-screen');
+      if (loading && loading.style.display !== 'none') {
+        var el = document.getElementById('error-msg');
+        if (el) {
+          el.style.display = 'block';
+          el.textContent = '❌ タイムアウト: スクリプトの読み込みに失敗した可能性があります。\nブラウザのコンソール(F12)でエラーを確認してください。';
+        }
+      }
+    }, 30000);
+  </script>
+  <script id="jsx-source" type="text/jsx-source">
+    const { useState, useRef, useEffect } = React;
+
+    // ── Supabase 初期化 ─────────────────────────────────────
+    const SUPABASE_URL      = 'https://wxjmqrxaqrujsvgzknwy.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_JYkjSrSixBp9jquMeq6hKw_YMwwiDSx';
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ── テスト用ダミーアカウント ────────────────────────────
+    const TEST_USERS = [
+      { email: "admin@test.com", password: "1234", role: "admin" },
+      { email: "user@test.com",  password: "1234", role: "user"  },
+    ];
+
+    // ── 画像パス ────────────────────────────────────────────
+    const ELI_IMG  = "./eli_img.png";
+    const LOGO_IMG = "./logo_img.png";
+
+    // ── 共有カラーパレット ──────────────────────────────────
+    const C = {
+      navy:    "#0a1f5c",
+      navyMid: "#1a3a8f",
+      blue:    "#2952c8",
+      blueL:   "#eef3ff",
+      yellow:  "#f5c800",
+      white:   "#ffffff",
+      bg:      "#f4f7ff",
+      gray:    "#8a9cc5",
+      grayL:   "#e4e9f5",
+      grayPale:"#f4f7ff",
+      red:     "#e63946",
+      green:   "#2eaa72",
+      orange:  "#f07800",
+      sidebar: "#0d2260",
+    };
+
+    // ═══════════════════════════════════════════════════════
+    // ログイン画面
+    // ═══════════════════════════════════════════════════════
+
+// ── E-Liロゴ（SVG） ──────────────────────────────────────
+function EliLogo({ height = 32 }) {
+  return (
+    <svg height={height} viewBox="0 0 130 44" style={{ display: "block" }}>
+      {/* スピードライン */}
+      <line x1="0" y1="20" x2="20" y2="16" stroke={C.white} strokeWidth="2.5" opacity="0.8" strokeLinecap="round"/>
+      <line x1="0" y1="25" x2="17" y2="22" stroke={C.white} strokeWidth="1.8" opacity="0.55" strokeLinecap="round"/>
+      <line x1="0" y1="30" x2="14" y2="28" stroke={C.white} strokeWidth="1.2" opacity="0.35" strokeLinecap="round"/>
+      {/* E-Li テキスト */}
+      <text x="24" y="36" fontSize="32" fontWeight="900" fill={C.white}
+        fontFamily="'Arial Black','Impact',sans-serif" letterSpacing="-1">E-Li</text>
+      {/* スピード弧 */}
+      <path d="M 54 5 Q 108 1 120 22 Q 108 40 92 40"
+        stroke={C.white} strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.9"/>
+    </svg>
+  );
+}
+
+// ── イーライくん（SVG） ──────────────────────────────────
+function EliSVG({ size = 56 }) {
+  return (
+    <svg viewBox="0 0 80 90" width={size} height={size * 1.1} style={{ display:"block" }}>
+      <line x1="40" y1="6" x2="40" y2="16" stroke={C.navyMid} strokeWidth="3" strokeLinecap="round"/>
+      <circle cx="40" cy="4" r="4" fill={C.navyMid}/>
+      <circle cx="40" cy="4" r="2" fill={C.yellow}/>
+      <ellipse cx="40" cy="36" rx="26" ry="24" fill={C.navyMid}/>
+      <ellipse cx="40" cy="36" rx="20" ry="18" fill={C.navy}/>
+      <ellipse cx="30" cy="33" rx="5" ry="6" fill="#87ceeb"/>
+      <ellipse cx="50" cy="33" rx="5" ry="6" fill="#87ceeb"/>
+      <ellipse cx="30" cy="32" rx="3" ry="4" fill="white"/>
+      <ellipse cx="50" cy="32" rx="3" ry="4" fill="white"/>
+      <path d="M28 44 Q40 52 52 44" stroke={C.yellow} strokeWidth="2.5" fill="none" strokeLinecap="round"/>
+      <circle cx="22" cy="42" r="3.5" fill="#ff8fab" opacity="0.6"/>
+      <circle cx="58" cy="42" r="3.5" fill="#ff8fab" opacity="0.6"/>
+      <ellipse cx="14" cy="36" rx="5" ry="6" fill={C.navyMid}/>
+      <ellipse cx="66" cy="36" rx="5" ry="6" fill={C.navyMid}/>
+      <rect x="20" y="58" width="40" height="24" rx="12" fill={C.navyMid}/>
+      <rect x="26" y="63" width="28" height="14" rx="7" fill={C.navy}/>
+      <text x="40" y="74" textAnchor="middle" fontSize="7" fontWeight="bold"
+        fill={C.yellow} fontFamily="sans-serif">E-Li</text>
+      <rect x="24" y="79" width="12" height="9" rx="5" fill={C.navyMid}/>
+      <rect x="44" y="79" width="12" height="9" rx="5" fill={C.navyMid}/>
+    </svg>
+  );
+}
+
+// ── 共通コンポーネント ───────────────────────────────────
+function TextInput({ type = "text", value, onChange, placeholder, error }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input
+      type={type} value={value} onChange={onChange} placeholder={placeholder}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      style={{
+        width: "100%", fontSize: 18, padding: "15px 18px",
+        borderRadius: 14, border: `2px solid ${error ? C.red : focused ? C.blue : C.grayL}`,
+        boxSizing: "border-box", fontFamily: "inherit", outline: "none",
+        background: focused ? "#f0f5ff" : C.white, color: C.navy,
+        boxShadow: focused ? "0 0 0 4px rgba(41,82,200,0.08)" : "none",
+        transition: "all 0.2s",
+      }}
+    />
+  );
+}
+
+function PwInput({ value, onChange, error }) {
+  const [show, setShow] = useState(false);
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ position: "relative" }}>
+      <input
+        type={show ? "text" : "password"} value={value} onChange={onChange}
+        placeholder="パスワードを入力"
+        onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+        style={{
+          width: "100%", fontSize: 18, padding: "15px 52px 15px 18px",
+          borderRadius: 14, border: `2px solid ${error ? C.red : focused ? C.blue : C.grayL}`,
+          boxSizing: "border-box", fontFamily: "inherit", outline: "none",
+          background: focused ? "#f0f5ff" : C.white, color: C.navy,
+          boxShadow: focused ? "0 0 0 4px rgba(41,82,200,0.08)" : "none",
+          transition: "all 0.2s",
+        }}
+      />
+      <button onClick={() => setShow(s => !s)} style={{
+        position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)",
+        background: "none", border: "none", cursor: "pointer", fontSize: 20, color: C.gray,
+      }}>
+        {show ? "🙈" : "👁️"}
+      </button>
+    </div>
+  );
+}
+
+function FieldWrap({ label, error, children }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: C.navy, marginBottom: 8 }}>{label}</div>
+      {children}
+      {error && <div style={{ color: C.red, fontSize: 13, marginTop: 6 }}>⚠️ {error}</div>}
+    </div>
+  );
+}
+
+function PrimaryBtn({ children, onClick, disabled, color }) {
+  const [hov, setHov] = useState(false);
+  const bg = disabled ? "#b0bec5"
+    : color === "green" ? C.green
+    : `linear-gradient(135deg, ${C.blue}, ${C.navy})`;
+  return (
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        display: "block", width: "100%", background: bg,
+        color: C.white, border: "none", borderRadius: 14,
+        fontSize: 18, fontWeight: 800, padding: "18px 0",
+        cursor: disabled ? "not-allowed" : "pointer", letterSpacing: 0.5,
+        fontFamily: "inherit",
+        boxShadow: disabled ? "none" : hov ? "0 8px 24px rgba(10,31,92,0.3)" : "0 4px 16px rgba(10,31,92,0.2)",
+        transform: hov && !disabled ? "translateY(-1px)" : "translateY(0)",
+        transition: "all 0.2s",
+      }}>
+      {children}
+    </button>
+  );
+}
+
+function TextLink({ children, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      background: "none", border: "none", color: C.blue,
+      fontSize: 14, fontWeight: 700, cursor: "pointer", textDecoration: "underline",
+      fontFamily: "inherit",
+    }}>
+      {children}
+    </button>
+  );
+}
+
+// ── ヘッダー ─────────────────────────────────────────────
+function Header({ title = "ログイン" }) {
+  return (
+    <div style={{
+      background: `linear-gradient(135deg, ${C.navy} 0%, ${C.navyMid} 100%)`,
+      padding: "14px 20px",
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      boxShadow: "0 2px 12px rgba(10,31,92,0.25)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <EliLogo height={30} />
+        <div>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.55)", letterSpacing: "1px" }}>工事 受発注システム</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>{title}</div>
+        </div>
+      </div>
+      <EliSVG size={40} />
+    </div>
+  );
+}
+
+// ── ログイン画面 ─────────────────────────────────────────
+function LoginScreen({ onLogin, onRegister, onForgot }) {
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors]     = useState({});
+
+  const handleLogin = () => {
+    const errs = {};
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "正しいメールアドレスを入力してください";
+    if (!password) errs.password = "パスワードを入力してください";
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    const matched = TEST_USERS.find(u => u.email === email.toLowerCase() && u.password === password);
+    if (!matched) { setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
+    onLogin(email, matched.role);
+  };
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <Header title="ログイン" />
+
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 16px 40px" }}>
+        <div style={{ background: C.white, borderRadius: 20, padding: "32px 28px",
+          boxShadow: "0 4px 24px rgba(10,31,92,0.08)", border: `1px solid ${C.grayL}` }}>
+
+          {/* タイトル */}
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.navy, marginBottom: 4 }}>ログイン</div>
+            <div style={{ fontSize: 14, color: C.gray }}>メールアドレスとパスワードを入力してください</div>
+          </div>
+
+          <FieldWrap label="📧 メールアドレス" error={errors.email}>
+            <TextInput type="email" value={email} placeholder="例：tanaka@example.com" error={errors.email}
+              onChange={e => { setEmail(e.target.value); setErrors(er => ({ ...er, email: "" })); }} />
+          </FieldWrap>
+
+          <FieldWrap label="🔑 パスワード" error={errors.password}>
+            <PwInput value={password} error={errors.password}
+              onChange={e => { setPassword(e.target.value); setErrors(er => ({ ...er, password: "" })); }} />
+          </FieldWrap>
+
+          <div style={{ textAlign: "right", marginBottom: 24, marginTop: -8 }}>
+            <TextLink onClick={onForgot}>パスワードをわすれた方はこちら</TextLink>
+          </div>
+
+          <PrimaryBtn onClick={handleLogin}>ログイン →</PrimaryBtn>
+
+          <div style={{ textAlign: "center", marginTop: 24 }}>
+            <div style={{ fontSize: 14, color: C.gray, marginBottom: 10 }}>
+              はじめてご利用の方は
+            </div>
+            <TextLink onClick={onRegister}>新規アカウントを作成する</TextLink>
+          </div>
+        </div>
+
+        {/* フッター */}
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: C.gray,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          🔒 SSL暗号化通信で保護されています
+        </div>
+
+        <div style={{ marginTop: 20, background: `linear-gradient(135deg,${C.navy},${C.navyMid})`,
+          borderRadius: 16, padding: "16px 20px",
+          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>E-Li Service Desk</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.white }}>06-6392-3882</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>平日 9:00〜18:00</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={{ background: C.yellow, borderRadius: 8, padding: "5px 12px",
+              fontSize: 12, fontWeight: 800, color: C.navy }}>LINE・Web対応</div>
+            <EliSVG size={40} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── パスワードリセット ───────────────────────────────────
+function ForgotScreen({ onBack }) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent]   = useState(false);
+
+  return (
+    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <Header title="パスワードのリセット" />
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 16px 40px" }}>
+        <div style={{ background: C.white, borderRadius: 20, padding: "32px 28px",
+          boxShadow: "0 4px 24px rgba(10,31,92,0.08)", border: `1px solid ${C.grayL}` }}>
+          {!sent ? (
+            <>
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ fontSize: 44, marginBottom: 10 }}>📧</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.navy, marginBottom: 6 }}>パスワードのリセット</div>
+                <div style={{ fontSize: 14, color: C.gray, lineHeight: 1.8 }}>
+                  登録済みのメールアドレスに<br />リセット用リンクを送ります
+                </div>
+              </div>
+              <FieldWrap label="📧 メールアドレス">
+                <TextInput type="email" value={email} placeholder="例：tanaka@example.com"
+                  onChange={e => setEmail(e.target.value)} />
+              </FieldWrap>
+              <div style={{ marginBottom: 12 }}>
+                <PrimaryBtn onClick={() => setSent(true)}>リセットメールを送る</PrimaryBtn>
+              </div>
+              <div style={{ textAlign: "center", marginTop: 16 }}>
+                <TextLink onClick={onBack}>← ログイン画面にもどる</TextLink>
+              </div>
+            </>
+          ) : (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div style={{ fontSize: 52, marginBottom: 14 }}>✅</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.navy, marginBottom: 10 }}>送信しました！</div>
+              <div style={{ fontSize: 15, color: C.gray, lineHeight: 1.9, marginBottom: 28,
+                background: C.bg, borderRadius: 12, padding: "14px" }}>
+                <b style={{ color: C.blue }}>{email}</b> に<br />
+                パスワードリセット用のリンクを送りました
+              </div>
+              <PrimaryBtn onClick={onBack}>ログイン画面にもどる</PrimaryBtn>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ── メイン ───────────────────────────────────────────────
+function LoginApp({ onLogin, onRegister }) {
+  const [screen, setScreen] = useState("login");
+  if (screen === "login")  return <LoginScreen
+    onLogin={(email, role) => onLogin(role)}
+    onRegister={onRegister}
+    onForgot={() => setScreen("forgot")} />;
+  if (screen === "forgot") return <ForgotScreen onBack={() => setScreen("login")} />;
+  return <LoginScreen
+    onLogin={(email, role) => onLogin(role)}
+    onRegister={onRegister}
+    onForgot={() => setScreen("forgot")} />;
+}
+
+    // ═══════════════════════════════════════════════════════
+    // 新規登録画面
+    // ═══════════════════════════════════════════════════════
+
+function RgTopBar() {
+  return (
+    <div style={{ padding:"28px 24px 20px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+      <img src={LOGO_IMG} alt="E-Li" style={{ height:60, width:"auto", objectFit:"contain" }} />
+      <div style={{ textAlign:"right" }}>
+        <div style={{ fontSize:12, color:C.gray, marginBottom:2 }}>工事 受発注システム</div>
+        <div style={{ fontSize:17, fontWeight:900, color:C.navy, lineHeight:1.4 }}>
+          現場を、もっと速く、<br />もっと確実に。
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EliRow({ children }) {
+  return (
+    <div style={{ padding:"24px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:20 }}>
+      <img src={ELI_IMG} alt="イーライくん" style={{ width:90, height:"auto",
+        animation:"eliFloat 3s ease-in-out infinite",
+        filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
+      <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
+        padding:"14px 18px", fontSize:16, color:C.navy, fontWeight:700,
+        lineHeight:1.8, border:"1px solid "+C.grayL }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RgTextInput({ type, value, onChange, placeholder, error, maxLength }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input type={type||"text"} value={value} onChange={onChange}
+      placeholder={placeholder} maxLength={maxLength}
+      onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
+      style={{ width:"100%", fontSize:17, padding:"15px 18px", borderRadius:12,
+        border:"2px solid "+(error?"#e63946":focused?"#2952c8":C.grayL),
+        boxSizing:"border-box", fontFamily:"inherit", outline:"none",
+        background:focused?"#f0f5ff":C.white, color:C.navy,
+        boxShadow:focused?"0 0 0 4px rgba(41,82,200,0.08)":"none",
+        transition:"all 0.2s" }} />
+  );
+}
+
+function RgPwInput({ value, onChange, error, placeholder }) {
+  const [show, setShow] = useState(false);
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ position:"relative" }}>
+      <input type={show?"text":"password"} value={value} onChange={onChange}
+        placeholder={placeholder||"パスワードを入力"}
+        onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
+        style={{ width:"100%", fontSize:17, padding:"15px 52px 15px 18px", borderRadius:12,
+          border:"2px solid "+(error?"#e63946":focused?"#2952c8":C.grayL),
+          boxSizing:"border-box", fontFamily:"inherit", outline:"none",
+          background:focused?"#f0f5ff":C.white, color:C.navy,
+          boxShadow:focused?"0 0 0 4px rgba(41,82,200,0.08)":"none",
+          transition:"all 0.2s" }} />
+      <button onClick={()=>setShow(s=>!s)} style={{ position:"absolute", right:14,
+        top:"50%", transform:"translateY(-50%)", background:"none", border:"none",
+        cursor:"pointer", fontSize:20, color:C.gray }}>
+        {show?"🙈":"👁️"}
+      </button>
+    </div>
+  );
+}
+
+function RgField({ label, error, hint, children }) {
+  return (
+    <div style={{ marginBottom:18 }}>
+      <div style={{ fontSize:15, fontWeight:700, color:C.navy, marginBottom:7 }}>{label}</div>
+      {children}
+      {hint && !error && <div style={{ fontSize:12, color:C.gray, marginTop:5 }}>{hint}</div>}
+      {error && <div style={{ color:C.red, fontSize:13, marginTop:5 }}>⚠️ {error}</div>}
+    </div>
+  );
+}
+
+function RgPrimaryBtn({ children, onClick, disabled }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ display:"block", width:"100%",
+        background:disabled?"#b0bec5":"linear-gradient(135deg,#2952c8,#0a1f5c)",
+        color:C.white, border:"none", borderRadius:14,
+        fontSize:18, fontWeight:800, padding:"18px 0",
+        cursor:disabled?"not-allowed":"pointer", fontFamily:"inherit",
+        boxShadow:disabled?"none":hov?"0 8px 24px rgba(10,31,92,0.35)":"0 4px 16px rgba(10,31,92,0.2)",
+        transform:hov&&!disabled?"translateY(-1px)":"translateY(0)",
+        transition:"all 0.2s" }}>
+      {children}
+    </button>
+  );
+}
+
+function RgSubBtn({ children, onClick }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ display:"block", width:"100%",
+        background:hov?"#f0f5ff":C.white, color:C.navy,
+        border:"2px solid "+C.grayL, borderRadius:14,
+        fontSize:16, fontWeight:700, padding:"16px 0",
+        cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s" }}>
+      {children}
+    </button>
+  );
+}
+
+function PwStrength({ pw }) {
+  if (!pw) return null;
+  let score = 0;
+  if (pw.length>=8) score++; if (pw.length>=12) score++;
+  if (/[A-Z]/.test(pw)) score++; if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  const lv = score<=1?{label:"弱い",color:"#e63946",w:"20%"}
+    :score<=3?{label:"ふつう",color:"#f07800",w:"60%"}
+    :{label:"強い 💪",color:C.green,w:"100%"};
+  return (
+    <div style={{ marginTop:8 }}>
+      <div style={{ height:5, background:"#e8edf8", borderRadius:99, overflow:"hidden" }}>
+        <div style={{ height:"100%", width:lv.w, background:lv.color, borderRadius:99, transition:"width 0.3s" }}/>
+      </div>
+      <div style={{ fontSize:12, color:lv.color, marginTop:4, fontWeight:700 }}>強度：{lv.label}</div>
+    </div>
+  );
+}
+
+function RgStepBar({ step }) {
+  const steps = ["企業ID確認","個人情報入力","完了"];
+  return (
+    <div style={{ display:"flex", alignItems:"center", padding:"14px 24px",
+      borderBottom:"1px solid "+C.grayL }}>
+      {steps.map((s,i)=>(
+        <div key={i} style={{ display:"flex", alignItems:"center", flex:1 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, flex:1 }}>
+            <div style={{ width:28, height:28, borderRadius:"50%", flexShrink:0,
+              background:i<step?C.green:i===step?C.blue:C.grayL,
+              color:i<=step?C.white:C.gray,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:13, fontWeight:800, transition:"all 0.3s" }}>
+              {i<step?"✓":i+1}
+            </div>
+            <span style={{ fontSize:12, color:i===step?C.navy:C.gray,
+              fontWeight:i===step?700:400 }}>{s}</span>
+          </div>
+          {i<steps.length-1 && (
+            <div style={{ flex:1, height:2, background:i<step?C.blue:C.grayL,
+              margin:"0 4px", transition:"background 0.3s" }}/>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── STEP 1: 企業ID入力 ──────────────────────────────────
+function Step1({ companyId, setCompanyId, onNext }) {
+  const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [verified, setVerified] = useState(false);
+
+  // モック企業データ
+  const COMPANIES = {
+    "ELI-1001": "株式会社山田工務店",
+    "ELI-1002": "有限会社佐藤建設",
+    "ELI-1003": "田中リフォーム株式会社",
+  };
+
+  const handleCheck = () => {
+    if (!companyId.trim()) { setError("企業IDを入力してください"); return; }
+    if (!/^ELI-\d{4}$/.test(companyId.toUpperCase())) {
+      setError("企業IDの形式が正しくありません（例：ELI-1001）"); return;
+    }
+    setChecking(true);
+    setTimeout(()=>{
+      setChecking(false);
+      const company = COMPANIES[companyId.toUpperCase()];
+      if (company) { setVerified(true); setError(""); }
+      else { setError("企業IDが見つかりません。担当者にご確認ください。"); }
+    }, 800);
+  };
+
+  const company = COMPANIES[companyId.toUpperCase()];
+
+  return (
+    <div style={{ padding:"0 24px 28px" }}>
+      <div style={{ background:"#f0f7ff", borderRadius:14, padding:"16px",
+        marginBottom:20, border:"1px solid #c5d8f5" }}>
+        <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:6 }}>
+          📋 企業IDについて
+        </div>
+        <div style={{ fontSize:13, color:"#444", lineHeight:1.9 }}>
+          担当者より発行された<b>企業ID</b>を入力してください。<br />
+          企業IDは <b style={{color:C.blue}}>ELI-XXXX</b> の形式です。
+        </div>
+      </div>
+
+      <RgField label="🏢 企業ID" error={error}
+        hint="例：ELI-1001　（担当者より発行されたIDを入力）">
+        <div style={{ display:"flex", gap:8 }}>
+          <div style={{ flex:1 }}>
+            <RgTextInput value={companyId}
+              onChange={e=>{ setCompanyId(e.target.value.toUpperCase()); setError(""); setVerified(false); }}
+              placeholder="ELI-1001" maxLength={8} error={error} />
+          </div>
+          <button onClick={handleCheck} style={{
+            background: verified?C.green:C.blue, color:C.white, border:"none",
+            borderRadius:12, padding:"0 16px", fontSize:14, fontWeight:700,
+            cursor:"pointer", whiteSpace:"nowrap", flexShrink:0,
+            transition:"background 0.2s" }}>
+            {checking?"確認中...":verified?"✓ 確認済":"確認する"}
+          </button>
+        </div>
+      </RgField>
+
+      {verified && company && (
+        <div style={{ background:"#f0faf5", border:"2px solid "+C.green,
+          borderRadius:14, padding:"16px 18px", marginBottom:20 }}>
+          <div style={{ fontSize:13, color:C.green, fontWeight:700, marginBottom:4 }}>
+            ✅ 企業IDを確認しました
+          </div>
+          <div style={{ fontSize:17, fontWeight:800, color:C.navy }}>{company}</div>
+          <div style={{ fontSize:13, color:C.gray, marginTop:2 }}>この企業に登録します</div>
+        </div>
+      )}
+
+      <RgPrimaryBtn onClick={()=>{ if(verified) onNext(); else handleCheck(); }}
+        disabled={!verified}>
+        つぎへ → 個人情報の入力
+      </RgPrimaryBtn>
+    </div>
+  );
+}
+
+// ── STEP 2: 個人情報入力 ────────────────────────────────
+function Step2({ data, setData, companyId, onNext, onBack }) {
+  const [errors, setErrors] = useState({});
+
+  const COMPANIES = {
+    "ELI-1001": "株式会社山田工務店",
+    "ELI-1002": "有限会社佐藤建設",
+    "ELI-1003": "田中リフォーム株式会社",
+  };
+  const company = COMPANIES[companyId] || "";
+  const pw = data.password || "";
+
+  const validate = () => {
+    const e = {};
+    if (!data.name.trim())  e.name = "氏名を入力してください";
+    if (!/^[\d\-]{10,13}$/.test((data.phone||"").replace(/\s/g,"")))
+      e.phone = "正しい電話番号を入力してください";
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))
+      e.email = "正しいメールアドレスを入力してください";
+    if (pw.length < 8) e.password = "8文字以上で入力してください";
+    if (data.confirmPw !== pw) e.confirmPw = "パスワードが一致しません";
+    setErrors(e);
+    return !Object.keys(e).length;
+  };
+
+  const bind = (key) => ({
+    value: data[key]||"",
+    onChange: e => { setData(d=>({...d,[key]:e.target.value})); setErrors(er=>({...er,[key]:""})); },
+    error: errors[key],
+  });
+
+  return (
+    <div style={{ padding:"0 24px 28px" }}>
+
+      {/* 会社名表示 */}
+      <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+        borderRadius:12, padding:"12px 16px", marginBottom:20 }}>
+        <div style={{ fontSize:11, color:C.yellow, fontWeight:700, marginBottom:2 }}>登録先企業</div>
+        <div style={{ fontSize:16, fontWeight:800, color:C.white }}>{company}</div>
+        <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginTop:2 }}>企業ID：{companyId}</div>
+      </div>
+
+      <RgField label="👤 氏名" error={errors.name}>
+        <RgTextInput placeholder="例：田中 太郎" {...bind("name")} />
+      </RgField>
+
+      <RgField label="📱 携帯電話番号" error={errors.phone}
+        hint="ログイン時の確認に使用します">
+        <RgTextInput type="tel" placeholder="例：090-1234-5678" {...bind("phone")} />
+      </RgField>
+
+      <RgField label="📧 メールアドレス（ログインID）" error={errors.email}
+        hint="このメールアドレスがログインIDになります">
+        <RgTextInput type="email" placeholder="例：tanaka@example.com" {...bind("email")} />
+      </RgField>
+
+      <div style={{ background:"#f4f7ff", borderRadius:10, padding:"10px 14px",
+        marginBottom:14, fontSize:12, color:"#444", lineHeight:1.9,
+        border:"1px solid "+C.grayL }}>
+        🔑 パスワードの条件：8文字以上・英大文字・数字を含む
+      </div>
+
+      <RgField label="🔑 パスワード" error={errors.password}>
+        <RgPwInput value={pw}
+          onChange={e=>{ setData(d=>({...d,password:e.target.value})); setErrors(er=>({...er,password:""})); }}
+          error={errors.password} />
+        <PwStrength pw={pw} />
+      </RgField>
+
+      <RgField label="🔑 パスワード（確認）" error={errors.confirmPw}>
+        <RgPwInput value={data.confirmPw||""}
+          onChange={e=>{ setData(d=>({...d,confirmPw:e.target.value})); setErrors(er=>({...er,confirmPw:""})); }}
+          error={errors.confirmPw} placeholder="もう一度入力してください" />
+      </RgField>
+
+      <div style={{ marginBottom:12 }}>
+        <RgPrimaryBtn onClick={()=>{ if(validate()) onNext(); }}>
+          登録する →
+        </RgPrimaryBtn>
+      </div>
+      <RgSubBtn onClick={onBack}>← もどる</RgSubBtn>
+    </div>
+  );
+}
+
+// ── 完了画面 ─────────────────────────────────────────────
+function RgDone({ data, companyId, onDone }) {
+  const COMPANIES = {
+    "ELI-1001": "株式会社山田工務店",
+    "ELI-1002": "有限会社佐藤建設",
+    "ELI-1003": "田中リフォーム株式会社",
+  };
+  return (
+    <div style={{ padding:"24px", textAlign:"center" }}>
+      <img src={ELI_IMG} alt="イーライくん" style={{ width:110, height:"auto",
+        animation:"eliFloat 3s ease-in-out infinite",
+        filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", marginBottom:16 }} />
+      <div style={{ fontSize:24, fontWeight:800, color:C.navy, marginBottom:8 }}>
+        登録が完了しました！🎉
+      </div>
+      <div style={{ fontSize:14, color:C.gray, marginBottom:20 }}>
+        {data.name} さん、ご登録ありがとうございます
+      </div>
+
+      <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+        borderRadius:14, padding:"16px 20px", marginBottom:16, textAlign:"left" }}>
+        <div style={{ fontSize:11, color:C.yellow, fontWeight:700, marginBottom:6, letterSpacing:"1px" }}>
+          登録情報
+        </div>
+        {[
+          ["会社名", COMPANIES[companyId]],
+          ["氏名",   data.name],
+          ["メール（ログインID）", data.email],
+        ].map(([k,v])=>(
+          <div key={k} style={{ display:"flex", gap:10, padding:"6px 0",
+            borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
+            <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", minWidth:110, flexShrink:0 }}>{k}</div>
+            <div style={{ fontSize:14, fontWeight:700, color:C.white }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background:"#f0faf5", border:"2px solid "+C.green, borderRadius:14,
+        padding:"14px", marginBottom:24, fontSize:14, color:"#1a5c3a", lineHeight:1.9 }}>
+        📧 <b style={{color:C.blue}}>{data.email}</b> に<br />
+        本登録メールをお送りしました。<br />
+        メール内のリンクをクリックして<br />登録を完了してください。
+      </div>
+
+      <button onClick={onDone} style={{ display:"block", width:"100%",
+        background:"linear-gradient(135deg,#2952c8,#0a1f5c)",
+        color:C.white, border:"none", borderRadius:14,
+        fontSize:18, fontWeight:800, padding:"18px 0", cursor:"pointer" }}>
+        ログイン画面へ →
+      </button>
+    </div>
+  );
+}
+
+// ── メイン ───────────────────────────────────────────────
+function RegisterApp({ onDone, onBack }) {
+  const [step, setStep]           = useState(0);
+  const [done, setDone]           = useState(false);
+  const [companyId, setCompanyId] = useState("");
+  const [data, setData]           = useState({
+    name:"", phone:"", email:"", password:"", confirmPw:"",
+  });
+
+  const eliMsg = [
+    <>企業IDを入力してください😊<br /><span style={{fontSize:13,color:C.gray}}>担当者より発行されたIDです</span></>,
+    <>個人情報を入力してください🖊️</>,
+  ];
+
+  return (
+    <div style={{ background:C.bg, minHeight:"100vh",
+      fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <style>{`@keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}}`}</style>
+
+      <RgTopBar />
+
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"0 16px 40px" }}>
+        <div style={{ background:C.white, borderRadius:20,
+          boxShadow:"0 4px 24px rgba(10,31,92,0.10)", border:"1px solid "+C.grayL }}>
+
+          {!done ? (
+            <>
+              <EliRow>{eliMsg[step]}</EliRow>
+              <RgStepBar step={step} />
+              {step===0 && (
+                <Step1 companyId={companyId} setCompanyId={setCompanyId}
+                  onNext={()=>setStep(1)} />
+              )}
+              {step===1 && (
+                <Step2 data={data} setData={setData} companyId={companyId}
+                  onNext={()=>setDone(true)} onBack={()=>setStep(0)} />
+              )}
+            </>
+          ) : (
+            <>
+              <EliRow>登録ありがとうございます！🎉<br />メールをご確認ください</EliRow>
+              <RgDone data={data} companyId={companyId} onDone={onDone} />
+            </>
+          )}
+        </div>
+
+        {/* 下部 */}
+        <div style={{ background:C.white, borderRadius:16,
+          boxShadow:"0 2px 12px rgba(10,31,92,0.07)", border:"1px solid "+C.grayL,
+          display:"flex", overflow:"hidden", marginTop:16 }}>
+          <div style={{ flex:1, padding:"18px 16px", borderRight:"1px solid "+C.grayL }}>
+            <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>📞 電話受付</div>
+            <div style={{ fontSize:20, fontWeight:900, color:C.navy }}>06-6392-3882</div>
+            <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>平日 9:00〜18:00</div>
+          </div>
+          <div style={{ flex:1, padding:"18px 16px", display:"flex", flexDirection:"column",
+            alignItems:"center", justifyContent:"center", gap:4 }}>
+            <div style={{ position:"relative", width:52, height:52 }}>
+              <svg viewBox="0 0 52 52" width="52" height="52">
+                <circle cx="26" cy="26" r="23" fill="none" stroke="#2952c8" strokeWidth="2.5" opacity="0.25"/>
+                <circle cx="26" cy="26" r="23" fill="none" stroke="#2952c8" strokeWidth="2.5" strokeLinecap="round"/>
+                <path d="M 37 18 Q 42 26 37 34" stroke="#2952c8" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                <path d="M 35 32 L 37 34 L 39 32" stroke="#2952c8" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
+                justifyContent:"center", flexDirection:"column", lineHeight:1 }}>
+                <span style={{ fontSize:11, fontWeight:900, color:C.navy }}>24</span>
+                <span style={{ fontSize:9, color:C.blue, fontWeight:700 }}>/365</span>
+              </div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
+              <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ textAlign:"center", marginTop:14, fontSize:13, color:C.gray }}>
+          🔒 SSL暗号化通信で保護されています
+        </div>
+      </div>
+    </div>
+  );
+}
+
+    // ═══════════════════════════════════════════════════════
+    // 発注フォーム
+    // ═══════════════════════════════════════════════════════
+
+const SERVICES = [
+  { id:"yousei", label:"養生・家具移動・荷上", icon:"🛗", color:"#e8f4ff", border:"#90c8f0" },
+  { id:"kaitai", label:"解体",                 icon:"🏚️", color:"#fff3e8", border:"#f0b070" },
+  { id:"sanpai", label:"産廃",                 icon:"🚛", color:"#e8f8ee", border:"#70c890" },
+  { id:"souji",  label:"清掃・家具移動",        icon:"🧹", color:"#f3e8ff", border:"#b070e0" },
+];
+
+const TIME_OPTIONS = ['08:00', '08:15', '08:30', '08:45', '09:00', '09:15', '09:30', '09:45', '10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30', '11:45', '12:00', '12:15', '12:30', '12:45', '13:00', '13:15', '13:30', '13:45', '14:00', '14:15', '14:30', '14:45', '15:00', '15:15', '15:30', '15:45', '16:00', '16:15', '16:30', '16:45', '17:00', '17:15', '17:30', '17:45', '18:00', '18:15', '18:30', '18:45', '19:00', '19:15', '19:30', '19:45', '20:00', '20:15', '20:30', '20:45', '21:00', '21:15', '21:30', '21:45', '22:00'];
+const ASBESTOS_TYPES = ["キッチン","浴室","クッションフロア","その他"];
+
+// モック：過去の現場名リスト（本番はFirebaseから取得）
+const PAST_SITES = [
+  "〇〇マンション101号室",
+  "〇〇マンション202号室",
+  "△△ビル3F",
+  "□□邸リフォーム現場",
+  "◇◇新築工事現場",
+  "〇〇団地A棟",
+  "△△ホテル改装工事",
+  "□□医院内装工事",
+];
+
+// ── 現場名サジェスト入力 ─────────────────────────────────
+function SiteNameInput({ value, onChange, hasError }) {
+  const [focused,  setFocused]  = useState(false);
+  const [showList, setShowList] = useState(false);
+  const wrapRef = useRef(null);
+
+  const suggestions = value.length>0
+    ? PAST_SITES.filter(s=>s.includes(value) && s!==value)
+    : [];
+
+  useEffect(()=>{
+    const handler = e => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setShowList(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return ()=>document.removeEventListener("mousedown", handler);
+  },[]);
+
+  const handleSelect = site => {
+    onChange(site);
+    setShowList(false);
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position:"relative" }}>
+      <input
+        value={value}
+        onChange={e=>{ onChange(e.target.value); setShowList(true); }}
+        onFocus={()=>{ setFocused(true); setShowList(true); }}
+        onBlur={()=>setFocused(false)}
+        placeholder="例：〇〇マンション101号室"
+        style={{ width:"100%", fontSize:16, padding:"13px 16px", borderRadius:12,
+          border:"2px solid "+(hasError?C.red:focused?C.blue:C.grayL),
+          boxSizing:"border-box", fontFamily:"inherit", outline:"none", color:C.navy,
+          background:hasError?"#fff0f0":C.white,
+          boxShadow:focused?"0 0 0 4px rgba(41,82,200,0.08)":"none",
+          transition:"all 0.2s" }} />
+
+      {/* サジェストリスト */}
+      {showList && suggestions.length>0 && (
+        <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:100,
+          background:C.white, borderRadius:14, boxShadow:"0 8px 32px rgba(10,31,92,0.15)",
+          border:"2px solid "+C.blue, marginTop:4, overflow:"hidden" }}>
+          <div style={{ padding:"8px 14px 4px", fontSize:12, color:C.gray, fontWeight:600 }}>
+            📋 過去の現場名
+          </div>
+          {suggestions.map((s,i)=>(
+            <button key={i} onClick={()=>handleSelect(s)}
+              style={{ display:"block", width:"100%", padding:"12px 16px",
+                background:"none", border:"none", borderTop:i===0?"none":"1px solid "+C.grayL,
+                textAlign:"left", fontSize:16, color:C.navy, cursor:"pointer",
+                fontFamily:"inherit", fontWeight:500 }}
+              onMouseEnter={e=>{ e.currentTarget.style.background="#f0f5ff"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background="none"; }}>
+              🏢 {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 共通UI ──────────────────────────────────────────────
+function OrTopBar({ title }) {
+  return (
+    <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
+      padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
+      boxShadow:"0 2px 8px rgba(10,31,92,0.06)", position:"sticky", top:0, zIndex:50 }}>
+      <img src={LOGO_IMG} alt="E-Li" style={{ height:44, width:"auto", objectFit:"contain" }} />
+      <div style={{ textAlign:"right" }}>
+        <div style={{ fontSize:11, color:C.gray }}>工事 受発注システム</div>
+        <div style={{ fontSize:15, fontWeight:800, color:C.navy }}>{title}</div>
+      </div>
+    </div>
+  );
+}
+
+function EliTalk({ children, size=70 }) {
+  return (
+    <div style={{ display:"flex", alignItems:"flex-end", gap:12, margin:"16px 0 20px" }}>
+      <img src={ELI_IMG} style={{ width:size, height:"auto", flexShrink:0,
+        animation:"eliFloat 3s ease-in-out infinite",
+        filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.15))" }} />
+      <div style={{ background:C.grayPale, borderRadius:"4px 18px 18px 18px",
+        padding:"12px 16px", fontSize:15, color:C.navy, fontWeight:700,
+        lineHeight:1.8, border:"1px solid "+C.grayL, flex:1 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Card({ children, refProp }) {
+  return (
+    <div ref={refProp} style={{ background:C.white, borderRadius:18,
+      boxShadow:"0 2px 16px rgba(10,31,92,0.08)",
+      border:"1px solid "+C.grayL, marginBottom:14 }}>
+      {children}
+    </div>
+  );
+}
+
+function CardTitle({ icon, children }) {
+  return (
+    <div style={{ fontSize:15, fontWeight:800, color:C.navy,
+      borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px",
+      display:"flex", alignItems:"center", gap:8 }}>
+      <span style={{ fontSize:20 }}>{icon}</span>{children}
+    </div>
+  );
+}
+
+function SubSection({ title, children }) {
+  return (
+    <div style={{ background:"#f0f5ff", borderRadius:12, padding:"14px",
+      marginTop:10, border:"1px solid #c0d0f0" }}>
+      <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:10 }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function OrBigBtn({ children, onClick, disabled, color }) {
+  const [hov,setHov]=useState(false);
+  const bg=disabled?"#c8d0e0"
+    :color==="yellow"?"linear-gradient(135deg,#f5c800,#ffe033)"
+    :color==="green"?"linear-gradient(135deg,#2eaa72,#1a7a50)"
+    :"linear-gradient(135deg,#2952c8,#0a1f5c)";
+  return (
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ display:"block", width:"100%", background:bg,
+        color:disabled?"#8a9cc5":color==="yellow"?C.navy:C.white,
+        border:"none", borderRadius:16, fontSize:18, fontWeight:900,
+        padding:"19px 0", cursor:disabled?"not-allowed":"pointer", fontFamily:"inherit",
+        boxShadow:disabled?"none":hov?"0 8px 24px rgba(10,31,92,0.3)":"0 4px 16px rgba(10,31,92,0.15)",
+        transform:hov&&!disabled?"translateY(-2px)":"translateY(0)",
+        transition:"all 0.2s" }}>
+      {children}
+    </button>
+  );
+}
+
+function OrSubBtn({ children, onClick }) {
+  return (
+    <button onClick={onClick}
+      style={{ display:"block", width:"100%", background:C.white, color:C.navy,
+        border:"2px solid "+C.grayL, borderRadius:14, fontSize:16, fontWeight:700,
+        padding:"15px 0", cursor:"pointer", fontFamily:"inherit", marginTop:10 }}>
+      {children}
+    </button>
+  );
+}
+
+function CheckBox({ label, checked, onChange, warn, small }) {
+  return (
+    <label style={{ display:"flex", alignItems:"center", gap:10,
+      padding:small?"8px 0":"11px 0", borderBottom:"1px solid "+C.grayL, cursor:"pointer" }}>
+      <div style={{ width:small?22:26, height:small?22:26, borderRadius:6, flexShrink:0,
+        border:"2px solid "+(checked?(warn?C.red:C.blue):(warn?"#f5c842":C.grayL)),
+        background:checked?(warn?C.red:C.blue):C.white,
+        display:"flex", alignItems:"center", justifyContent:"center", transition:"all 0.15s" }}>
+        {checked && <span style={{ color:C.white, fontSize:small?13:16, fontWeight:900 }}>✓</span>}
+      </div>
+      <input type="checkbox" checked={checked} onChange={onChange} style={{ display:"none" }}/>
+      <span style={{ fontSize:small?15:17, color:checked&&warn?C.red:C.navy,
+        fontWeight:checked?700:500 }}>{label}</span>
+    </label>
+  );
+}
+
+function RadioGroup({ options, value, onChange, cols }) {
+  return (
+    <div style={{ display:cols?"grid":"flex", gridTemplateColumns:cols?"1fr 1fr":undefined,
+      flexWrap:cols?undefined:"wrap", gap:8 }}>
+      {options.map(opt=>(
+        <button key={opt} onClick={()=>onChange(opt===value?"":opt)}
+          style={{ padding:"11px 14px", borderRadius:12, fontSize:14, fontWeight:700,
+            border:"2px solid "+(value===opt?C.blue:C.grayL),
+            background:value===opt?"#eef3ff":C.white,
+            color:value===opt?C.blue:C.navy, cursor:"pointer", transition:"all 0.15s",
+            textAlign:"left" }}>
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NumSelect({ label, value, onChange, max=10 }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 0",
+      borderBottom:"1px solid "+C.grayL }}>
+      <span style={{ fontSize:15, color:C.navy, fontWeight:600, flex:1 }}>{label}</span>
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <button onClick={()=>onChange(Math.max(0,value-1))}
+          style={{ width:34, height:34, borderRadius:"50%", border:"2px solid "+C.grayL,
+            background:C.white, fontSize:20, cursor:"pointer", display:"flex",
+            alignItems:"center", justifyContent:"center", color:C.navy, fontWeight:700 }}>−</button>
+        <span style={{ fontSize:20, fontWeight:800, color:C.navy, minWidth:28, textAlign:"center" }}>{value}</span>
+        <button onClick={()=>onChange(Math.min(max,value+1))}
+          style={{ width:34, height:34, borderRadius:"50%", border:"2px solid "+C.blue,
+            background:"#eef3ff", fontSize:20, cursor:"pointer", display:"flex",
+            alignItems:"center", justifyContent:"center", color:C.blue, fontWeight:700 }}>＋</button>
+      </div>
+    </div>
+  );
+}
+
+function WorkersSelect({ value, onChange, max=6 }) {
+  const opts = ["1人","2人","3人","4人","5人","6人以上"].slice(0,max);
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+      {opts.map(w=>(
+        <button key={w} onClick={()=>onChange(w)}
+          style={{ padding:"13px 6px", borderRadius:10, fontSize:15, fontWeight:800,
+            border:"2px solid "+(value===w?C.blue:C.grayL),
+            background:value===w?"#eef3ff":C.white,
+            color:value===w?C.blue:C.navy, cursor:"pointer" }}>
+          {w}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function TimeSelect({ value, onChange, label, hasError }) {
+  return (
+    <div style={{ flex:1 }}>
+      <div style={{ fontSize:13, color:hasError?C.red:C.gray, marginBottom:5, fontWeight:600 }}>
+        {label}{hasError?" ⚠️":""}
+      </div>
+      <select value={value} onChange={onChange}
+        style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:12,
+          border:"2px solid "+(hasError?C.red:C.grayL), fontFamily:"inherit", outline:"none",
+          background:hasError?"#fff0f0":C.white, color:C.navy, cursor:"pointer", transition:"all 0.2s" }}>
+        <option value="">選択</option>
+        {TIME_OPTIONS.map(t=><option key={t} value={t}>{t}</option>)}
+      </select>
+    </div>
+  );
+}
+
+function TextArea({ value, onChange, placeholder, rows=2, hasError }) {
+  const [f,setF]=useState(false);
+  return (
+    <textarea value={value} onChange={onChange} placeholder={placeholder} rows={rows}
+      onFocus={()=>setF(true)} onBlur={()=>setF(false)}
+      style={{ width:"100%", fontSize:15, padding:"12px 14px", borderRadius:12,
+        border:"2px solid "+(hasError?C.red:f?C.blue:C.grayL), boxSizing:"border-box",
+        fontFamily:"inherit", outline:"none", color:C.navy,
+        resize:"vertical", lineHeight:1.6, background:hasError?"#fff0f0":C.white,
+        boxShadow:f?"0 0 0 4px rgba(41,82,200,0.08)":"none", transition:"all 0.2s" }} />
+  );
+}
+
+function OrTxtInput({ value, onChange, placeholder, hasError }) {
+  const [f,setF]=useState(false);
+  return (
+    <input value={value} onChange={onChange} placeholder={placeholder}
+      onFocus={()=>setF(true)} onBlur={()=>setF(false)}
+      style={{ width:"100%", fontSize:16, padding:"13px 16px", borderRadius:12,
+        border:"2px solid "+(hasError?C.red:f?C.blue:C.grayL), boxSizing:"border-box",
+        fontFamily:"inherit", outline:"none", color:C.navy,
+        background:hasError?"#fff0f0":C.white,
+        boxShadow:f?"0 0 0 4px rgba(41,82,200,0.08)":"none", transition:"all 0.2s" }} />
+  );
+}
+
+// ── アスベスト共通 ───────────────────────────────────────
+function AsbestosDetail({ val, onChange }) {
+  const v=val||{types:[],other:""};
+  const toggle=t=>{
+    const arr=v.types.includes(t)?v.types.filter(x=>x!==t):[...v.types,t];
+    onChange({...v,types:arr});
+  };
+  return (
+    <SubSection title="⚠️ アスベスト箇所">
+      <div style={{ background:C.white, borderRadius:10, padding:"0 12px", border:"1px solid "+C.grayL, marginBottom:8 }}>
+        {ASBESTOS_TYPES.filter(t=>t!=="その他").map(t=>(
+          <CheckBox key={t} label={t} checked={v.types.includes(t)} onChange={()=>toggle(t)} small />
+        ))}
+        <CheckBox label="その他" checked={v.types.includes("その他")} onChange={()=>toggle("その他")} small />
+      </div>
+      {v.types.includes("その他") && (
+        <TextArea value={v.other||""} onChange={e=>onChange({...v,other:e.target.value})}
+          placeholder="その他の箇所を入力" rows={2} />
+      )}
+    </SubSection>
+  );
+}
+
+// ── 解体の詳細 ───────────────────────────────────────────
+function KaitaiDetail({ details, detail, onChange, showErrors }) {
+  const v=detail||{floorSize:"",days:"",offDays:"",asbestosDetail:null};
+  const u=p=>onChange({...v,...p});
+  const FLOOR_SIZES=["30㎡以下","30〜50㎡","50㎡以上"];
+  const hasFloor=details.includes("フロアめくり");
+  const hasAsbestos=details.includes("アスベストあり");
+  return (
+    <div>
+      <SubSection title="📅 工事日数 ※必須">
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8 }}>
+          {[1,2,3,4,5,6,7,8,9].map(n=>(
+            <button key={n} onClick={()=>u({days:String(n)})}
+              style={{ padding:"14px 8px", borderRadius:12, fontSize:18, fontWeight:800,
+                border:"2px solid "+(v.days===String(n)?C.blue:showErrors&&!v.days?C.red:C.grayL),
+                background:v.days===String(n)?"#eef3ff":showErrors&&!v.days?"#fff0f0":C.white,
+                color:v.days===String(n)?C.blue:C.navy, cursor:"pointer" }}>
+              {n}日
+            </button>
+          ))}
+        </div>
+        {showErrors&&!v.days&&<div style={{ color:C.red, fontSize:13, marginTop:6 }}>⚠️ 工事日数を選択してください</div>}
+      </SubSection>
+      <SubSection title="🚫 作業に入れない日 ※必須">
+        <div style={{ fontSize:13, color:C.gray, marginBottom:8, lineHeight:1.7 }}>例）土日祝・毎週水曜日・6月15日など</div>
+        <TextArea value={v.offDays||""} onChange={e=>u({offDays:e.target.value})}
+          placeholder="例：土日祝・毎週水曜日" rows={2} hasError={showErrors&&!v.offDays} />
+        {showErrors&&!v.offDays&&<div style={{ color:C.red, fontSize:13, marginTop:4 }}>⚠️ 作業に入れない日を入力してください</div>}
+      </SubSection>
+      {hasFloor&&(
+        <SubSection title="📐 フロアめくり - 面積">
+          <RadioGroup options={FLOOR_SIZES} value={v.floorSize||""} onChange={val=>u({floorSize:val})} cols />
+        </SubSection>
+      )}
+      {hasAsbestos&&(
+        <div style={{ marginTop:10 }}>
+          <AsbestosDetail val={v.asbestosDetail} onChange={val=>u({asbestosDetail:val})} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 産廃の詳細 ───────────────────────────────────────────
+function SanpaiDetail({ details, detail, onChange }) {
+  const v=detail||{wasteSize:"",wasteTypes:[],asbestosDetail:null,baccanType:"",haizaiHelper:""};
+  const u=p=>onChange({...v,...p});
+  const hasHaizai=details.includes("廃材回収");
+  const hasBackan=details.includes("バッカン");
+  const WASTE_SIZES=["1㎥以下","1〜3㎥","3〜5㎥","5㎥以上"];
+  const WASTE_TYPES=["キッチン","トイレ","洗面台","浴室","大工解体廃材","内装廃材","床材","梱包材","養生材（床養生はお値引き回収あり）","アスベストあり"];
+  const BACCAN_TYPES=["交換","新規設置","撤収"];
+  const toggleWaste=t=>{
+    const arr=v.wasteTypes.includes(t)?v.wasteTypes.filter(x=>x!==t):[...v.wasteTypes,t];
+    u({wasteTypes:arr});
+  };
+  const hasAsbestos=v.wasteTypes.includes("アスベストあり");
+  return (
+    <div>
+      {hasHaizai&&(
+        <>
+          <SubSection title="📦 廃材回収 - 廃材量">
+            <RadioGroup options={WASTE_SIZES} value={v.wasteSize||""} onChange={val=>u({wasteSize:val})} cols />
+          </SubSection>
+          <SubSection title="🗂️ 廃材内容">
+            <div style={{ background:C.white, borderRadius:10, padding:"0 12px", border:"1px solid "+C.grayL }}>
+              {WASTE_TYPES.map(t=>(
+                <CheckBox key={t} label={t} checked={v.wasteTypes.includes(t)}
+                  onChange={()=>toggleWaste(t)} small warn={t==="アスベストあり"} />
+              ))}
+            </div>
+            {hasAsbestos&&(
+              <AsbestosDetail val={v.asbestosDetail} onChange={val=>u({asbestosDetail:val})} />
+            )}
+          </SubSection>
+          {/* 搬出補助作業員あり・なし */}
+          <SubSection title="👷 搬出補助作業員">
+            <RadioGroup options={["搬出補助作業員あり","搬出補助作業員なし"]}
+              value={v.haizaiHelper||""} onChange={val=>u({haizaiHelper:val})} />
+          </SubSection>
+        </>
+      )}
+      {hasBackan&&(
+        <SubSection title="🗑️ バッカン">
+          <RadioGroup options={BACCAN_TYPES} value={v.baccanType||""} onChange={val=>u({baccanType:val})} />
+        </SubSection>
+      )}
+    </div>
+  );
+}
+
+// ── 清掃の詳細 ───────────────────────────────────────────
+function SoujiDetail({ details, detail, onChange }) {
+  const v=detail||{
+    kanyi_yousei:"",kanyi_heavy:"",kanyi_workers:"",
+    house_size:"",house_furniture:"",house_water:"",house_corner:false,house_vacancy:"",
+    ac_normal:0,ac_smart:0,ac_tencase:0,ac_tentsu:0,
+    ac_normal_model:"",ac_smart_model:"",
+    other_types:[],
+  };
+  const u=p=>onChange({...v,...p});
+  const hasKanyi=details.includes("簡易清掃・家具移動");
+  const hasHouse=details.includes("ハウスクリーニング");
+  const hasAC=details.includes("エアコンクリーニング");
+  const hasOther=details.includes("その他");
+  const HOUSE_SIZES=["30㎡以下","30〜60㎡","60〜80㎡","80〜100㎡","100㎡以上"];
+  const OTHER_ITEMS=["排水管洗浄","外壁洗浄","除菌作業","消臭作業","白木洗い","床洗浄ワックス","床剥離洗浄ワックス"];
+  const toggleOther=t=>{
+    const arr=v.other_types.includes(t)?v.other_types.filter(x=>x!==t):[...v.other_types,t];
+    u({other_types:arr});
+  };
+  return (
+    <div>
+      {hasKanyi&&(
+        <>
+          <SubSection title="🧹 簡易清掃・家具移動 - 養生撤去処分">
+            <RadioGroup options={["養生撤去処分あり","養生撤去処分なし"]}
+              value={v.kanyi_yousei||""} onChange={val=>u({kanyi_yousei:val})} />
+          </SubSection>
+          <SubSection title="🪑 家具移動 - 重量物">
+            <RadioGroup options={["重量物あり","重量物なし"]}
+              value={v.kanyi_heavy||""} onChange={val=>u({kanyi_heavy:val})} />
+          </SubSection>
+          <SubSection title="👷 作業者数（2人まで）">
+            <WorkersSelect value={v.kanyi_workers||""} onChange={val=>u({kanyi_workers:val})} max={2} />
+          </SubSection>
+        </>
+      )}
+      {hasHouse&&(
+        <>
+          <SubSection title="🏠 ハウスクリーニング - 広さ">
+            <RadioGroup options={HOUSE_SIZES} value={v.house_size||""} onChange={val=>u({house_size:val})} cols />
+          </SubSection>
+          <SubSection title="🪑 家具の有無">
+            <RadioGroup options={["家具あり","家具なし"]} value={v.house_furniture||""} onChange={val=>u({house_furniture:val})} />
+          </SubSection>
+          <SubSection title="🚿 水回り設備の入替状況">
+            <TextArea value={v.house_water||""} onChange={e=>u({house_water:e.target.value})}
+              placeholder="例：キッチン交換済み・浴室はそのまま" rows={2} />
+          </SubSection>
+          <SubSection title="📐 その他の条件">
+            <label style={{ display:"flex", alignItems:"center", gap:12, cursor:"pointer", marginBottom:10 }}>
+              <div style={{ width:24, height:24, borderRadius:6, flexShrink:0,
+                border:"2px solid "+(v.house_corner?C.blue:C.grayL), background:v.house_corner?C.blue:C.white,
+                display:"flex", alignItems:"center", justifyContent:"center" }}>
+                {v.house_corner&&<span style={{ color:C.white, fontSize:14, fontWeight:900 }}>✓</span>}
+              </div>
+              <input type="checkbox" checked={v.house_corner||false}
+                onChange={e=>u({house_corner:e.target.checked})} style={{ display:"none" }}/>
+              <span style={{ fontSize:15, color:C.navy, fontWeight:600 }}>角部屋</span>
+            </label>
+            <RadioGroup options={["空家","在宅"]} value={v.house_vacancy||""} onChange={val=>u({house_vacancy:val})} />
+          </SubSection>
+        </>
+      )}
+      {hasAC&&(
+        <SubSection title="❄️ エアコンクリーニング">
+          <NumSelect label="ノーマルエアコン"       value={v.ac_normal||0}  onChange={n=>u({ac_normal:n})} />
+          <NumSelect label="お掃除機能付きエアコン" value={v.ac_smart||0}   onChange={n=>u({ac_smart:n})} />
+          <NumSelect label="テンカセエアコン"       value={v.ac_tencase||0} onChange={n=>u({ac_tencase:n})} />
+          <NumSelect label="テンツリエアコン"       value={v.ac_tentsu||0}  onChange={n=>u({ac_tentsu:n})} />
+          {(v.ac_normal>0||v.ac_smart>0)&&(
+            <div style={{ background:C.white, borderRadius:10, padding:"12px 14px",
+              border:"1px solid "+C.grayL, marginTop:10 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:6 }}>📷 品番・写真について</div>
+              <div style={{ fontSize:13, color:C.gray, lineHeight:1.8, marginBottom:8 }}>
+                ノーマル・お掃除機能付きは<b style={{color:C.red}}>品番が必要</b>です。<br />
+                エアコン本体下部の写真・引きの写真を担当者にお送りください。
+              </div>
+              {v.ac_normal>0&&(
+                <div style={{ marginBottom:8 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:4 }}>ノーマルエアコン 品番（任意）</div>
+                  <OrTxtInput value={v.ac_normal_model||""} placeholder="例：CS-401DY2-W"
+                    onChange={e=>u({ac_normal_model:e.target.value})} />
+                </div>
+              )}
+              {v.ac_smart>0&&(
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:4 }}>お掃除機能付き 品番（任意）</div>
+                  <OrTxtInput value={v.ac_smart_model||""} placeholder="例：CS-X401D2-W"
+                    onChange={e=>u({ac_smart_model:e.target.value})} />
+                </div>
+              )}
+            </div>
+          )}
+        </SubSection>
+      )}
+      {hasOther&&(
+        <SubSection title="🔧 その他 - 作業内容">
+          <div style={{ background:C.white, borderRadius:10, padding:"0 12px", border:"1px solid "+C.grayL }}>
+            {OTHER_ITEMS.map(t=>(
+              <CheckBox key={t} label={t} checked={v.other_types.includes(t)}
+                onChange={()=>toggleOther(t)} small />
+            ))}
+          </div>
+        </SubSection>
+      )}
+    </div>
+  );
+}
+
+// ── 養生の詳細 ───────────────────────────────────────────
+function YouseiDetail({ details, detail, onChange }) {
+  const v=detail||{};
+  const u=p=>onChange({...v,...p});
+  const hasYousei=details.includes("養生");
+  const hasFurniture=details.includes("家具移動");
+  const hasNiage=details.includes("荷上げ");
+  if (!hasYousei&&!hasFurniture&&!hasNiage) return null;
+  return (
+    <div>
+      {hasYousei&&(
+        <SubSection title="🛗 養生 - 場所">
+          <RadioGroup options={["共用部","室内","両方"]} value={v.location||""} onChange={val=>u({location:val})} />
+          <div style={{ marginTop:10 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:6 }}>リフォーム内容</div>
+            <TextArea value={v.reform||""} onChange={e=>u({reform:e.target.value})}
+              placeholder="例：キッチン・浴室のリフォームに伴う養生" rows={2} />
+          </div>
+        </SubSection>
+      )}
+      {hasFurniture&&(
+        <SubSection title="🪑 家具移動 - 重量物">
+          <RadioGroup options={["重量物あり","重量物なし"]} value={v.heavy||""} onChange={val=>u({heavy:val})} />
+        </SubSection>
+      )}
+      {hasNiage&&(
+        <SubSection title="📦 荷上げ - 内容">
+          <TextArea value={v.niage||""} onChange={e=>u({niage:e.target.value})}
+            placeholder="例：2Fへ資材10箱の荷上げ" rows={2} />
+        </SubSection>
+      )}
+    </div>
+  );
+}
+
+function needsWorkers(serviceId) {
+  return serviceId==="yousei"||serviceId==="kaitai";
+}
+
+// ── 日程カード ───────────────────────────────────────────
+function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, showErrors }) {
+  const toggleDetail=t=>{
+    const d=sch.details||[];
+    onChange({...sch,details:d.includes(t)?d.filter(x=>x!==t):[...d,t]});
+  };
+  const KAITAI_ITEMS=["フロアめくり","建具","間仕切り","天井","内壁","キッチン","トイレ","洗面台","UB","在来風呂","アスベストあり"];
+  const SANPAI_ITEMS=["廃材回収","バッカン"];
+  const SOUJI_ITEMS=["簡易清掃・家具移動","ハウスクリーニング","エアコンクリーニング","その他"];
+  const YOUSEI_ITEMS=["養生","家具移動","荷上げ"];
+  const detailItems=serviceId==="kaitai"?KAITAI_ITEMS
+    :serviceId==="sanpai"?SANPAI_ITEMS
+    :serviceId==="souji"?SOUJI_ITEMS
+    :YOUSEI_ITEMS;
+
+  const errDate=showErrors&&!sch.date;
+  const errStart=showErrors&&!sch.startTime;
+  const errEnd=showErrors&&!sch.endTime;
+  const errWorkers=showErrors&&!sch.workers&&needsWorkers(serviceId);
+  const hasAnyErr=errDate||errStart||errEnd||errWorkers;
+  const kd=sch.serviceDetail||{};
+  const errKaitaiDays=showErrors&&serviceId==="kaitai"&&!kd.days;
+  const errKaitaiOffDays=showErrors&&serviceId==="kaitai"&&!kd.offDays;
+
+  return (
+    <div style={{ background:hasAnyErr||errKaitaiDays||errKaitaiOffDays?"#fff8f8":"#f4f7ff",
+      borderRadius:16, padding:"16px", marginBottom:12,
+      border:"2px solid "+(hasAnyErr||errKaitaiDays||errKaitaiOffDays?C.red:C.grayL), transition:"all 0.3s" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+        <div style={{ fontSize:15, fontWeight:800, color:C.blue }}>📅 日程 {idx+1}</div>
+        {canRemove&&(
+          <button onClick={onRemove} style={{ background:"#fff0f0", border:"1px solid #ffc0c0",
+            color:C.red, borderRadius:8, padding:"5px 12px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            削除
+          </button>
+        )}
+      </div>
+      <div style={{ marginBottom:12 }}>
+        <div style={{ fontSize:13, color:errDate?C.red:C.gray, marginBottom:5, fontWeight:600 }}>
+          日付{errDate?" ⚠️ 必須":""}
+        </div>
+        <input type="date" value={sch.date||""}
+          onChange={e=>onChange({...sch,date:e.target.value})}
+          style={{ width:"100%", fontSize:17, padding:"12px 14px", borderRadius:12,
+            border:"2px solid "+(errDate?C.red:C.grayL), boxSizing:"border-box",
+            fontFamily:"inherit", outline:"none", color:C.navy,
+            background:errDate?"#fff0f0":C.white, transition:"all 0.2s" }} />
+      </div>
+      <div style={{ display:"flex", gap:10, alignItems:"flex-end", marginBottom:14 }}>
+        <TimeSelect label="開始時間" value={sch.startTime||""}
+          onChange={e=>onChange({...sch,startTime:e.target.value})} hasError={errStart} />
+        <div style={{ paddingBottom:14, fontSize:18, color:C.gray, fontWeight:700, flexShrink:0 }}>〜</div>
+        <TimeSelect label="終了時間" value={sch.endTime||""}
+          onChange={e=>onChange({...sch,endTime:e.target.value})} hasError={errEnd} />
+      </div>
+      <div style={{ marginBottom:4 }}>
+        <div style={{ fontSize:13, color:C.gray, marginBottom:6, fontWeight:600 }}>作業内容</div>
+        <div style={{ background:C.white, borderRadius:10, padding:"0 12px", border:"1px solid "+C.grayL }}>
+          {detailItems.map(opt=>(
+            <CheckBox key={opt} label={opt}
+              checked={(sch.details||[]).includes(opt)}
+              onChange={()=>toggleDetail(opt)}
+              warn={opt==="アスベストあり"} small />
+          ))}
+        </div>
+      </div>
+      {serviceId==="yousei"&&(
+        <YouseiDetail details={sch.details||[]} detail={sch.serviceDetail}
+          onChange={v=>onChange({...sch,serviceDetail:v})} />
+      )}
+      {serviceId==="kaitai"&&(
+        <KaitaiDetail details={sch.details||[]} detail={sch.serviceDetail}
+          onChange={v=>onChange({...sch,serviceDetail:v})} showErrors={showErrors} />
+      )}
+      {serviceId==="sanpai"&&(sch.details||[]).length>0&&(
+        <SanpaiDetail details={sch.details||[]} detail={sch.serviceDetail}
+          onChange={v=>onChange({...sch,serviceDetail:v})} />
+      )}
+      {serviceId==="souji"&&(sch.details||[]).length>0&&(
+        <SoujiDetail details={sch.details||[]} detail={sch.serviceDetail}
+          onChange={v=>onChange({...sch,serviceDetail:v})} />
+      )}
+      {needsWorkers(serviceId)&&(
+        <div style={{ marginTop:14, marginBottom:4 }}>
+          <div style={{ fontSize:13, color:errWorkers?C.red:C.gray, marginBottom:8, fontWeight:600 }}>
+            作業者数{errWorkers?" ⚠️ 必須":""}
+          </div>
+          <WorkersSelect value={sch.workers||""} onChange={val=>onChange({...sch,workers:val})} max={6} />
+        </div>
+      )}
+      <div style={{ marginTop:14 }}>
+        <div style={{ fontSize:13, color:C.gray, marginBottom:5, fontWeight:600 }}>メモ（任意）</div>
+        <TextArea value={sch.memo||""} onChange={e=>onChange({...sch,memo:e.target.value})}
+          placeholder="この日程に関する特記事項など" rows={2} />
+      </div>
+    </div>
+  );
+}
+
+// ── STEP 1: 作業区分選択 ────────────────────────────────
+function StepService({ onSelect, doneServices }) {
+  return (
+    <div style={{ padding:"0 16px 32px" }}>
+      <EliTalk>
+        {doneServices.length>0
+          ? <>他に作業はありますか？<br />追加する作業をえらんでください😊</>
+          : <>どんな作業をご依頼ですか？<br />タップしてえらんでください😊</>}
+      </EliTalk>
+      {doneServices.length>0&&(
+        <div style={{ background:"#f0faf5", border:"2px solid "+C.green, borderRadius:14,
+          padding:"12px 16px", marginBottom:16, fontSize:14, color:"#1a5c3a", fontWeight:600 }}>
+          ✅ 追加済み：{doneServices.map(id=>SERVICES.find(s=>s.id===id)?.label).join("・")}
+        </div>
+      )}
+      <div style={{ display:"flex", flexDirection:"column", gap:12, marginBottom:16 }}>
+        {SERVICES.map(s=>{
+          const done=doneServices.includes(s.id);
+          return (
+            <button key={s.id} onClick={()=>!done&&onSelect(s.id)} disabled={done}
+              style={{ display:"flex", alignItems:"center", gap:16,
+                background:done?"#f0f0f0":s.color, border:"2px solid "+(done?"#ccc":s.border),
+                borderRadius:18, padding:"20px 18px", cursor:done?"not-allowed":"pointer",
+                textAlign:"left", opacity:done?0.5:1,
+                boxShadow:done?"none":"0 2px 10px rgba(10,31,92,0.07)", transition:"all 0.15s" }}
+              onMouseEnter={e=>{ if(!done) e.currentTarget.style.transform="translateY(-2px)"; }}
+              onMouseLeave={e=>{ e.currentTarget.style.transform="translateY(0)"; }}>
+              <span style={{ fontSize:40, flexShrink:0 }}>{s.icon}</span>
+              <div>
+                <div style={{ fontSize:20, fontWeight:800, color:done?"#aaa":C.navy }}>{s.label}</div>
+                {done&&<div style={{ fontSize:13, color:"#aaa", marginTop:2 }}>✅ 追加済み</div>}
+              </div>
+              {!done&&<span style={{ marginLeft:"auto", fontSize:22, color:C.gray }}>›</span>}
+            </button>
+          );
+        })}
+      </div>
+      {doneServices.length>0&&(
+        <OrBigBtn onClick={()=>onSelect(null)} color="green">✅ これで全部！確認画面へ進む</OrBigBtn>
+      )}
+    </div>
+  );
+}
+
+// ── STEP 2: 詳細入力 ────────────────────────────────────
+function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData }) {
+  const svc=SERVICES.find(s=>s.id===serviceId);
+  const init=savedData||{};
+  const [siteName,  setSiteName]  = useState(init.siteName||"");
+  const [address,   setAddress]   = useState(init.address||"");
+  const [addrOk,    setAddrOk]   = useState(init.addrOk||false);
+  const [keyInfo,   setKeyInfo]   = useState(init.keyInfo||{noKey:false,key:"",parking:""});
+  const [schedules, setSchedules] = useState(init.schedules||[{date:"",startTime:"",endTime:"",details:[],workers:"",memo:"",serviceDetail:null}]);
+  const [note,      setNote]      = useState(init.note||"");
+  const [errors,    setErrors]    = useState([]);
+  const [showErrors,setShowErrors]= useState(false);
+
+  const refSiteName =useRef(null);
+  const refAddress  =useRef(null);
+  const refAddrOk   =useRef(null);
+  const refSchedule0=useRef(null);
+
+  const addSchedule=()=>setSchedules(s=>[...s,{date:"",startTime:"",endTime:"",details:[],workers:"",memo:"",serviceDetail:null}]);
+  const rmSchedule =i=>setSchedules(s=>s.filter((_,idx)=>idx!==i));
+  const updateSch  =(i,v)=>setSchedules(s=>s.map((x,idx)=>idx===i?v:x));
+
+  const validate=()=>{
+    const errs=[];
+    if (!isAdditional&&!siteName)    errs.push("現場名を入力してください");
+    if (!isAdditional&&!address)     errs.push("住所を入力してください");
+    if (!isAdditional&&!addrOk)      errs.push("住所に間違いがないことを確認してチェックしてください");
+    if (!schedules[0].date)          errs.push("日程1の日付を選択してください");
+    if (!schedules[0].startTime)     errs.push("日程1の開始時間を選択してください");
+    if (!schedules[0].endTime)       errs.push("日程1の終了時間を選択してください");
+    if (needsWorkers(serviceId)&&!schedules[0].workers) errs.push("日程1の作業者数を選択してください");
+    if (serviceId==="kaitai") {
+      if (!schedules[0].serviceDetail?.days)    errs.push("工事日数を選択してください");
+      if (!schedules[0].serviceDetail?.offDays) errs.push("作業に入れない日を入力してください");
+    }
+    return errs;
+  };
+
+  const scrollToFirst=()=>{
+    if (!isAdditional) {
+      if (!siteName&&refSiteName.current)  { refSiteName.current.scrollIntoView({behavior:"smooth",block:"center"}); return; }
+      if (!address&&refAddress.current)    { refAddress.current.scrollIntoView({behavior:"smooth",block:"center"}); return; }
+      if (!addrOk&&refAddrOk.current)     { refAddrOk.current.scrollIntoView({behavior:"smooth",block:"center"}); return; }
+    }
+    if (refSchedule0.current) refSchedule0.current.scrollIntoView({behavior:"smooth",block:"center"});
+  };
+
+  const handleNext=()=>{
+    const errs=validate();
+    setErrors(errs);
+    setShowErrors(true);
+    if (errs.length>0) { setTimeout(scrollToFirst,100); return; }
+    onSubmit({siteName,address,addrOk,keyInfo,schedules,note});
+  };
+
+  return (
+    <div style={{ padding:"0 16px 40px" }}>
+      <EliTalk size={60}>{svc.icon} <b>{svc.label}</b>の詳細を入力してください✏️</EliTalk>
+
+      {showErrors&&errors.length>0&&(
+        <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:14,
+          padding:"14px 16px", marginBottom:14, animation:"shake 0.4s ease" }}>
+          <div style={{ fontSize:15, fontWeight:800, color:C.red, marginBottom:8 }}>
+            ⚠️ 入力に不備があります（{errors.length}件）
+          </div>
+          {errors.map((e,i)=>(
+            <div key={i} style={{ fontSize:14, color:C.red, marginBottom:3, display:"flex", gap:6 }}>
+              <span>•</span>{e}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 担当者 */}
+      <Card>
+        <CardTitle icon="👤">担当者</CardTitle>
+        <div style={{ padding:"14px 18px" }}>
+          <div style={{ fontSize:16, fontWeight:700, color:C.navy,
+            background:C.grayPale, borderRadius:10, padding:"12px 16px" }}>
+            榮藤 美香（ログイン情報から自動入力）
+          </div>
+        </div>
+      </Card>
+
+      {/* 現場情報 */}
+      {!isAdditional ? (
+        <Card>
+          <CardTitle icon="📍">現場情報</CardTitle>
+          <div style={{ padding:"14px 18px" }}>
+            <div ref={refSiteName} style={{ marginBottom:14 }}>
+              <div style={{ fontSize:15, fontWeight:700,
+                color:showErrors&&!siteName?C.red:C.navy, marginBottom:8 }}>
+                現場名 <span style={{ color:C.red, fontSize:13 }}>※必須</span>
+                {showErrors&&!siteName&&<span style={{ fontSize:13, marginLeft:6 }}>⚠️</span>}
+              </div>
+              {/* サジェスト付き現場名入力 */}
+              <SiteNameInput value={siteName}
+                onChange={v=>{ setSiteName(v); setErrors([]); }}
+                hasError={showErrors&&!siteName} />
+              <div style={{ fontSize:12, color:C.gray, marginTop:5 }}>
+                💡 過去に登録した現場名が候補に表示されます
+              </div>
+            </div>
+            <div ref={refAddress} style={{ marginBottom:14 }}>
+              <div style={{ fontSize:15, fontWeight:700,
+                color:showErrors&&!address?C.red:C.navy, marginBottom:8 }}>
+                住所 <span style={{ color:C.red, fontSize:13 }}>※必須</span>
+                {showErrors&&!address&&<span style={{ fontSize:13, marginLeft:6 }}>⚠️</span>}
+              </div>
+              <OrTxtInput value={address} onChange={e=>{ setAddress(e.target.value); setErrors([]); }}
+                placeholder="例：大阪府堺市北区〇〇町1-2-3" hasError={showErrors&&!address} />
+            </div>
+            <div ref={refAddrOk}
+              style={{ background:addrOk?"#f0faf5":showErrors&&!addrOk?"#fff0f0":C.yellowL,
+                border:"2px solid "+(addrOk?C.green:showErrors&&!addrOk?C.red:"#f5c842"),
+                borderRadius:14, padding:"14px 16px", marginBottom:14, transition:"all 0.3s" }}>
+              <label style={{ display:"flex", alignItems:"center", gap:14, cursor:"pointer" }}>
+                <div style={{ width:30, height:30, borderRadius:8, flexShrink:0,
+                  border:"2px solid "+(addrOk?C.green:showErrors&&!addrOk?C.red:"#f5c842"),
+                  background:addrOk?C.green:C.white,
+                  display:"flex", alignItems:"center", justifyContent:"center", transition:"all 0.2s" }}>
+                  {addrOk&&<span style={{ color:C.white, fontSize:18, fontWeight:900 }}>✓</span>}
+                </div>
+                <input type="checkbox" checked={addrOk}
+                  onChange={e=>{ setAddrOk(e.target.checked); setErrors([]); }} style={{ display:"none" }}/>
+                <div>
+                  <div style={{ fontSize:16, fontWeight:800,
+                    color:addrOk?C.green:showErrors&&!addrOk?C.red:"#7a5a00" }}>
+                    住所に間違いがないことを確認しました
+                  </div>
+                  <div style={{ fontSize:13, marginTop:2,
+                    color:addrOk?"#2eaa72":showErrors&&!addrOk?C.red:"#7a5a00" }}>
+                    {addrOk?"✅ 確認済み":showErrors&&!addrOk?"⚠️ 必ずチェックしてください":"※ 必ずチェックしてください"}
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div style={{ background:C.grayPale, borderRadius:12, padding:"14px" }}>
+              <div style={{ fontSize:14, fontWeight:700, color:C.gray, marginBottom:10 }}>🔑 鍵・駐車場情報</div>
+              <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", marginBottom:10 }}>
+                <div style={{ width:24, height:24, borderRadius:6, flexShrink:0,
+                  border:"2px solid "+(keyInfo.noKey?C.blue:C.grayL), background:keyInfo.noKey?C.blue:C.white,
+                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {keyInfo.noKey&&<span style={{ color:C.white, fontSize:14, fontWeight:900 }}>✓</span>}
+                </div>
+                <input type="checkbox" checked={keyInfo.noKey}
+                  onChange={e=>setKeyInfo(k=>({...k,noKey:e.target.checked}))} style={{ display:"none" }}/>
+                <span style={{ fontSize:14, color:C.navy, fontWeight:600 }}>在宅のため鍵なし</span>
+              </label>
+              {!keyInfo.noKey&&(
+                <input value={keyInfo.key} onChange={e=>setKeyInfo(k=>({...k,key:e.target.value}))}
+                  placeholder="鍵の情報（例：管理室で受取・暗証番号1234）"
+                  style={{ width:"100%", fontSize:15, padding:"12px 14px", borderRadius:10,
+                    border:"2px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit",
+                    outline:"none", color:C.navy, marginBottom:10 }} />
+              )}
+              <input value={keyInfo.parking} onChange={e=>setKeyInfo(k=>({...k,parking:e.target.value}))}
+                placeholder="駐車場情報（例：建物前2台分）"
+                style={{ width:"100%", fontSize:15, padding:"12px 14px", borderRadius:10,
+                  border:"2px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit",
+                  outline:"none", color:C.navy }} />
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <div style={{ background:"#f0faf5", border:"2px solid "+C.green, borderRadius:14,
+          padding:"12px 16px", marginBottom:14 }}>
+          <div style={{ fontSize:13, color:C.green, fontWeight:700, marginBottom:4 }}>
+            📍 現場情報（1作業目と同じ）
+          </div>
+          <div style={{ fontSize:15, color:C.navy, fontWeight:700 }}>{firstSiteData?.siteName||""}</div>
+          <div style={{ fontSize:13, color:C.gray }}>{firstSiteData?.address||""}</div>
+        </div>
+      )}
+
+      {/* 日程 */}
+      <Card refProp={refSchedule0}>
+        <CardTitle icon="📅">日程・作業内容・人数</CardTitle>
+        <div style={{ padding:"14px 18px" }}>
+          <div style={{ fontSize:13, color:C.gray, marginBottom:14, lineHeight:1.8 }}>
+            ※ 日程ごとに時間・内容・人数を設定できます
+          </div>
+          {schedules.map((sch,i)=>(
+            <ScheduleCard key={i} sch={sch} idx={i} serviceId={serviceId}
+              onChange={v=>{ updateSch(i,v); setErrors([]); }}
+              onRemove={()=>rmSchedule(i)}
+              canRemove={schedules.length>1}
+              showErrors={showErrors&&i===0} />
+          ))}
+          <button onClick={addSchedule}
+            style={{ display:"flex", alignItems:"center", gap:8, width:"100%",
+              padding:"13px 16px", borderRadius:12, border:"2px dashed "+C.blue,
+              background:"#f0f5ff", color:C.blue, fontSize:15, fontWeight:700, cursor:"pointer" }}>
+            ＋ 日程を追加する
+          </button>
+        </div>
+      </Card>
+
+      <Card>
+        <CardTitle icon="💬">全体へのご要望</CardTitle>
+        <div style={{ padding:"14px 18px" }}>
+          <TextArea value={note} onChange={e=>setNote(e.target.value)}
+            placeholder="全体を通してのご要望・特記事項（任意）" rows={3} />
+        </div>
+      </Card>
+
+      <OrBigBtn onClick={handleNext}>確認画面へ →</OrBigBtn>
+      <OrSubBtn onClick={onBack}>← もどる</OrSubBtn>
+    </div>
+  );
+}
+
+// ── 確認・最終確認・完了 ─────────────────────────────────
+function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll }) {
+  const svc=SERVICES.find(s=>s.id===serviceId);
+  const allDone=doneServices.length>=SERVICES.length;
+  const ConfRow=({label,value})=>value?(
+    <div style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
+      <div style={{ fontSize:14, color:C.gray, minWidth:90, flexShrink:0 }}>{label}</div>
+      <div style={{ fontSize:15, fontWeight:700, color:C.navy, flex:1 }}>{value}</div>
+    </div>
+  ):null;
+  return (
+    <div style={{ padding:"0 16px 40px" }}>
+      <EliTalk size={60}>内容を確認してください✅<br />間違いがあれば「修正する」をタップ</EliTalk>
+      {doneServices.length>1&&(
+        <div style={{ background:"#f0faf5", border:"2px solid "+C.green, borderRadius:14,
+          padding:"12px 16px", marginBottom:14, fontSize:14, color:"#1a5c3a", fontWeight:600 }}>
+          ✅ 追加済み：{doneServices.filter(id=>id!==serviceId).map(id=>SERVICES.find(s=>s.id===id)?.label).join("・")}
+        </div>
+      )}
+      <div style={{ background:C.yellowL, border:"2px solid #f5c842", borderRadius:14, padding:"12px 16px", marginBottom:14 }}>
+        <div style={{ fontSize:14, fontWeight:800, color:"#7a5a00" }}>{svc.icon} {svc.label} の確認</div>
+      </div>
+      <Card>
+        <div style={{ padding:"14px 18px" }}>
+          <ConfRow label="作業区分" value={svc.icon+" "+svc.label} />
+          <ConfRow label="現場名"   value={formData.siteName} />
+          <ConfRow label="住所"     value={formData.address} />
+          <ConfRow label="担当者"   value="榮藤 美香" />
+        </div>
+      </Card>
+      {formData.schedules.map((sch,i)=>(
+        <Card key={i}>
+          <CardTitle icon="📅">日程 {i+1}</CardTitle>
+          <div style={{ padding:"14px 18px" }}>
+            <ConfRow label="日付"     value={sch.date} />
+            <ConfRow label="時間"     value={sch.startTime&&sch.endTime?sch.startTime+"〜"+sch.endTime:""} />
+            <ConfRow label="作業内容" value={(sch.details||[]).join("・")} />
+            {serviceId==="kaitai"&&sch.serviceDetail&&(
+              <>
+                <ConfRow label="工事日数"   value={sch.serviceDetail.days?sch.serviceDetail.days+"日":""} />
+                <ConfRow label="入れない日" value={sch.serviceDetail.offDays} />
+              </>
+            )}
+            {serviceId==="sanpai"&&sch.serviceDetail&&(
+              <ConfRow label="補助作業員" value={sch.serviceDetail.haizaiHelper} />
+            )}
+            {sch.workers&&<ConfRow label="作業者数" value={sch.workers} />}
+            <ConfRow label="メモ" value={sch.memo} />
+          </div>
+        </Card>
+      ))}
+      <OrSubBtn onClick={onEdit}>✏️ この作業の内容を修正する</OrSubBtn>
+      <div style={{ display:"flex", alignItems:"center", gap:12, margin:"20px 0" }}>
+        <div style={{ flex:1, height:2, background:C.grayL, borderRadius:1 }}/>
+        <span style={{ fontSize:14, color:C.gray, fontWeight:700 }}>次のステップ</span>
+        <div style={{ flex:1, height:2, background:C.grayL, borderRadius:1 }}/>
+      </div>
+      <div style={{ background:C.white, borderRadius:18, padding:"20px",
+        boxShadow:"0 2px 16px rgba(10,31,92,0.08)", border:"1px solid "+C.grayL }}>
+        <div style={{ fontSize:16, fontWeight:800, color:C.navy, marginBottom:16, textAlign:"center" }}>
+          他に追加する作業はありますか？
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          {!allDone&&<OrBigBtn onClick={onAddMore} color="yellow">➕ 他の作業を追加する</OrBigBtn>}
+          <OrBigBtn onClick={onSubmitAll} color="green">✉️ このまま発注する</OrBigBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FinalConfirm({ orders, onBack, onSubmit, submitting }) {
+  return (
+    <div style={{ padding:"0 16px 40px" }}>
+      <EliTalk size={60}>全ての作業内容です✅<br />問題なければ発注してください！</EliTalk>
+      {orders.map((order,oi)=>{
+        const svc=SERVICES.find(s=>s.id===order.serviceId);
+        return (
+          <div key={oi} style={{ marginBottom:8 }}>
+            <div style={{ fontSize:14, fontWeight:800, color:C.blue, marginBottom:6, marginTop:oi>0?12:0 }}>
+              ■ 作業{oi+1}：{svc.icon} {svc.label}
+            </div>
+            <Card>
+              <div style={{ padding:"12px 18px" }}>
+                {order.data.siteName&&(
+                  <div style={{ display:"flex", gap:12, padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
+                    <div style={{ fontSize:13, color:C.gray, minWidth:80 }}>現場名</div>
+                    <div style={{ fontSize:14, fontWeight:700, color:C.navy }}>{order.data.siteName}</div>
+                  </div>
+                )}
+                {order.data.schedules.map((sch,si)=>(
+                  <div key={si} style={{ padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
+                    <div style={{ fontSize:13, color:C.blue, fontWeight:700, marginBottom:2 }}>
+                      日程{si+1}：{sch.date} {sch.startTime}〜{sch.endTime}
+                    </div>
+                    <div style={{ fontSize:13, color:C.navy }}>
+                      {(sch.details||[]).join("・")}{sch.workers?" / "+sch.workers:""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        );
+      })}
+      <div style={{ background:C.yellowL, border:"1px solid #f5c842", borderRadius:14,
+        padding:"14px 16px", marginBottom:16, fontSize:14, color:"#7a5a00", lineHeight:1.8 }}>
+        📞 送信後、<b>24時間以内</b>に担当者よりご連絡いたします
+      </div>
+      <OrBigBtn onClick={onSubmit} disabled={submitting}>
+        {submitting ? '送信中...' : '✉️ 発注する'}
+      </OrBigBtn>
+      <OrSubBtn onClick={onBack}>← もどる</OrSubBtn>
+    </div>
+  );
+}
+
+function OrDone({ onReset, onDone, orderId }) {
+  return (
+    <div style={{ padding:"32px 24px", textAlign:"center" }}>
+      <img src={ELI_IMG} style={{ width:120, height:"auto",
+        animation:"eliFloat 3s ease-in-out infinite",
+        filter:"drop-shadow(0 8px 20px rgba(10,31,92,0.15))", marginBottom:16 }} />
+      <div style={{ fontSize:26, fontWeight:900, color:C.navy, marginBottom:8 }}>発注しました！🎉</div>
+      <div style={{ fontSize:15, color:C.gray, lineHeight:1.9, marginBottom:24 }}>
+        ご依頼ありがとうございます。<br />
+        <b style={{ color:C.blue }}>24時間以内</b>に担当者よりご連絡いたします。
+      </div>
+      <div style={{ background:"#f0faf5", border:"2px solid "+C.green, borderRadius:16,
+        padding:"16px", marginBottom:28, fontSize:15, color:"#1a5c3a", lineHeight:1.9 }}>
+        受付番号：<b style={{ fontSize:20 }}>{orderId || '...'}</b><br />
+        <span style={{ fontSize:13, color:C.gray }}>注文履歴からご確認いただけます</span>
+      </div>
+      <OrBigBtn onClick={onDone || onReset} color="yellow">📋 注文履歴を見る</OrBigBtn>
+    </div>
+  );
+}
+
+function OrStepBar({ phase }) {
+  const idx=phase==="service"?0:phase==="form"?1:2;
+  return (
+    <div style={{ background:C.white, borderBottom:"1px solid "+C.grayL,
+      padding:"10px 20px", display:"flex", alignItems:"center" }}>
+      {["作業区分","詳細入力","確認"].map((s,i)=>(
+        <div key={i} style={{ display:"flex", alignItems:"center", flex:1 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:6, flex:1 }}>
+            <div style={{ width:26, height:26, borderRadius:"50%", flexShrink:0,
+              background:i<idx?C.green:i===idx?C.blue:C.grayL,
+              color:i<=idx?C.white:C.gray,
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:12, fontWeight:800 }}>
+              {i<idx?"✓":i+1}
+            </div>
+            <span style={{ fontSize:12, color:i===idx?C.navy:C.gray, fontWeight:i===idx?700:400 }}>{s}</span>
+          </div>
+          {i<2&&<div style={{ flex:1, height:2, background:i<idx?C.blue:C.grayL, margin:"0 4px" }}/>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OrderApp({ onDone, onBack }) {
+  const [phase,        setPhase]        = useState("service");
+  const [currentSvc,   setCurrentSvc]   = useState(null);
+  const [doneServices, setDoneServices] = useState([]);
+  const [orders,       setOrders]       = useState([]);
+  const [savedForms,   setSavedForms]   = useState({});
+  const firstSiteData = orders[0]?.data||null;
+  const [submitting, setSubmitting] = useState(false);
+  const [savedIds,   setSavedIds]   = useState([]);
+
+  const STYLE=`@keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}} @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}`;
+
+  const handleSelectService=id=>{
+    if (id===null) { setPhase("finalConfirm"); return; }
+    setCurrentSvc(id); setPhase("form");
+  };
+
+  const handleFormSubmit=data=>{
+    const finalData=doneServices.length>0&&firstSiteData
+      ? {...data,siteName:firstSiteData.siteName,address:firstSiteData.address,
+          addrOk:firstSiteData.addrOk,keyInfo:firstSiteData.keyInfo}
+      : data;
+    const newOrders=[...orders.filter(o=>o.serviceId!==currentSvc),{serviceId:currentSvc,data:finalData}];
+    setOrders(newOrders);
+    setSavedForms(f=>({...f,[currentSvc]:finalData}));
+    if (!doneServices.includes(currentSvc)) setDoneServices(d=>[...d,currentSvc]);
+    setPhase("confirm");
+  };
+
+  const saveToSupabase = async (ordersList) => {
+    const ids = [];
+    for (const order of ordersList) {
+      const svc = SERVICES.find(s => s.id === order.serviceId);
+      const d   = order.data;
+      const { data: newOrder, error } = await sb.from('orders').insert({
+        service:        svc.label,
+        site:           d.siteName  || '',
+        address:        d.address   || '',
+        key_info:       d.keyInfo?.noKey ? '在宅' : (d.keyInfo?.key || ''),
+        parking:        d.keyInfo?.parking || '',
+        note:           d.note      || '',
+        service_detail: d,
+      }).select('id').single();
+      if (error) throw error;
+      if (d.schedules?.length) {
+        await sb.from('schedules').insert(
+          d.schedules.map((sch, i) => ({
+            order_id:   newOrder.id,
+            work_date:  sch.date       || null,
+            start_time: sch.startTime  || '',
+            end_time:   sch.endTime    || '',
+            workers:    sch.workers    || '',
+            details:    sch.details    || [],
+            sort_order: i,
+          }))
+        );
+      }
+      await sb.from('messages').insert({
+        order_id:  newOrder.id,
+        from_role: 'eli',
+        text:      '受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。',
+      });
+      ids.push(newOrder.id);
+    }
+    return ids;
+  };
+
+  const handleActualSubmit = async (ordersList) => {
+    setSubmitting(true);
+    try {
+      const ids = await saveToSupabase(ordersList);
+      setSavedIds(ids);
+      setPhase("done");
+    } catch(e) {
+      alert('送信エラーが発生しました。もう一度お試しください。');
+      console.error(e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmitAll = () => orders.length > 1 ? setPhase("finalConfirm") : handleActualSubmit(orders);
+  const getTitle=()=>({service:"発注受付",form:"詳細入力",confirm:"確認画面",finalConfirm:"最終確認",done:"発注完了"}[phase]||"発注受付");
+
+  if (phase==="done") return (
+    <div style={{ background:C.bg, minHeight:"100vh", fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <style>{STYLE}</style>
+      <OrTopBar title="発注完了"/>
+      <div style={{ maxWidth:480, margin:"0 auto" }}>
+        <div style={{ background:C.white, borderRadius:20, margin:"20px 16px",
+          boxShadow:"0 4px 24px rgba(10,31,92,0.10)", border:"1px solid "+C.grayL }}>
+          <OrDone onDone={onDone} onReset={()=>{ setPhase("service"); setCurrentSvc(null); setDoneServices([]); setOrders([]); setSavedForms({}); setSavedIds([]); }} orderId={savedIds[0]} />
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background:C.bg, minHeight:"100vh",
+      fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <style>{STYLE}</style>
+      <OrTopBar title={getTitle()}/><OrStepBar phase={phase}/>
+      <div style={{ maxWidth:480, margin:"0 auto" }}>
+        {phase==="service"&&<StepService onSelect={handleSelectService} doneServices={doneServices}/>}
+        {phase==="form"&&currentSvc&&(
+          <StepForm serviceId={currentSvc}
+            savedData={savedForms[currentSvc]||(doneServices.length>0&&firstSiteData
+              ?{siteName:firstSiteData.siteName,address:firstSiteData.address,
+                addrOk:firstSiteData.addrOk,keyInfo:firstSiteData.keyInfo}:{})}
+            isAdditional={doneServices.length>0&&!doneServices.includes(currentSvc)}
+            firstSiteData={firstSiteData}
+            onSubmit={handleFormSubmit}
+            onBack={()=>setPhase(doneServices.includes(currentSvc)?"confirm":"service")} />
+        )}
+        {phase==="confirm"&&currentSvc&&(
+          <StepConfirm serviceId={currentSvc} formData={savedForms[currentSvc]}
+            doneServices={doneServices}
+            onEdit={()=>setPhase("form")}
+            onAddMore={()=>{ setCurrentSvc(null); setPhase("service"); }}
+            onSubmitAll={handleSubmitAll}/>
+        )}
+        {phase==="finalConfirm"&&(
+          <FinalConfirm orders={orders} onBack={()=>setPhase("confirm")} onSubmit={()=>handleActualSubmit(orders)} submitting={submitting}/>
+        )}
+      </div>
+    </div>
+  );
+}
+
+    // ═══════════════════════════════════════════════════════
+    // 注文履歴
+    // ═══════════════════════════════════════════════════════
+
+const HI_STATUS = {
+  "調整中":         { bg:"#fff8e0", text:"#b07800", border:"#f5c800", icon:"🆕", desc:"24時間以内に返答します" },
+  "日程確定":       { bg:"#eef3ff", text:"#2952c8", border:"#2952c8", icon:"📅", desc:"日程が確定しました" },
+  "日程相談中":     { bg:"#fff3e8", text:"#c05000", border:"#f0a050", icon:"💬", desc:"日程を調整中です" },
+  "完了":           { bg:"#f0faf5", text:"#2eaa72", border:"#2eaa72", icon:"✅", desc:"工事が完了しました" },
+  "キャンセル":     { bg:"#fff0f0", text:"#e63946", border:"#e63946", icon:"❌", desc:"キャンセルされました" },
+  "キャンセル相談中": { bg:"#fff0f0", text:"#c0202c", border:"#f08090", icon:"🚫", desc:"キャンセルをご相談中です" },
+  "日程変更相談中": { bg:"#f3eeff", text:"#6930c3", border:"#b090e8", icon:"📆", desc:"日程変更をご相談中です" },
+};
+
+const HI_SVC_ICON = {
+  "養生・家具移動・荷上":"🛗","解体":"🏚️","産廃":"🚛","清掃・家具移動":"🧹",
+};
+
+const _hiNow = Date.now();
+const _hiFuture = (d) => { const t = new Date(); t.setDate(t.getDate()+d); return t.toISOString().split("T")[0]; };
+const HI_ORDERS = [
+  { id:"B-2024-101", service:"養生・家具移動・荷上", status:"日程確定",
+    site:"〇〇マンション101号室", address:"大阪府堺市北区〇〇町1-2-3",
+    schedules:[{ date:_hiFuture(3), start:"09:00", end:"17:00", workers:"3人", details:["養生","家具移動"] }],
+    key:"管理室で受取", parking:"建物前2台", note:"", created:"2024-06-10 17:32",
+    createdAt: _hiNow - 2*3600000, statusChangedAt: _hiNow - 1*3600000 },
+  { id:"B-2024-102", service:"清掃・家具移動", status:"調整中",
+    site:"△△ビル3F", address:"大阪府大阪市北区△△町4-5-6",
+    schedules:[{ date:_hiFuture(5), start:"13:00", end:"18:00", workers:"2人", details:["ハウスクリーニング"] }],
+    key:"在宅", parking:"近隣コインP", note:"", created:"2024-06-11 09:05",
+    createdAt: _hiNow - 20*3600000, statusChangedAt: _hiNow - 20*3600000 },
+  { id:"B-2024-103", service:"解体", status:"日程相談中",
+    site:"□□邸リフォーム", address:"大阪府堺市中区□□町7-8-9",
+    schedules:[{ date:_hiFuture(7), start:"08:00", end:"17:00", workers:"4人", details:["フロアめくり"] }],
+    key:"", parking:"敷地内駐車可", note:"", created:"2024-06-09 14:20",
+    createdAt: _hiNow - 50*3600000, statusChangedAt: _hiNow - 50*3600000 },
+  { id:"B-2024-104", service:"産廃", status:"完了",
+    site:"◇◇現場", address:"大阪府堺市南区◇◇町1-1-1",
+    schedules:[{ date:_hiFuture(-5), start:"10:00", end:"14:00", workers:"", details:["廃材回収"] }],
+    key:"", parking:"現場内", note:"", created:"2024-06-01 11:00",
+    createdAt: _hiNow - 200*3600000, statusChangedAt: _hiNow - 100*3600000 },
+];
+
+const HI_INIT_CHATS = {
+  "B-2024-101": [
+    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-10 17:32", read:true },
+    { id:2, from:"staff", text:"日程の調整がつきました。よろしくお願いします📅", time:"2024-06-11 10:00", read:false },
+  ],
+  "B-2024-102": [
+    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-11 09:05", read:true },
+  ],
+  "B-2024-103": [
+    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-09 14:20", read:true },
+    { id:2, from:"staff", text:"ごめんなさい、ご希望の日程では予定がつきませんでした💦\nご希望に近い別日程でしたら対応できそうですが、いかがですか？", time:"2024-06-10 09:30", read:false },
+  ],
+  "B-2024-104": [
+    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-01 11:00", read:true },
+    { id:2, from:"staff", text:"工事が完了しました。ありがとうございました✅", time:"2024-06-05 16:00", read:true },
+  ],
+};
+
+const HI_CSS = `
+  @keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}}
+  @keyframes dotB{0%,80%,100%{transform:translateY(0);opacity:0.4}40%{transform:translateY(-5px);opacity:1}}
+  @keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
+  @keyframes hiBlink{0%,100%{opacity:1}50%{opacity:0.25}}
+`;
+
+function HiStatusBadge({ status, large }) {
+  const s = HI_STATUS[status] || HI_STATUS["調整中"];
+  return (
+    <span style={{ background:s.bg, color:s.text, border:"2px solid "+s.border,
+      borderRadius:99, padding:large?"8px 16px":"5px 12px",
+      fontSize:large?15:13, fontWeight:800, whiteSpace:"nowrap" }}>
+      {s.icon} {status}
+    </span>
+  );
+}
+
+function hiGetTimer(order, nowMs) {
+  if (order.status === "調整中") {
+    const elapsedH = (nowMs - order.createdAt) / 3600000;
+    const remainH  = 24 - elapsedH;
+    if (remainH > 12) return null;
+    if (remainH <= 3) return { bg:"#e63946", col:"#fff", blink:true,  label:`残り${Math.max(0,Math.ceil(remainH))}h` };
+    if (remainH <= 6) return { bg:"#fb923c", col:"#fff", blink:false, label:`残り${Math.ceil(remainH)}h` };
+    return               { bg:"#fff3cd", col:"#a07800", blink:false, label:`残り${Math.ceil(remainH)}h` };
+  }
+  if (order.status === "日程相談中") {
+    const elapsedH = (nowMs - (order.statusChangedAt || order.createdAt)) / 3600000;
+    if (elapsedH >= 72) return { bg:"#e63946", col:"#fff",    blink:true,  label:`${Math.floor(elapsedH)}h経過` };
+    if (elapsedH >= 60) return { bg:"#c05000", col:"#fff",    blink:false, label:`${Math.floor(elapsedH)}h経過` };
+    if (elapsedH >= 48) return { bg:"#fb923c", col:"#fff",    blink:false, label:`${Math.floor(elapsedH)}h経過` };
+    if (elapsedH >= 36) return { bg:"#fbbf24", col:"#7c4f00", blink:false, label:`${Math.floor(elapsedH)}h経過` };
+    if (elapsedH >= 24) return { bg:"#fef9c3", col:"#854d0e", blink:false, label:`${Math.floor(elapsedH)}h経過` };
+    return                     { bg:"#fffde7", col:"#a07800", blink:false, label:`${Math.floor(elapsedH)}h経過` };
+  }
+  return null;
+}
+
+function HiBigBtn({ children, onClick, color, disabled }) {
+  const [hov,setHov] = useState(false);
+  const bg = disabled ? "#c8d0e0"
+    : color==="yellow" ? "linear-gradient(135deg,#f5c800,#ffe033)"
+    : color==="green"  ? "linear-gradient(135deg,#2eaa72,#1a7a50)"
+    : "linear-gradient(135deg,#2952c8,#0a1f5c)";
+  return (
+    <button onClick={onClick} disabled={disabled}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ display:"block", width:"100%", background:bg,
+        color:disabled?"#8a9cc5":color==="yellow"?C.navy:C.white,
+        border:"none", borderRadius:14, fontSize:17, fontWeight:800,
+        padding:"17px 0", cursor:disabled?"not-allowed":"pointer", fontFamily:"inherit",
+        boxShadow:disabled?"none":hov?"0 8px 24px rgba(10,31,92,0.25)":"0 4px 14px rgba(10,31,92,0.15)",
+        transform:hov&&!disabled?"translateY(-1px)":"translateY(0)",
+        transition:"all 0.2s" }}>
+      {children}
+    </button>
+  );
+}
+
+// ── イーライくんのメッセージ ─────────────────────────────
+function EliMessage({ orders, chats }) {
+  const adjCount    = orders.filter(o=>o.status==="調整中").length;
+  const soudanCount = orders.filter(o=>o.status==="日程相談中").length;
+  const unreadCount = orders.reduce((acc,o)=>
+    acc + (chats[o.id]||[]).filter(m=>m.from==="staff"&&!m.read).length, 0);
+
+  let msgs = [];
+  if (unreadCount>0) msgs.push({ color:C.red,
+    text:`新しいメッセージが${unreadCount}件届いています！\nチャットを確認してください📩` });
+  if (soudanCount>0) msgs.push({ color:"#c05000",
+    text:`日程相談中の案件が${soudanCount}件あります。\nチャットでご確認・ご返答をお願いします💬` });
+  if (adjCount>0) msgs.push({ color:"#b07800",
+    text:`調整中の案件が${adjCount}件あります。\n24時間以内に返答しますのでお待ちください😊` });
+  if (msgs.length===0) msgs.push({ color:C.navy,
+    text:"注文履歴の一覧です😊\nタップして詳細・チャットを確認できます" });
+
+  return (
+    <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:20 }}>
+      <img src="https://api.dicebear.com/7.x/bottts/svg?seed=eli&backgroundColor=0a1f5c"
+        style={{ width:72, height:72, borderRadius:"50%", flexShrink:0,
+          animation:"eliFloat 3s ease-in-out infinite",
+          border:"3px solid #e4e9f5" }} />
+      <div style={{ flex:1 }}>
+        {msgs.map((msg,i)=>(
+          <div key={i} style={{ background:C.grayPale,
+            borderRadius: i===0?"4px 18px 18px 18px":"18px",
+            padding:"12px 16px", fontSize:15, color:C.navy, fontWeight:700,
+            lineHeight:1.8, border:"1px solid "+C.grayL, marginBottom:i<msgs.length-1?8:0 }}>
+            {msg.text}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 注文カード ───────────────────────────────────────────
+function HiOrderCard({ role, order, unreadCount, onClick }) {
+  const st    = HI_STATUS[order.status] || HI_STATUS["調整中"];
+  const sch   = order.schedules[0];
+  const timer = role === "admin" ? hiGetTimer(order, Date.now()) : null;
+  const borderColor = timer ? timer.bg : st.border;
+
+  return (
+    <button onClick={onClick}
+      style={{ width:"100%", background:C.white, borderRadius:18,
+        border:"1px solid "+(timer ? timer.bg : C.grayL),
+        borderLeft:"6px solid "+borderColor,
+        padding:0, textAlign:"left", cursor:"pointer", overflow:"hidden",
+        boxShadow: timer && timer.blink
+          ? "0 0 0 2px "+timer.bg+", 0 4px 16px rgba(10,31,92,0.12)"
+          : "0 2px 12px rgba(10,31,92,0.07)",
+        marginBottom:12, transition:"box-shadow 0.15s, transform 0.15s",
+        position:"relative" }}
+      onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-1px)"; }}
+      onMouseLeave={e=>{ e.currentTarget.style.transform="translateY(0)"; }}>
+
+      {unreadCount>0 && (
+        <div style={{ position:"absolute", top:-8, right:-8,
+          background:C.red, color:C.white, borderRadius:"50%",
+          width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center",
+          fontSize:13, fontWeight:900, boxShadow:"0 2px 8px rgba(230,57,70,0.5)",
+          animation:"pulse 1.5s ease-in-out infinite", zIndex:1 }}>
+          {unreadCount}
+        </div>
+      )}
+
+      {/* タイマーバナー */}
+      {timer && (
+        <div style={{
+          background: timer.bg, padding:"8px 16px",
+          display:"flex", alignItems:"center", justifyContent:"space-between",
+          animation: timer.blink ? "hiBlink 0.8s ease-in-out infinite" : "none" }}>
+          <span style={{ fontSize:14, fontWeight:800, color:timer.col }}>
+            ⏱ {order.status==="調整中" ? "返答期限" : "対応期限"}：{timer.label}
+          </span>
+          {timer.blink && (
+            <span style={{ fontSize:12, fontWeight:700, color:timer.col }}>⚠️ 要対応</span>
+          )}
+        </div>
+      )}
+
+      {/* カード本体 */}
+      <div style={{ padding:"14px 16px" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, gap:8 }}>
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:18, fontWeight:800, color:C.navy,
+              overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {HI_SVC_ICON[order.service]} {order.service}
+            </div>
+            <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>{order.id} ・ {order.created}</div>
+          </div>
+          <div style={{ flexShrink:0 }}><HiStatusBadge status={order.status} /></div>
+        </div>
+
+        <div style={{ fontSize:14, color:"#444", lineHeight:2.0 }}>
+          <div>📍 {order.site}</div>
+          <div>📅 {sch.date}　{sch.start}〜{sch.end}</div>
+        </div>
+
+        <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ color:C.blue, fontSize:13, fontWeight:700 }}>🔍 詳細を見る</span>
+          <span style={{ color:C.gray }}>|</span>
+          <span style={{ color:C.green, fontSize:13, fontWeight:700 }}>
+            💬 チャット
+            {unreadCount>0 && (
+              <span style={{ background:C.red, color:C.white, borderRadius:99,
+                padding:"1px 8px", fontSize:11, fontWeight:800, marginLeft:6 }}>
+                {unreadCount}件未読
+              </span>
+            )}
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ── 詳細画面 ─────────────────────────────────────────────
+function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat }) {
+  const [modal, setModal] = useState(null);
+  const [reschedDate, setReschedDate] = useState("");
+  const [reschedTime, setReschedTime] = useState("");
+  const [reschedErr,  setReschedErr]  = useState("");
+
+  const st = HI_STATUS[order.status] || HI_STATUS["調整中"];
+  const noReqStatuses = ["完了", "キャンセル", "キャンセル相談中"];
+  const canCancel    = role !== "admin" && !noReqStatuses.includes(order.status);
+  const canReschedule= role !== "admin" && !noReqStatuses.includes(order.status) && order.status !== "日程変更相談中";
+
+  const ConfRow = ({label,value}) => !value ? null : (
+    <div style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
+      <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
+      <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
+    </div>
+  );
+
+  const nowStr = () => {
+    const t = new Date();
+    return `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+  };
+
+  const handleCancel = () => {
+    onStatusChange && onStatusChange(order.id, "キャンセル相談中");
+    onChat && onChat(order.id, {
+      id: Date.now(), from: "user",
+      text: "キャンセルをお願いしたいです。\n担当者のご確認をよろしくお願いいたします。",
+      time: nowStr(), read: true
+    });
+    setModal(null);
+  };
+
+  const handleReschedule = () => {
+    if (!reschedDate) { setReschedErr("日付を選択してください"); return; }
+    if (!reschedTime) { setReschedErr("時間を入力してください"); return; }
+    const [, m, d] = reschedDate.split("-").map(Number);
+    const [hh, mm] = reschedTime.split(":");
+    const timeLabel = mm === "00" ? `${hh}時頃` : `${hh}時${mm}分頃`;
+    onStatusChange && onStatusChange(order.id, "日程変更相談中");
+    onChat && onChat(order.id, {
+      id: Date.now(), from: "user",
+      text: `${m}月${d}日 ${timeLabel}への日程変更を希望します。\nご調整のほどよろしくお願いいたします。`,
+      time: nowStr(), read: true
+    });
+    setModal(null);
+    setReschedDate(""); setReschedTime(""); setReschedErr("");
+  };
+
+  const Sheet = ({ children }) => (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
+      display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:1000 }}>
+      <div style={{ background:C.white, borderRadius:"24px 24px 0 0",
+        padding:"28px 24px 48px", width:"100%", maxWidth:480,
+        animation:"msgIn 0.25s ease" }}>
+        {children}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background:C.bg, minHeight:"100vh", fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <style>{HI_CSS}</style>
+
+      {/* キャンセル確認シート */}
+      {modal === "cancel" && (
+        <Sheet>
+          <div style={{ textAlign:"center", marginBottom:24 }}>
+            <div style={{ fontSize:40, marginBottom:10 }}>🚫</div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.navy, marginBottom:8 }}>
+              キャンセルを依頼しますか？
+            </div>
+            <div style={{ fontSize:14, color:C.gray, lineHeight:1.9 }}>
+              担当者へキャンセルの相談メッセージが<br />自動で送られます。
+            </div>
+          </div>
+          <button onClick={handleCancel}
+            style={{ display:"block", width:"100%",
+              background:"linear-gradient(135deg,#e63946,#b01020)",
+              color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
+              padding:"16px 0", cursor:"pointer", fontFamily:"inherit", marginBottom:10 }}>
+            🚫 はい、キャンセルを依頼する
+          </button>
+          <button onClick={()=>setModal(null)}
+            style={{ display:"block", width:"100%", background:C.grayPale, color:C.navy,
+              border:"2px solid "+C.grayL, borderRadius:14, fontSize:15, fontWeight:700,
+              padding:"14px 0", cursor:"pointer", fontFamily:"inherit" }}>
+            もどる
+          </button>
+        </Sheet>
+      )}
+
+      {/* 日程変更フォームシート */}
+      {modal === "reschedule" && (
+        <Sheet>
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:18, fontWeight:800, color:C.navy, marginBottom:4 }}>📆 日程変更を相談する</div>
+            <div style={{ fontSize:14, color:C.gray }}>ご希望の日時を入力してください</div>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>変更希望日</div>
+            <input type="date" value={reschedDate}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={e=>{ setReschedDate(e.target.value); setReschedErr(""); }}
+              style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:10,
+                border:"2px solid "+(reschedErr&&!reschedDate ? C.red : C.grayL),
+                fontFamily:"inherit", outline:"none", color:C.navy, boxSizing:"border-box" }} />
+          </div>
+          <div style={{ marginBottom:reschedErr ? 8 : 20 }}>
+            <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>変更希望時間</div>
+            <input type="time" value={reschedTime}
+              onChange={e=>{ setReschedTime(e.target.value); setReschedErr(""); }}
+              style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:10,
+                border:"2px solid "+(reschedErr&&!reschedTime ? C.red : C.grayL),
+                fontFamily:"inherit", outline:"none", color:C.navy, boxSizing:"border-box" }} />
+          </div>
+          {reschedErr && (
+            <div style={{ color:C.red, fontSize:13, marginBottom:12 }}>⚠️ {reschedErr}</div>
+          )}
+          <button onClick={handleReschedule}
+            style={{ display:"block", width:"100%",
+              background:"linear-gradient(135deg,#6930c3,#4a1f9e)",
+              color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
+              padding:"16px 0", cursor:"pointer", fontFamily:"inherit", marginBottom:10 }}>
+            📆 変更を相談する
+          </button>
+          <button onClick={()=>{ setModal(null); setReschedErr(""); }}
+            style={{ display:"block", width:"100%", background:C.grayPale, color:C.navy,
+              border:"2px solid "+C.grayL, borderRadius:14, fontSize:15, fontWeight:700,
+              padding:"14px 0", cursor:"pointer", fontFamily:"inherit" }}>
+            もどる
+          </button>
+        </Sheet>
+      )}
+
+      {/* ヘッダー */}
+      <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
+        padding:"14px 20px", display:"flex", alignItems:"center", gap:12,
+        boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
+        <button onClick={onBack} style={{ background:C.grayPale, border:"none",
+          borderRadius:10, padding:"8px 14px", fontSize:14, fontWeight:700,
+          color:C.navy, cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
+        <img src={LOGO_IMG} style={{ height:36, objectFit:"contain" }} />
+        <div style={{ flex:1, textAlign:"right", fontSize:14, fontWeight:800, color:C.navy }}>詳細</div>
+      </div>
+
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 40px" }}>
+        {/* ステータスバー */}
+        <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+          borderRadius:18, padding:"18px 20px", marginBottom:16 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+            <div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>受付番号</div>
+              <div style={{ fontSize:17, fontWeight:800, color:C.white }}>{order.id}</div>
+            </div>
+            <HiStatusBadge status={order.status} large />
+          </div>
+          <div style={{ fontSize:13, color:"rgba(255,255,255,0.75)", marginTop:4 }}>{st.icon} {st.desc}</div>
+          {role === "admin" && (() => { const t = hiGetTimer(order, Date.now()); return t ? (
+            <div style={{ marginTop:8 }}>
+              <span style={{ background:t.bg, color:t.col, borderRadius:99,
+                padding:"4px 12px", fontSize:13, fontWeight:700, display:"inline-block",
+                animation:t.blink?"hiBlink 0.8s ease-in-out infinite":"none" }}>
+                ⏱ {t.label}
+              </span>
+            </div>
+          ) : null; })()}
+        </div>
+
+        {/* ステータス変更（admin のみ） */}
+        {role === "admin" && (
+          <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
+            boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:16, padding:"14px 18px" }}>
+            <div style={{ fontSize:13, color:C.gray, marginBottom:10, fontWeight:700 }}>ステータスを変更</div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {Object.entries(HI_STATUS).map(([key, s]) => {
+                const active = order.status === key;
+                return (
+                  <button key={key}
+                    onClick={() => !active && onStatusChange && onStatusChange(order.id, key)}
+                    style={{ padding:"7px 14px", borderRadius:99, fontSize:13, fontWeight:700,
+                      border:"2px solid "+(active ? s.border : C.grayL),
+                      background: active ? s.bg : C.white,
+                      color: active ? s.text : C.gray,
+                      cursor: active ? "default" : "pointer", transition:"all 0.15s" }}>
+                    {s.icon} {key}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* チャットボタン */}
+        <button onClick={onOpenChat}
+          style={{ width:"100%", background:"linear-gradient(135deg,#2eaa72,#1a7a50)",
+            border:"none", borderRadius:16, padding:"16px 20px", cursor:"pointer",
+            display:"flex", alignItems:"center", gap:14, marginBottom:12,
+            boxShadow:"0 4px 16px rgba(46,170,114,0.35)", textAlign:"left" }}>
+          <div style={{ width:44, height:44, background:"rgba(255,255,255,0.2)",
+            borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:24, flexShrink:0 }}>💬</div>
+          <div>
+            <div style={{ fontSize:16, fontWeight:900, color:C.white }}>イーライくんとチャット</div>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", marginTop:2 }}>
+              担当者への連絡・日程相談はこちら
+            </div>
+          </div>
+        </button>
+
+        {/* キャンセル・日程変更ボタン（一般ユーザーのみ） */}
+        {(canCancel || canReschedule) && (
+          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+            {canReschedule && (
+              <button onClick={()=>setModal("reschedule")}
+                style={{ flex:1, background:C.white, color:"#6930c3",
+                  border:"2px solid #b090e8", borderRadius:14, fontSize:14, fontWeight:700,
+                  padding:"14px 8px", cursor:"pointer", fontFamily:"inherit" }}>
+                📆 日程変更を相談
+              </button>
+            )}
+            {canCancel && (
+              <button onClick={()=>setModal("cancel")}
+                style={{ flex:1, background:C.white, color:C.red,
+                  border:"2px solid "+C.red, borderRadius:14, fontSize:14, fontWeight:700,
+                  padding:"14px 8px", cursor:"pointer", fontFamily:"inherit" }}>
+                🚫 キャンセル依頼
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* 基本情報 */}
+        <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
+          boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:C.navy,
+            borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📋 基本情報</div>
+          <div style={{ padding:"14px 18px" }}>
+            <ConfRow label="作業区分" value={HI_SVC_ICON[order.service]+" "+order.service} />
+            <ConfRow label="現場名"   value={order.site} />
+            <ConfRow label="住所"     value={order.address} />
+            <ConfRow label="鍵"       value={order.key} />
+            <ConfRow label="駐車場"   value={order.parking} />
+            <ConfRow label="備考"     value={order.note} />
+          </div>
+        </div>
+
+        {/* 日程 */}
+        {order.schedules.map((sch,i)=>(
+          <div key={i} style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
+            boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
+            <div style={{ fontSize:15, fontWeight:800, color:C.navy,
+              borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📅 日程 {i+1}</div>
+            <div style={{ padding:"14px 18px" }}>
+              <ConfRow label="日付"     value={sch.date} />
+              <ConfRow label="時間"     value={sch.start+"〜"+sch.end} />
+              <ConfRow label="作業内容" value={(sch.details||[]).join("・")} />
+              <ConfRow label="作業者数" value={sch.workers} />
+            </div>
+          </div>
+        ))}
+
+        <button onClick={onBack}
+          style={{ display:"block", width:"100%", background:C.white, color:C.navy,
+            border:"2px solid "+C.grayL, borderRadius:14, fontSize:16, fontWeight:700,
+            padding:"15px 0", cursor:"pointer", fontFamily:"inherit" }}>
+          ← 一覧にもどる
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── チャット画面 ─────────────────────────────────────────
+// LOGO_IMG は共有定数を使用
+
+function ChatScreen({ role, order, messages, onSend, onBack }) {
+  const [input,  setInput]  = useState("");
+  const [typing, setTyping] = useState(false);
+  const bottomRef = useRef(null);
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[messages,typing]);
+
+  const now = () => {
+    const d = new Date();
+    return `${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
+  };
+
+  const handleSend = () => {
+    if (!input.trim()) return;
+    onSend(order.id, { id:Date.now(), from:"user", text:input.trim(), time:now(), read:true });
+    setInput("");
+    setTyping(true);
+    setTimeout(()=>{
+      setTyping(false);
+      onSend(order.id, { id:Date.now()+1, from:"eli",
+        text:"メッセージを受け取りました😊\n担当者が確認次第、ご返答いたします。\nお急ぎの場合は📞 06-6392-3882 へどうぞ。",
+        time:now(), read:true });
+    },1500);
+  };
+
+  return (
+    <div style={{ height:"100vh", display:"flex", flexDirection:"column",
+      fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <style>{HI_CSS}</style>
+      <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+        padding:"12px 16px", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+        <button onClick={onBack} style={{ background:"rgba(255,255,255,0.15)", border:"none",
+          color:C.white, borderRadius:10, padding:"8px 14px", fontSize:14,
+          fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+          ← もどる
+        </button>
+        <div style={{ width:38, height:38, background:"rgba(255,255,255,0.2)",
+          borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
+          fontSize:22, flexShrink:0 }}>🤖</div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:14, fontWeight:900, color:C.white,
+            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            {order.site}
+          </div>
+          <div style={{ marginTop:2 }}><HiStatusBadge status={order.status} /></div>
+        </div>
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto", padding:"16px", background:C.bg }}>
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          <div style={{ textAlign:"center", marginBottom:16 }}>
+            <span style={{ background:C.grayPale, color:C.gray, fontSize:12,
+              fontWeight:600, borderRadius:99, padding:"4px 14px", border:"1px solid "+C.grayL }}>
+              受付番号：{order.id}
+            </span>
+          </div>
+
+          {messages.map((msg,i)=>{
+            const isOwn = role==="admin" ? msg.from==="staff" : msg.from==="user";
+            return (
+              <div key={msg.id||i} style={{
+                display:"flex", flexDirection:isOwn?"row-reverse":"row",
+                alignItems:"flex-end", gap:8, marginBottom:16, animation:"msgIn 0.3s ease" }}>
+                {!isOwn && (
+                  <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
+                    display:"flex", alignItems:"center", justifyContent:"center",
+                    fontSize:18, flexShrink:0 }}>
+                    {msg.from==="staff" ? "👷" : "🤖"}
+                  </div>
+                )}
+                <div style={{ maxWidth:"78%" }}>
+                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>🤖 イーライくん</div>}
+                  {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue,   marginBottom:3, fontWeight:600 }}>👷 担当者</div>}
+                  {!isOwn && msg.from==="user"  && role==="admin" && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 ユーザー</div>}
+                  <div style={{
+                    background: isOwn
+                      ? "linear-gradient(135deg,#2952c8,#0a1f5c)"
+                      : msg.from==="staff" ? "#eef3ff" : C.white,
+                    color: isOwn ? C.white : C.navy,
+                    borderRadius: isOwn ? "20px 4px 20px 20px" : "4px 20px 20px 20px",
+                    padding:"13px 17px", fontSize:16, fontWeight:500, lineHeight:1.7,
+                    boxShadow: isOwn ? "0 4px 14px rgba(10,31,92,0.2)" : "0 4px 14px rgba(10,31,92,0.07)",
+                    border: !isOwn ? `1px solid ${C.grayL}` : "none",
+                    whiteSpace:"pre-wrap",
+                  }}>{msg.text}</div>
+                  <div style={{ fontSize:11, color:C.gray, marginTop:4,
+                    textAlign:isOwn?"right":"left" }}>{msg.time}</div>
+                </div>
+              </div>
+            );
+          })}
+
+          {typing && (
+            <div style={{ display:"flex", alignItems:"flex-end", gap:8, marginBottom:16 }}>
+              <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
+                display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🤖</div>
+              <div style={{ background:C.white, borderRadius:"4px 20px 20px 20px",
+                padding:"14px 18px", border:`1px solid ${C.grayL}`,
+                display:"flex", gap:5, alignItems:"center" }}>
+                {[0,1,2].map(i=>(
+                  <div key={i} style={{ width:8, height:8, borderRadius:"50%",
+                    background:C.blue, animation:`dotB 1.2s ease ${i*0.2}s infinite` }} />
+                ))}
+              </div>
+            </div>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      </div>
+
+      <div style={{ background:C.white, borderTop:`2px solid ${C.grayL}`, padding:"12px 16px", flexShrink:0 }}>
+        <div style={{ maxWidth:500, margin:"0 auto", display:"flex", gap:10, alignItems:"flex-end" }}>
+          <textarea value={input} onChange={e=>setInput(e.target.value)}
+            onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSend();} }}
+            placeholder="メッセージを入力... (Enterで送信)" rows={1}
+            style={{ flex:1, fontSize:16, padding:"13px 16px", borderRadius:14,
+              border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
+              color:C.navy, resize:"none", lineHeight:1.5, maxHeight:100, overflowY:"auto", outline:"none" }}
+            onInput={e=>{ e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,100)+"px"; }}
+          />
+          <button onClick={handleSend} style={{
+            width:50, height:50, borderRadius:"50%", border:"none",
+            background:input.trim()?"linear-gradient(135deg,#2952c8,#0a1f5c)":C.grayL,
+            color:input.trim()?C.white:C.gray, fontSize:20, cursor:input.trim()?"pointer":"default",
+            display:"flex", alignItems:"center", justifyContent:"center",
+            flexShrink:0, transition:"all 0.15s" }}>✈️</button>
+        </div>
+        <div style={{ textAlign:"center", marginTop:6, fontSize:12, color:C.gray }}>
+          📞 緊急の場合は 06-6392-3882 まで
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── メイン ───────────────────────────────────────────────
+function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
+  const [orders,    setOrders]    = useState(HI_ORDERS);
+  const [chats,     setChats]     = useState(HI_INIT_CHATS);
+  const [filter,    setFilter]    = useState("全て");
+  const [screen,    setScreen]    = useState("list");
+  const [currentId, setCurrentId] = useState(null);
+  const [, setTick] = useState(0);
+
+  const current = orders.find(o => o.id === currentId) || null;
+
+  useEffect(() => {
+    const autoComplete = (os) => {
+      const nowMs = Date.now();
+      let changed = false;
+      const next = os.map(o => {
+        if (o.status !== "日程確定" && o.status !== "日程相談中") return o;
+        const sch = o.schedules && o.schedules[0];
+        if (!sch) return o;
+        const endDt = new Date(sch.date + "T" + (sch.end || "23:59") + ":00");
+        if (endDt.getTime() < nowMs) { changed = true; return { ...o, status:"完了", statusChangedAt:nowMs }; }
+        return o;
+      });
+      return changed ? next : os;
+    };
+    const id = setInterval(() => {
+      setTick(n => n + 1);
+      setOrders(os => autoComplete(os));
+    }, 60000);
+    setOrders(os => autoComplete(os));
+    return () => clearInterval(id);
+  }, []);
+
+  const handleStatusChange = (id, newStatus) => {
+    const nowMs = Date.now();
+    setOrders(os => os.map(o => o.id === id
+      ? { ...o, status: newStatus, statusChangedAt: nowMs } : o));
+    if (newStatus === "日程確定") {
+      const order = orders.find(o => o.id === id);
+      if (order && order.schedules && order.schedules.length > 0) {
+        const DOW = ["日","月","火","水","木","金","土"];
+        const scheduleLines = order.schedules.map(sch => {
+          const [y, m, d] = sch.date.split("-").map(Number);
+          const dow = DOW[new Date(y, m - 1, d).getDay()];
+          return `${m}月${d}日（${dow}）${sch.start}〜`;
+        }).join("\n");
+        const t = new Date();
+        const timeStr = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")} ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+        const autoMsg = {
+          id: Date.now(),
+          from: "staff",
+          text: `お待たせいたしました。\n下記日程にて段取りができましたので、ご報告申し上げます。\n【作業内容】\n${order.service}\n【日時】\n${scheduleLines}\n当日はよろしくお願いいたします。\n引き続き、何卒よろしくお願い申し上げます。`,
+          time: timeStr,
+          read: false,
+        };
+        setChats(c => ({ ...c, [id]: [...(c[id] || []), autoMsg] }));
+      }
+    }
+  };
+
+  const getUnread = id => (chats[id]||[]).filter(m=>m.from==="staff"&&!m.read).length;
+
+  const openChat = order => {
+    setChats(c=>({ ...c, [order.id]:(c[order.id]||[]).map(m=>({...m,read:true})) }));
+    setCurrentId(order.id);
+    setScreen("chat");
+  };
+
+  const addMessage = (orderId, msg) => {
+    setChats(c=>({ ...c, [orderId]:[...(c[orderId]||[]),msg] }));
+  };
+
+  const counts = {
+    全て:       orders.length,
+    調整中:     orders.filter(o=>o.status==="調整中").length,
+    日程確定:   orders.filter(o=>o.status==="日程確定").length,
+    日程相談中: orders.filter(o=>o.status==="日程相談中").length,
+    完了:       orders.filter(o=>o.status==="完了").length,
+  };
+
+  const filtered = filter==="全て" ? orders : orders.filter(o=>o.status===filter);
+
+  if (screen==="chat" && current) return (
+    <ChatScreen role={role} order={current} messages={chats[current.id]||[]}
+      onSend={addMessage} onBack={()=>setScreen("detail")} />
+  );
+
+  if (screen==="detail" && current) return (
+    <DetailScreen role={role} order={current}
+      onBack={()=>setScreen("list")}
+      onOpenChat={()=>openChat(current)}
+      onStatusChange={handleStatusChange}
+      onChat={addMessage} />
+  );
+
+  return (
+    <div style={{ background:C.bg, minHeight:"100vh",
+      fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <style>{HI_CSS}</style>
+
+      {/* ヘッダー */}
+      <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
+        padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
+        boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
+        <img src={LOGO_IMG} style={{ height:36, objectFit:"contain" }} />
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <button onClick={onMyPage} style={{ padding:"6px 14px", background:"#eef3ff", border:"1px solid #2952c8", borderRadius:8, color:"#2952c8", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>👤 マイページ</button>
+          <button onClick={onLogout} style={{ padding:"6px 14px", background:C.grayPale, border:"1px solid "+C.grayL, borderRadius:8, color:C.gray, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>ログアウト</button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 40px" }}>
+
+        {/* イーライくんのメッセージ */}
+        <EliMessage orders={orders} chats={chats} />
+
+        {/* フィルター */}
+        <div style={{ display:"flex", gap:8, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
+          {Object.entries(counts).map(([key,cnt])=>{
+            const st  = HI_STATUS[key];
+            const act = filter===key;
+            return (
+              <button key={key} onClick={()=>setFilter(key)}
+                style={{ flexShrink:0, padding:"8px 14px", borderRadius:99, fontSize:13, fontWeight:700,
+                  border:"2px solid "+(act?(st?.border||C.blue):C.grayL),
+                  background:act?(st?.bg||"#eef3ff"):C.white,
+                  color:act?(st?.text||C.blue):C.gray,
+                  cursor:"pointer", whiteSpace:"nowrap", transition:"all 0.15s" }}>
+                {key} ({cnt})
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 一覧 */}
+        {filtered.map(order=>(
+          <HiOrderCard key={order.id} role={role} order={order}
+            unreadCount={getUnread(order.id)}
+            onClick={()=>{ setCurrentId(order.id); setScreen("detail"); }} />
+        ))}
+
+        <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
+
+        {/* フッター */}
+        <div style={{ background:C.white, borderRadius:16, marginTop:16,
+          boxShadow:"0 2px 12px rgba(10,31,92,0.07)", border:"1px solid "+C.grayL,
+          display:"flex", overflow:"hidden" }}>
+          <div style={{ flex:1, padding:"16px", borderRight:"1px solid "+C.grayL }}>
+            <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>📞 電話受付</div>
+            <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>06-6392-3882</div>
+            <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>平日 9:00〜18:00</div>
+          </div>
+          <div style={{ flex:1, padding:"16px", display:"flex", flexDirection:"column",
+            alignItems:"center", justifyContent:"center", gap:4 }}>
+            <div style={{ fontSize:28 }}>🕐</div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
+              <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
+            </div>
+          </div>
+        </div>
+        <div style={{ textAlign:"center", marginTop:14, fontSize:13, color:C.gray }}>
+          🔒 SSL暗号化通信で保護されています
+        </div>
+      </div>
+    </div>
+  );
+}
+
+    // ═══════════════════════════════════════════════════════
+    // マイページ
+    // ═══════════════════════════════════════════════════════
+
+function MyTopBar({ onBack, onLogout }) {
+  return (
+    <div style={{ padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
+      background:C.white, borderBottom:"2px solid "+C.grayL, boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+        <button onClick={onBack} style={{ padding:"6px 14px", background:C.grayPale, border:"1px solid "+C.grayL,
+          borderRadius:8, color:C.navy, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
+        <img src={LOGO_IMG} alt="E-Li" style={{ height:36, width:"auto", objectFit:"contain" }} />
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <div style={{ textAlign:"right" }}>
+          <div style={{ fontSize:11, color:C.gray }}>工事 受発注システム</div>
+          <div style={{ fontSize:14, fontWeight:900, color:C.navy }}>マイページ</div>
+        </div>
+        <button onClick={onLogout} style={{ padding:"6px 12px", background:C.grayPale, border:"1px solid "+C.grayL,
+          borderRadius:8, color:C.gray, fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>🚪ログアウト</button>
+      </div>
+    </div>
+  );
+}
+
+function MyEliRow({ children }) {
+  return (
+    <div style={{ padding:"20px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:16 }}>
+      <img src={ELI_IMG} alt="イーライくん" style={{ width:80, height:"auto",
+        animation:"eliFloat 3s ease-in-out infinite",
+        filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
+      <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
+        padding:"12px 16px", fontSize:15, color:C.navy, fontWeight:700,
+        lineHeight:1.8, border:"1px solid "+C.grayL }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ReadOnlyField({ label, value }) {
+  return (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontSize:14, fontWeight:700, color:C.gray, marginBottom:6 }}>{label}</div>
+      <div style={{ fontSize:17, padding:"14px 18px", borderRadius:12,
+        background:"#f4f7ff", color:C.navy, border:"1px solid "+C.grayL,
+        fontWeight:600 }}>{value}</div>
+    </div>
+  );
+}
+
+function EditField({ label, value, onChange, error, type, hint }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:6 }}>
+        {label} <span style={{ fontSize:12, color:C.blue, fontWeight:600 }}>（変更可）</span>
+      </div>
+      <input type={type||"text"} value={value} onChange={onChange}
+        onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
+        style={{ width:"100%", fontSize:17, padding:"14px 18px", borderRadius:12,
+          border:"2px solid "+(error?"#e63946":focused?"#2952c8":C.grayL),
+          boxSizing:"border-box", fontFamily:"inherit", outline:"none",
+          background:focused?"#f0f5ff":C.white, color:C.navy,
+          boxShadow:focused?"0 0 0 4px rgba(41,82,200,0.08)":"none",
+          transition:"all 0.2s" }} />
+      {hint && !error && <div style={{ fontSize:12, color:C.gray, marginTop:4 }}>{hint}</div>}
+      {error && <div style={{ color:C.red, fontSize:13, marginTop:4 }}>⚠️ {error}</div>}
+    </div>
+  );
+}
+
+function PwField({ label, value, onChange, error, placeholder }) {
+  const [show, setShow] = useState(false);
+  const [focused, setFocused] = useState(false);
+  return (
+    <div style={{ marginBottom:16 }}>
+      <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:6 }}>{label}</div>
+      <div style={{ position:"relative" }}>
+        <input type={show?"text":"password"} value={value} onChange={onChange}
+          placeholder={placeholder||"入力してください"}
+          onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
+          style={{ width:"100%", fontSize:17, padding:"14px 52px 14px 18px", borderRadius:12,
+            border:"2px solid "+(error?"#e63946":focused?"#2952c8":C.grayL),
+            boxSizing:"border-box", fontFamily:"inherit", outline:"none",
+            background:focused?"#f0f5ff":C.white, color:C.navy,
+            boxShadow:focused?"0 0 0 4px rgba(41,82,200,0.08)":"none",
+            transition:"all 0.2s" }} />
+        <button onClick={()=>setShow(s=>!s)} style={{ position:"absolute", right:14,
+          top:"50%", transform:"translateY(-50%)", background:"none", border:"none",
+          cursor:"pointer", fontSize:20, color:C.gray }}>
+          {show?"🙈":"👁️"}
+        </button>
+      </div>
+      {error && <div style={{ color:C.red, fontSize:13, marginTop:4 }}>⚠️ {error}</div>}
+    </div>
+  );
+}
+
+function MyPrimaryBtn({ children, onClick, color }) {
+  const [hov, setHov] = useState(false);
+  const bg = color==="green"
+    ? "linear-gradient(135deg,#2eaa72,#1a7a50)"
+    : "linear-gradient(135deg,#2952c8,#0a1f5c)";
+  return (
+    <button onClick={onClick}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ display:"block", width:"100%", background:bg,
+        color:C.white, border:"none", borderRadius:14,
+        fontSize:17, fontWeight:800, padding:"17px 0",
+        cursor:"pointer", fontFamily:"inherit",
+        boxShadow:hov?"0 8px 24px rgba(10,31,92,0.3)":"0 4px 16px rgba(10,31,92,0.15)",
+        transform:hov?"translateY(-1px)":"translateY(0)",
+        transition:"all 0.2s" }}>
+      {children}
+    </button>
+  );
+}
+
+function MySubBtn({ children, onClick }) {
+  const [hov, setHov] = useState(false);
+  return (
+    <button onClick={onClick}
+      onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{ display:"block", width:"100%",
+        background:hov?"#f0f5ff":C.white, color:C.navy,
+        border:"2px solid "+C.grayL, borderRadius:14,
+        fontSize:16, fontWeight:700, padding:"15px 0",
+        cursor:"pointer", fontFamily:"inherit", transition:"all 0.2s" }}>
+      {children}
+    </button>
+  );
+}
+
+function SectionTitle({ children, icon }) {
+  return (
+    <div style={{ fontSize:15, fontWeight:800, color:C.navy, marginBottom:14, marginTop:4,
+      display:"flex", alignItems:"center", gap:8,
+      borderLeft:"4px solid "+C.blue, paddingLeft:10 }}>
+      {icon} {children}
+    </div>
+  );
+}
+
+function Toast({ msg }) {
+  if (!msg) return null;
+  return (
+    <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
+      background:C.green, color:C.white, borderRadius:12, padding:"14px 24px",
+      fontSize:15, fontWeight:700, boxShadow:"0 4px 20px rgba(0,0,0,0.2)",
+      zIndex:999, whiteSpace:"nowrap", animation:"fadeUp 0.3s ease" }}>
+      ✅ {msg}
+    </div>
+  );
+}
+
+// ── パスワード変更モーダル ───────────────────────────────
+function PwModal({ onClose }) {
+  const [current, setCurrent]   = useState("");
+  const [newPw, setNewPw]       = useState("");
+  const [confirm, setConfirm]   = useState("");
+  const [errors, setErrors]     = useState({});
+  const [done, setDone]         = useState(false);
+
+  const handleSave = () => {
+    const e = {};
+    if (!current)        e.current = "現在のパスワードを入力してください";
+    if (newPw.length<8)  e.newPw   = "8文字以上で入力してください";
+    if (newPw !== confirm) e.confirm = "パスワードが一致しません";
+    setErrors(e);
+    if (!Object.keys(e).length) setDone(true);
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.5)",
+      display:"flex", alignItems:"center", justifyContent:"center",
+      zIndex:200, padding:16 }}>
+      <div style={{ background:C.white, borderRadius:20, width:"100%", maxWidth:440,
+        maxHeight:"90vh", overflowY:"auto" }}>
+
+        {/* モーダルヘッダー */}
+        <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+          borderRadius:"20px 20px 0 0", padding:"16px 20px",
+          display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontSize:17, fontWeight:800, color:C.white }}>🔑 パスワードの変更</div>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none",
+            color:C.white, width:32, height:32, borderRadius:"50%", cursor:"pointer", fontSize:18 }}>✕</button>
+        </div>
+
+        <div style={{ padding:"24px" }}>
+          {!done ? (
+            <>
+              <PwField label="現在のパスワード" value={current}
+                onChange={e=>{ setCurrent(e.target.value); setErrors(er=>({...er,current:""})); }}
+                error={errors.current} placeholder="現在のパスワード" />
+
+              <PwField label="新しいパスワード" value={newPw}
+                onChange={e=>{ setNewPw(e.target.value); setErrors(er=>({...er,newPw:""})); }}
+                error={errors.newPw} placeholder="8文字以上" />
+
+              <PwField label="新しいパスワード（確認）" value={confirm}
+                onChange={e=>{ setConfirm(e.target.value); setErrors(er=>({...er,confirm:""})); }}
+                error={errors.confirm} placeholder="もう一度入力" />
+
+              <div style={{ background:"#f4f7ff", borderRadius:10, padding:"10px 14px",
+                marginBottom:20, fontSize:12, color:"#444", lineHeight:1.9,
+                border:"1px solid "+C.grayL }}>
+                🔑 8文字以上・英大文字・数字を含む
+              </div>
+
+              <div style={{ marginBottom:12 }}>
+                <MyPrimaryBtn onClick={handleSave}>変更を保存する</MyPrimaryBtn>
+              </div>
+              <MySubBtn onClick={onClose}>キャンセル</MySubBtn>
+            </>
+          ) : (
+            <div style={{ textAlign:"center", padding:"16px 0" }}>
+              <div style={{ fontSize:52, marginBottom:12 }}>✅</div>
+              <div style={{ fontSize:20, fontWeight:800, color:C.navy, marginBottom:8 }}>
+                パスワードを変更しました！
+              </div>
+              <div style={{ fontSize:14, color:C.gray, marginBottom:24, lineHeight:1.8 }}>
+                次回のログインから新しいパスワードをご使用ください
+              </div>
+              <MyPrimaryBtn onClick={onClose}>とじる</MyPrimaryBtn>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── メイン ───────────────────────────────────────────────
+function MyPageApp({ onBack, onLogout }) {
+  const [name, setName]   = useState("榮藤 美香");
+  const [phone, setPhone] = useState("08088891665");
+  const [errors, setErrors] = useState({});
+  const [toast, setToast]   = useState("");
+  const [showPwModal, setShowPwModal] = useState(false);
+
+  const showToast = (msg) => {
+    setToast(msg);
+    setTimeout(()=>setToast(""), 3000);
+  };
+
+  const handleSave = () => {
+    const e = {};
+    if (!name.trim()) e.name = "氏名を入力してください";
+    if (!/^[\d\-]{10,13}$/.test(phone.replace(/\s/g,""))) e.phone = "正しい電話番号を入力してください";
+    setErrors(e);
+    if (!Object.keys(e).length) showToast("変更を保存しました");
+  };
+
+  return (
+    <div style={{ background:C.bg, minHeight:"100vh",
+      fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <style>{`
+        @keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+      `}</style>
+
+      <MyTopBar onBack={onBack} onLogout={onLogout} />
+
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"0 16px 40px" }}>
+        <div style={{ background:C.white, borderRadius:20,
+          boxShadow:"0 4px 24px rgba(10,31,92,0.10)", border:"1px solid "+C.grayL, marginBottom:16 }}>
+
+          <MyEliRow>
+            {name.split(" ")[0]}さん、<br />情報を確認・変更できます✏️
+          </MyEliRow>
+
+          <div style={{ padding:"0 24px 28px" }}>
+
+            {/* 変更不可 */}
+            <SectionTitle icon="🏢">会社情報</SectionTitle>
+            <ReadOnlyField label="契約社名" value="株式会社オガチャン" />
+            <ReadOnlyField label="メールアドレス（ログインID）" value="jimu@markan.co.jp" />
+            <ReadOnlyField label="企業ID" value="ELI-1001" />
+
+            <div style={{ height:1, background:C.grayL, margin:"20px 0" }}/>
+
+            {/* 変更可能 */}
+            <SectionTitle icon="👤">個人情報</SectionTitle>
+            <EditField label="担当者名" value={name}
+              onChange={e=>{ setName(e.target.value); setErrors(er=>({...er,name:""})); }}
+              error={errors.name} />
+            <EditField label="携帯電話番号" value={phone} type="tel"
+              onChange={e=>{ setPhone(e.target.value); setErrors(er=>({...er,phone:""})); }}
+              error={errors.phone} hint="ログイン時の確認に使用します" />
+
+            <div style={{ marginBottom:12 }}>
+              <MyPrimaryBtn onClick={handleSave} color="green">変更を保存する</MyPrimaryBtn>
+            </div>
+
+            <div style={{ height:1, background:C.grayL, margin:"20px 0" }}/>
+
+            {/* パスワード変更 */}
+            <SectionTitle icon="🔑">セキュリティ</SectionTitle>
+            <MySubBtn onClick={()=>setShowPwModal(true)}>
+              🔑 パスワードを変更する
+            </MySubBtn>
+
+            <div style={{ height:1, background:C.grayL, margin:"20px 0" }}/>
+
+            {/* ログアウト */}
+            <button style={{ display:"block", width:"100%",
+              background:"none", color:C.red, border:"2px solid #fde8e8",
+              borderRadius:14, fontSize:15, fontWeight:700, padding:"14px 0",
+              cursor:"pointer", fontFamily:"inherit" }}>
+              ログアウト
+            </button>
+          </div>
+        </div>
+
+        {/* 下部 */}
+        <div style={{ background:C.white, borderRadius:16,
+          boxShadow:"0 2px 12px rgba(10,31,92,0.07)", border:"1px solid "+C.grayL,
+          display:"flex", overflow:"hidden" }}>
+          <div style={{ flex:1, padding:"18px 16px", borderRight:"1px solid "+C.grayL }}>
+            <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>📞 電話受付</div>
+            <div style={{ fontSize:20, fontWeight:900, color:C.navy }}>06-6392-3882</div>
+            <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>平日 9:00〜18:00</div>
+          </div>
+          <div style={{ flex:1, padding:"18px 16px", display:"flex", flexDirection:"column",
+            alignItems:"center", justifyContent:"center", gap:4 }}>
+            <div style={{ position:"relative", width:52, height:52 }}>
+              <svg viewBox="0 0 52 52" width="52" height="52">
+                <circle cx="26" cy="26" r="23" fill="none" stroke="#2952c8" strokeWidth="2.5" opacity="0.25"/>
+                <circle cx="26" cy="26" r="23" fill="none" stroke="#2952c8" strokeWidth="2.5" strokeLinecap="round"/>
+                <path d="M 37 18 Q 42 26 37 34" stroke="#2952c8" strokeWidth="2" fill="none" strokeLinecap="round"/>
+                <path d="M 35 32 L 37 34 L 39 32" stroke="#2952c8" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+              <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
+                justifyContent:"center", flexDirection:"column", lineHeight:1 }}>
+                <span style={{ fontSize:11, fontWeight:900, color:C.navy }}>24</span>
+                <span style={{ fontSize:9, color:C.blue, fontWeight:700 }}>/365</span>
+              </div>
+            </div>
+            <div style={{ textAlign:"center" }}>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
+              <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ textAlign:"center", marginTop:14, fontSize:13, color:C.gray }}>
+          🔒 SSL暗号化通信で保護されています
+        </div>
+      </div>
+
+      {showPwModal && <PwModal onClose={()=>setShowPwModal(false)} />}
+      <Toast msg={toast} />
+    </div>
+  );
+}
+
+    // ═══════════════════════════════════════════════════════
+    // 管理者画面
+    // ═══════════════════════════════════════════════════════
+
+const AD_STATUS_LIST = ["調整中","日程確定","日程相談中","キャンセル相談中","日程変更相談中","完了","キャンセル"];
+const AD_STATUS = {
+  "調整中":         { bg:"#fff8e0", text:"#b07800", border:"#f5c800", icon:"🆕" },
+  "日程確定":       { bg:"#eef3ff", text:"#2952c8", border:"#2952c8", icon:"📅" },
+  "日程相談中":     { bg:"#fff3e8", text:"#c05000", border:"#f0a050", icon:"💬" },
+  "キャンセル相談中": { bg:"#fff0f0", text:"#c0202c", border:"#f08090", icon:"🚫" },
+  "日程変更相談中": { bg:"#f3eeff", text:"#6930c3", border:"#b090e8", icon:"📆" },
+  "完了":           { bg:"#f0faf5", text:"#2eaa72", border:"#2eaa72", icon:"✅" },
+  "キャンセル":     { bg:"#fff0f0", text:"#e63946", border:"#e63946", icon:"❌" },
+};
+const AD_SVC_ICON = {
+  "養生・家具移動・荷上":"🛗","解体":"🏚️","産廃":"🚛","清掃・家具移動":"🧹",
+};
+
+function mapOrder(row) {
+  const schRows = (row.schedules || []).sort((a,b) => (a.sort_order||0) - (b.sort_order||0));
+  const schedules = schRows.map(s => ({
+    date:    s.work_date   || '',
+    start:   s.start_time  || '',
+    end:     s.end_time    || '',
+    workers: s.workers     || '',
+    details: Array.isArray(s.details) ? s.details : [],
+  }));
+  return {
+    id:             row.id,
+    company:        row.company    || '',
+    companyId:      row.company_id || '',
+    person:         row.person     || '',
+    phone:          row.phone      || '',
+    service:        row.service    || '',
+    status:         row.status     || '調整中',
+    site:           row.site       || '',
+    address:        row.address    || '',
+    schedules,
+    key:            row.key_info   || '',
+    parking:        row.parking    || '',
+    note:           row.note       || '',
+    createdAt: row.created_at
+      ? new Date(row.created_at).getTime() : Date.now(),
+    statusChangedAt: row.status_changed_at
+      ? new Date(row.status_changed_at).getTime()
+      : (row.created_at ? new Date(row.created_at).getTime() : Date.now()),
+  };
+}
+
+function mapChat(row) {
+  const timeStr = row.created_at
+    ? new Date(row.created_at).toLocaleTimeString('ja', {hour:'2-digit', minute:'2-digit'})
+    : (row.time || '');
+  return {
+    id:   row.id,
+    from: row.from_role || row.from || 'user',
+    text: row.text || '',
+    time: timeStr,
+    read: row.is_read !== undefined ? row.is_read : true,
+  };
+}
+
+// ── タイマー計算 ─────────────────────────────────────────
+
+// 調整中：発注から24時間
+function getAdjustingLevel(createdAt) {
+  const elapsed = Date.now() - createdAt;
+  const remaining = 24 * 3600000 - elapsed;
+  if (remaining <= 0)             return { level:"over",    remaining };
+  if (remaining <= 3 * 3600000)  return { level:"danger",  remaining };
+  if (remaining <= 6 * 3600000)  return { level:"warn",    remaining };
+  if (remaining <= 12 * 3600000) return { level:"caution", remaining };
+  return { level:"ok", remaining };
+}
+
+// 日程相談中：ステータス変更から72時間
+function getNegotiatingLevel(statusChangedAt) {
+  const elapsed = Date.now() - statusChangedAt;
+  if (elapsed >= 72 * 3600000) return { level:"over",        elapsed };
+  if (elapsed >= 60 * 3600000) return { level:"danger",      elapsed };
+  if (elapsed >= 48 * 3600000) return { level:"warn",        elapsed };
+  if (elapsed >= 36 * 3600000) return { level:"caution",     elapsed };
+  if (elapsed >= 24 * 3600000) return { level:"caution_low", elapsed };
+  return { level:"ok", elapsed };
+}
+
+function formatMs(ms) {
+  const absMs = Math.abs(ms);
+  const h = Math.floor(absMs / 3600000);
+  const m = Math.floor((absMs % 3600000) / 60000);
+  return h > 0 ? `${h}時間${m}分` : `${m}分`;
+}
+
+function formatElapsed(ms) {
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (h >= 24) {
+    const d = Math.floor(h/24);
+    const rh = h % 24;
+    return rh > 0 ? `${d}日${rh}時間` : `${d}日`;
+  }
+  return h > 0 ? `${h}時間${m}分` : `${m}分`;
+}
+
+// レベル→スタイル（調整中用）
+const ADJ_STYLES = {
+  over:    { cardBg:"#ffd0d0", leftBorder:"#e63946", badgeBg:"#e63946", badgeText:"#fff", pulse:true  },
+  danger:  { cardBg:"#ffe4e4", leftBorder:"#e63946", badgeBg:"#e63946", badgeText:"#fff", pulse:true  },
+  warn:    { cardBg:"#fff0e0", leftBorder:"#f07800", badgeBg:"#f07800", badgeText:"#fff", pulse:false },
+  caution: { cardBg:"#fff8ee", leftBorder:"#f5c800", badgeBg:"#e09000", badgeText:"#fff", pulse:false },
+  ok:      { cardBg:C.white,   leftBorder:"#f5c800", badgeBg:"#8a9cc5", badgeText:"#fff", pulse:false },
+};
+
+// レベル→スタイル（日程相談中用）
+const NEG_STYLES = {
+  over:        { cardBg:"#ffd0d0", leftBorder:"#e63946", badgeBg:"#e63946", badgeText:"#fff", pulse:true  },
+  danger:      { cardBg:"#ffe4e4", leftBorder:"#e63946", badgeBg:"#e63946", badgeText:"#fff", pulse:true  },
+  warn:        { cardBg:"#fff0e0", leftBorder:"#f07800", badgeBg:"#f07800", badgeText:"#fff", pulse:false },
+  caution:     { cardBg:"#fff8e0", leftBorder:"#f5c800", badgeBg:"#e09000", badgeText:"#fff", pulse:false },
+  caution_low: { cardBg:"#fffbe8", leftBorder:"#f5c800", badgeBg:"#b07800", badgeText:"#fff", pulse:false },
+  ok:          { cardBg:C.white,   leftBorder:"#f0a050", badgeBg:"#8a9cc5", badgeText:"#fff", pulse:false },
+};
+
+function getOrderTimer(order) {
+  if (order.status === "調整中") {
+    const info = getAdjustingLevel(order.createdAt);
+    const st = ADJ_STYLES[info.level];
+    const label = info.remaining <= 0
+      ? `⏰ 期限超過 ${formatMs(info.remaining)}`
+      : `⏰ 残り ${formatMs(info.remaining)}`;
+    return { ...st, label, show:true };
+  }
+  if (order.status === "日程相談中") {
+    const info = getNegotiatingLevel(order.statusChangedAt);
+    const st = NEG_STYLES[info.level];
+    const label = info.elapsed >= 72 * 3600000
+      ? `💬 相談中 ${formatElapsed(info.elapsed)}（3日超過！）`
+      : `💬 相談中 ${formatElapsed(info.elapsed)} 経過`;
+    return { ...st, label, show:true };
+  }
+  return { show:false, cardBg:C.white, leftBorder:AD_STATUS[order.status]?.border||C.grayL, pulse:false };
+}
+
+// リアルタイム更新フック
+function useTimer() {
+  const [tick, setTick] = useState(0);
+  useEffect(()=>{
+    const t = setInterval(()=>setTick(v=>v+1), 60000);
+    return ()=>clearInterval(t);
+  },[]);
+  return tick;
+}
+
+// ── 共通UI ──────────────────────────────────────────────
+function ADStatusBadge({ status }) {
+  const s = AD_STATUS[status]||STATUS["調整中"];
+  return (
+    <span style={{ background:s.bg, color:s.text, border:"2px solid "+s.border,
+      borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:800 }}>
+      {s.icon} {status}
+    </span>
+  );
+}
+
+function CopyBtn({ value, label }) {
+  const [copied, setCopied] = useState(false);
+  const handle = () => {
+    try { navigator.clipboard?.writeText(value); } catch(e){}
+    setCopied(true);
+    setTimeout(()=>setCopied(false), 2000);
+  };
+  return (
+    <button onClick={handle}
+      style={{ background:copied?"#f0faf5":C.grayPale,
+        border:"1px solid "+(copied?C.green:C.grayL),
+        color:copied?C.green:C.gray, borderRadius:6, padding:"3px 10px",
+        fontSize:12, fontWeight:700, cursor:"pointer",
+        transition:"all 0.2s", whiteSpace:"nowrap" }}>
+      {copied?"✅ コピー済":"📋 "+label}
+    </button>
+  );
+}
+
+// ── 凡例 ────────────────────────────────────────────────
+function Legend() {
+  return (
+    <div style={{ padding:"8px 12px", borderBottom:"1px solid "+C.grayL, fontSize:11, color:C.gray }}>
+      <div style={{ marginBottom:4, fontWeight:700 }}>⏰ 調整中（24h期限）</div>
+      <div style={{ display:"flex", gap:6, marginBottom:6, flexWrap:"wrap" }}>
+        {[
+          { bg:"#fff8ee", label:"12h以上" },
+          { bg:"#fff0e0", label:"12h以内" },
+          { bg:"#ffe4e4", label:"6h以内" },
+          { bg:"#ffd0d0", label:"3h以内🔴" },
+        ].map(({bg,label})=>(
+          <span key={label} style={{ display:"flex", alignItems:"center", gap:3 }}>
+            <span style={{ width:11, height:11, background:bg, borderRadius:2,
+              border:"1px solid #ddd", display:"inline-block" }}/>
+            {label}
+          </span>
+        ))}
+      </div>
+      <div style={{ marginBottom:4, fontWeight:700 }}>💬 日程相談中（72h上限）</div>
+      <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+        {[
+          { bg:"#fffbe8", label:"24h以内" },
+          { bg:"#fff8e0", label:"36h以内" },
+          { bg:"#fff0e0", label:"48h以内" },
+          { bg:"#ffe4e4", label:"60h以内" },
+          { bg:"#ffd0d0", label:"72h超🔴" },
+        ].map(({bg,label})=>(
+          <span key={label} style={{ display:"flex", alignItems:"center", gap:3 }}>
+            <span style={{ width:11, height:11, background:bg, borderRadius:2,
+              border:"1px solid #ddd", display:"inline-block" }}/>
+            {label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 受注カード ───────────────────────────────────────────
+function AdOrderCard({ order, isSelected, onClick }) {
+  useTimer(); // 毎分再描画
+  const timer = getOrderTimer(order);
+
+  return (
+    <button onClick={onClick}
+      style={{ width:"100%", padding:"12px 14px", textAlign:"left", cursor:"pointer",
+        background: isSelected ? "#ddeeff" : timer.cardBg,
+        borderBottom:"1px solid "+C.grayL, border:"none",
+        borderLeft:"4px solid "+(isSelected?C.blue:timer.leftBorder),
+        transition:"background 0.5s, border-color 0.5s",
+        animation: timer.pulse && !isSelected ? "urgentPulse 1.5s ease-in-out infinite" : "none",
+        outline:"none" }}>
+
+      <div style={{ display:"flex", justifyContent:"space-between",
+        alignItems:"flex-start", marginBottom:5, gap:6 }}>
+        <div style={{ fontSize:13, fontWeight:800, color:C.navy,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
+          {AD_SVC_ICON[order.service]} {order.site}
+        </div>
+        <ADStatusBadge status={order.status} />
+      </div>
+
+      <div style={{ fontSize:11, color:C.gray, lineHeight:1.7, marginBottom: timer.show?5:0 }}>
+        <div>{order.company}</div>
+        <div>{order.schedules[0].date}　{order.id}</div>
+      </div>
+
+      {timer.show && (
+        <span style={{ display:"inline-block", background:timer.badgeBg,
+          color:timer.badgeText, borderRadius:5, padding:"3px 8px",
+          fontSize:11, fontWeight:800,
+          animation: timer.pulse ? "urgentPulse 1.5s ease-in-out infinite" : "none" }}>
+          {timer.label}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ── 受注一覧パネル ───────────────────────────────────────
+function OrderList({ orders, selected, onSelect, filter, setFilter, search, setSearch }) {
+  useTimer();
+  const adjCount   = orders.filter(o=>o.status==="調整中").length;
+  const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
+  const reqCount   = orders.filter(o=>o.status==="キャンセル相談中"||o.status==="日程変更相談中").length;
+  const overAdj    = orders.filter(o=>{
+    if (o.status!=="調整中") return false;
+    return getAdjustingLevel(o.createdAt).level==="over"||getAdjustingLevel(o.createdAt).level==="danger";
+  }).length;
+  const overSoud = orders.filter(o=>{
+    if (o.status!=="日程相談中") return false;
+    return getNegotiatingLevel(o.statusChangedAt).level==="over"||getNegotiatingLevel(o.statusChangedAt).level==="danger";
+  }).length;
+
+  return (
+    <div style={{ width:340, background:C.white, borderRight:"2px solid "+C.grayL,
+      display:"flex", flexDirection:"column", flexShrink:0, height:"100vh", overflow:"hidden" }}>
+
+      <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`, padding:"14px 14px 10px" }}>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>E-Li 管理者画面</div>
+        <div style={{ fontSize:17, fontWeight:900, color:C.white }}>受注一覧</div>
+        <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
+          {adjCount>0 && (
+            <div style={{ background:"rgba(230,57,70,0.2)", border:"1px solid rgba(230,57,70,0.5)",
+              borderRadius:7, padding:"4px 8px", fontSize:11, color:"#ffaaaa", fontWeight:700 }}>
+              🆕 調整中 {adjCount}件{overAdj>0&&` ・ ⚠️${overAdj}件要確認`}
+            </div>
+          )}
+          {soudCount>0 && (
+            <div style={{ background:"rgba(240,120,0,0.2)", border:"1px solid rgba(240,120,0,0.5)",
+              borderRadius:7, padding:"4px 8px", fontSize:11, color:"#ffcc88", fontWeight:700 }}>
+              💬 日程相談中 {soudCount}件{overSoud>0&&` ・ ⚠️${overSoud}件長期`}
+            </div>
+          )}
+          {reqCount>0 && (
+            <div style={{ background:"rgba(192,32,44,0.2)", border:"1px solid rgba(192,32,44,0.5)",
+              borderRadius:7, padding:"4px 8px", fontSize:11, color:"#ffaaaa", fontWeight:700,
+              animation:"urgentPulse 2s ease-in-out infinite" }}>
+              ⚠️ 要対応 {reqCount}件（キャンセル・日程変更依頼）
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ padding:"8px 12px", borderBottom:"1px solid "+C.grayL }}>
+        <input value={search} onChange={e=>setSearch(e.target.value)}
+          placeholder="🔍 現場名・会社名・受付番号で検索"
+          style={{ width:"100%", fontSize:13, padding:"7px 11px", borderRadius:8,
+            border:"1px solid "+C.grayL, boxSizing:"border-box", outline:"none",
+            fontFamily:"inherit", color:C.navy }} />
+      </div>
+
+      <div style={{ padding:"6px 10px", borderBottom:"1px solid "+C.grayL,
+        display:"flex", gap:4, flexWrap:"wrap" }}>
+        {["全て",...AD_STATUS_LIST].map(s=>{
+          const st=AD_STATUS[s];
+          const act=filter===s;
+          const cnt=s==="全て"?orders.length:orders.filter(o=>o.status===s).length;
+          return (
+            <button key={s} onClick={()=>setFilter(s)}
+              style={{ padding:"3px 8px", borderRadius:6, fontSize:11, fontWeight:700,
+                border:"1.5px solid "+(act?(st?.border||C.blue):C.grayL),
+                background:act?(st?.bg||C.blueL):C.white,
+                color:act?(st?.text||C.blue):C.gray, cursor:"pointer" }}>
+              {s} ({cnt})
+            </button>
+          );
+        })}
+      </div>
+
+      <Legend />
+
+      <div style={{ flex:1, overflowY:"auto" }}>
+        {orders.length===0 ? (
+          <div style={{ textAlign:"center", padding:"40px 16px", color:C.gray }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>📭</div>
+            <div style={{ fontSize:14 }}>該当なし</div>
+          </div>
+        ) : orders.map(order=>(
+          <AdOrderCard key={order.id} order={order}
+            isSelected={selected?.id===order.id}
+            onClick={()=>onSelect(order)} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── 詳細パネル ───────────────────────────────────────────
+function DetailPanel({ order, chats, onAddChat, onStatusChange }) {
+  const [tab, setTab]           = useState("detail");
+  const [chatInput, setChatInput] = useState("");
+  const bottomRef = useRef(null);
+  useTimer();
+
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[chats, tab]);
+
+  if (!order) return (
+    <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
+      color:C.gray, flexDirection:"column", gap:12, background:C.bg }}>
+      <div style={{ fontSize:48 }}>📋</div>
+      <div style={{ fontSize:18, fontWeight:700 }}>左の一覧から案件を選んでください</div>
+    </div>
+  );
+
+  const timer = getOrderTimer(order);
+
+  const handleSend = () => {
+    if (!chatInput.trim()) return;
+    onAddChat(order.id, { id:Date.now(), from:"staff", text:chatInput.trim(),
+      time:new Date().toLocaleTimeString("ja",{hour:"2-digit",minute:"2-digit"}) });
+    setChatInput("");
+  };
+
+  const prowonText = `【受付番号】${order.id}
+【会社名】${order.company}
+【担当者】${order.person}　${order.phone}
+【作業区分】${order.service}
+【現場名】${order.site}
+【住所】${order.address}
+【日程】${order.schedules.map(s=>`${s.date} ${s.start}〜${s.end} ${s.workers} ${(s.details||[]).join("・")}`).join(" / ")}
+【鍵】${order.key||"なし"}
+【駐車場】${order.parking||"なし"}
+【備考】${order.note||"なし"}`;
+
+  const Row = ({label,value,copy})=>!value?null:(
+    <div style={{ display:"flex", gap:12, padding:"9px 0",
+      borderBottom:"1px solid "+C.grayL, alignItems:"flex-start" }}>
+      <div style={{ fontSize:13, color:C.gray, minWidth:90, flexShrink:0, paddingTop:1 }}>{label}</div>
+      <div style={{ fontSize:14, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
+      {copy && <CopyBtn value={value} label="コピー" />}
+    </div>
+  );
+
+  // 警告バナーの内容
+  const showBanner = timer.show && (timer.level==="danger"||timer.level==="over");
+  const bannerText = order.status==="調整中"
+    ? (timer.level==="over" ? "🚨 返答期限を超過しています！今すぐ連絡してください" : `🚨 返答期限まであとわずか！ ${timer.label}`)
+    : (timer.level==="over" ? `🚨 日程相談が3日を超えました！ ${timer.label}` : `⚠️ 日程相談が長期化しています。 ${timer.label}`);
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:C.bg }}>
+
+      {/* ヘッダー */}
+      <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
+        padding:"12px 20px", display:"flex", alignItems:"center",
+        justifyContent:"space-between", gap:12, flexShrink:0 }}>
+        <div style={{ minWidth:0 }}>
+          <div style={{ fontSize:12, color:C.gray, marginBottom:2 }}>{order.id}</div>
+          <div style={{ fontSize:17, fontWeight:900, color:C.navy,
+            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            {AD_SVC_ICON[order.service]} {order.site}
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginTop:4, flexWrap:"wrap" }}>
+            <span style={{ fontSize:13, color:C.gray }}>{order.company} ・ {order.person}</span>
+            {timer.show && (
+              <span style={{ background:timer.badgeBg, color:timer.badgeText,
+                borderRadius:7, padding:"3px 10px", fontSize:12, fontWeight:800,
+                animation:timer.pulse?"urgentPulse 1.5s ease-in-out infinite":"none" }}>
+                {timer.label}
+              </span>
+            )}
+          </div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+          <ADStatusBadge status={order.status} />
+          <select value={order.status} onChange={e=>onStatusChange(order.id, e.target.value)}
+            style={{ fontSize:13, padding:"8px 12px", borderRadius:8,
+              border:"2px solid "+C.blue, fontFamily:"inherit", outline:"none",
+              color:C.blue, fontWeight:700, cursor:"pointer", background:C.blueL }}>
+            {AD_STATUS_LIST.map(s=>(
+              <option key={s} value={s}>{AD_STATUS[s].icon} {s}に変更</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* タブ */}
+      <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
+        display:"flex", flexShrink:0 }}>
+        {[["detail","📋 詳細"],["chat","💬 チャット"],["prowon","📤 プロワン用"]].map(([key,label])=>(
+          <button key={key} onClick={()=>setTab(key)}
+            style={{ padding:"12px 20px", fontSize:14, fontWeight:700, cursor:"pointer",
+              border:"none", background:"none",
+              color:tab===key?C.blue:C.gray,
+              borderBottom:tab===key?"3px solid "+C.blue:"3px solid transparent" }}>
+            {label}
+            {key==="chat" && (chats[order.id]||[]).filter(m=>m.from==="user").length>0 && (
+              <span style={{ background:C.green, color:C.white, borderRadius:99,
+                padding:"1px 7px", fontSize:11, fontWeight:800, marginLeft:6 }}>
+                {(chats[order.id]||[]).filter(m=>m.from==="user").length}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* 詳細タブ */}
+      {tab==="detail" && (
+        <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
+          <div style={{ maxWidth:700, margin:"0 auto" }}>
+
+            {/* 警告バナー */}
+            {showBanner && (
+              <div style={{ background: timer.level==="over"?"#ffd0d0":"#ffe4e4",
+                border:"2px solid "+C.red, borderRadius:12, padding:"12px 16px",
+                marginBottom:16, display:"flex", alignItems:"center", gap:10,
+                animation:"urgentPulse 2s ease-in-out infinite" }}>
+                <span style={{ fontSize:22 }}>🚨</span>
+                <div style={{ fontSize:14, fontWeight:800, color:C.red }}>{bannerText}</div>
+              </div>
+            )}
+
+            {/* 会社情報 */}
+            <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
+              marginBottom:14, overflow:"hidden" }}>
+              <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
+                padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
+                🏢 会社・担当者情報
+              </div>
+              <div style={{ padding:"4px 18px 12px" }}>
+                <Row label="会社名"   value={order.company}   copy />
+                <Row label="企業ID"   value={order.companyId} copy />
+                <Row label="担当者"   value={order.person}    copy />
+                <Row label="電話番号" value={order.phone}     copy />
+              </div>
+            </div>
+
+            {/* 発注内容 */}
+            <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
+              marginBottom:14, overflow:"hidden" }}>
+              <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
+                padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
+                📋 発注内容
+              </div>
+              <div style={{ padding:"4px 18px 12px" }}>
+                <Row label="作業区分" value={AD_SVC_ICON[order.service]+" "+order.service} />
+                <Row label="現場名"   value={order.site}    copy />
+                <Row label="住所"     value={order.address} copy />
+                <Row label="鍵"       value={order.key} />
+                <Row label="駐車場"   value={order.parking} />
+                {order.note&&<Row label="備考" value={order.note} />}
+              </div>
+            </div>
+
+            {/* 日程 */}
+            {order.schedules.map((sch,i)=>(
+              <div key={i} style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
+                marginBottom:14, overflow:"hidden" }}>
+                <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
+                  padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
+                  📅 日程 {i+1}
+                </div>
+                <div style={{ padding:"4px 18px 12px" }}>
+                  <Row label="日付"     value={sch.date} />
+                  <Row label="時間"     value={sch.start+"〜"+sch.end} />
+                  <Row label="作業内容" value={(sch.details||[]).join("・")} />
+                  {sch.workers&&<Row label="作業者数" value={sch.workers} />}
+                </div>
+              </div>
+            ))}
+
+            <div style={{ background:"#fffbe6", border:"2px solid #f5c842",
+              borderRadius:14, padding:"16px 18px" }}>
+              <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:8 }}>
+                📋 プロワン登録用・一括コピー
+              </div>
+              <CopyBtn value={prowonText} label="全項目をコピーする" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* チャットタブ */}
+      {tab==="chat" && (
+        <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
+          <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
+            <div style={{ maxWidth:700, margin:"0 auto" }}>
+              {/* 定型文 */}
+              <div style={{ background:C.white, borderRadius:12, padding:"12px 14px",
+                marginBottom:16, border:"1px solid "+C.grayL }}>
+                <div style={{ fontSize:12, fontWeight:700, color:C.gray, marginBottom:8 }}>
+                  📝 定型文（クリックで入力）
+                </div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {[
+                    "日程の調整がつきました。よろしくお願いします📅",
+                    "ごめんなさい、ご希望の日程では予定がつきませんでした💦\nご希望に近い別日程でしたら対応できそうですが、いかがですか？",
+                    "工事が完了しました。ありがとうございました✅",
+                    "確認いたしました。担当者より折り返しご連絡いたします。",
+                  ].map((t,i)=>(
+                    <button key={i} onClick={()=>setChatInput(t)}
+                      style={{ padding:"6px 12px", borderRadius:8, fontSize:12, fontWeight:600,
+                        border:"1px solid "+C.blue, background:C.blueL, color:C.blue,
+                        cursor:"pointer" }}>
+                      {t.length>22?t.slice(0,22)+"…":t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* メッセージ */}
+              {(chats[order.id]||[]).map((msg,i)=>(
+                <div key={msg.id||i} style={{
+                  display:"flex", flexDirection:msg.from==="staff"?"row-reverse":"row",
+                  alignItems:"flex-end", gap:8, marginBottom:14 }}>
+                  {msg.from!=="staff" && (
+                    <div style={{ width:34, height:34, background:C.navy, borderRadius:"50%",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      fontSize:15, flexShrink:0 }}>
+                      {msg.from==="eli"?"🤖":"👤"}
+                    </div>
+                  )}
+                  <div style={{ maxWidth:"70%" }}>
+                    {msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>🤖 自動返答</div>}
+                    {msg.from==="user"  && <div style={{ fontSize:11, color:C.orange, marginBottom:3, fontWeight:600 }}>👤 {order.person}</div>}
+                    {msg.from==="staff" && <div style={{ fontSize:11, color:C.green,  marginBottom:3, fontWeight:600, textAlign:"right" }}>👷 担当者（あなた）</div>}
+                    <div style={{
+                      background:msg.from==="staff"
+                        ? `linear-gradient(135deg,${C.green},#1a7a50)`
+                        : msg.from==="user" ? "#fff8e0" : C.white,
+                      color:msg.from==="staff"?C.white:C.navy,
+                      borderRadius:msg.from==="staff"?"20px 4px 20px 20px":"4px 20px 20px 20px",
+                      padding:"11px 15px", fontSize:14, lineHeight:1.7,
+                      border:msg.from!=="staff"?`1px solid ${C.grayL}`:"none",
+                      whiteSpace:"pre-wrap",
+                    }}>{msg.text}</div>
+                    <div style={{ fontSize:11, color:C.gray, marginTop:3,
+                      textAlign:msg.from==="staff"?"right":"left" }}>{msg.time}</div>
+                  </div>
+                </div>
+              ))}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+
+          <div style={{ background:C.white, borderTop:"2px solid "+C.grayL,
+            padding:"12px 20px", flexShrink:0 }}>
+            <div style={{ maxWidth:700, margin:"0 auto", display:"flex", gap:10, alignItems:"flex-end" }}>
+              <textarea value={chatInput} onChange={e=>setChatInput(e.target.value)}
+                onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSend();} }}
+                placeholder="お客様へのメッセージを入力... (Enterで送信)" rows={2}
+                style={{ flex:1, fontSize:14, padding:"12px 14px", borderRadius:12,
+                  border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
+                  color:C.navy, resize:"none", lineHeight:1.5, outline:"none" }} />
+              <button onClick={handleSend}
+                style={{ height:48, padding:"0 20px", borderRadius:12, border:"none",
+                  background:chatInput.trim()?`linear-gradient(135deg,${C.green},#1a7a50)`:C.grayL,
+                  color:chatInput.trim()?C.white:C.gray, fontSize:14, fontWeight:800,
+                  cursor:chatInput.trim()?"pointer":"default", fontFamily:"inherit", flexShrink:0 }}>
+                送信 ✈️
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* プロワンタブ */}
+      {tab==="prowon" && (
+        <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
+          <div style={{ maxWidth:700, margin:"0 auto" }}>
+            <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
+              padding:"20px", marginBottom:16 }}>
+              <div style={{ fontSize:15, fontWeight:800, color:C.navy, marginBottom:12 }}>
+                📋 プロワン登録用データ
+              </div>
+              <pre style={{ fontSize:14, color:C.navy, lineHeight:2.0, whiteSpace:"pre-wrap",
+                background:C.bg, borderRadius:10, padding:"16px", border:"1px solid "+C.grayL,
+                fontFamily:"inherit", marginBottom:16 }}>{prowonText}</pre>
+              <CopyBtn value={prowonText} label="全項目をコピー" />
+            </div>
+            <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL, padding:"20px" }}>
+              <div style={{ fontSize:15, fontWeight:800, color:C.navy, marginBottom:12 }}>🔗 項目ごとにコピー</div>
+              {[
+                ["会社名",   order.company],
+                ["担当者",   order.person],
+                ["電話番号", order.phone],
+                ["作業区分", order.service],
+                ["現場名",   order.site],
+                ["住所",     order.address],
+                ["日程",     order.schedules.map(s=>`${s.date} ${s.start}〜${s.end}`).join(" / ")],
+                ["作業内容", order.schedules.map(s=>(s.details||[]).join("・")).join(" / ")],
+                ["作業者数", order.schedules.map(s=>s.workers).filter(Boolean).join(" / ")],
+                ["鍵",       order.key||"なし"],
+                ["駐車場",   order.parking||"なし"],
+              ].map(([label,value])=>(
+                <div key={label} style={{ display:"flex", alignItems:"center", gap:12,
+                  padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
+                  <div style={{ fontSize:13, color:C.gray, minWidth:80 }}>{label}</div>
+                  <div style={{ fontSize:14, color:C.navy, fontWeight:600, flex:1 }}>{value}</div>
+                  <CopyBtn value={value} label="コピー" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 企業ID管理 ───────────────────────────────────────────
+function CompanyPanel({ onClose }) {
+  const [companies, setCompanies] = useState([]);
+  const [showAdd, setShowAdd]     = useState(false);
+  const [form, setForm]           = useState({ name:"", contact:"", phone:"", email:"" });
+  const [cpLoading, setCpLoading] = useState(true);
+
+  useEffect(() => {
+    sb.from('companies').select('*').order('id').then(({ data }) => {
+      setCompanies(data || []);
+      setCpLoading(false);
+    });
+  }, []);
+
+  const nextId = () => {
+    if (companies.length === 0) return "ELI-1001";
+    const nums = companies.map(c => parseInt((c.id || "ELI-0").replace("ELI-", "")) || 0);
+    return "ELI-" + String(Math.max(...nums) + 1).padStart(4, "0");
+  };
+
+  const handleAdd = async () => {
+    if (!form.name) return;
+    const newId = nextId();
+    const since = new Date().toISOString().slice(0, 10);
+    const { data } = await sb.from('companies')
+      .insert({ id:newId, ...form, since })
+      .select().single();
+    if (data) setCompanies(c => [...c, data]);
+    setForm({ name:"", contact:"", phone:"", email:"" });
+    setShowAdd(false);
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.5)",
+      display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 }}
+      onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
+      <div style={{ background:C.white, borderRadius:20, width:"90%", maxWidth:800,
+        maxHeight:"85vh", overflow:"hidden", display:"flex", flexDirection:"column",
+        boxShadow:"0 20px 60px rgba(10,31,92,0.3)" }}>
+        <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
+          padding:"16px 24px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontSize:18, fontWeight:900, color:C.white }}>🏢 企業ID管理</div>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none",
+            color:C.white, borderRadius:8, padding:"6px 14px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            ✕ とじる
+          </button>
+        </div>
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 24px" }}>
+          <div style={{ marginBottom:16 }}>
+            <button onClick={()=>setShowAdd(s=>!s)}
+              style={{ background:`linear-gradient(135deg,${C.green},#1a7a50)`,
+                color:C.white, border:"none", borderRadius:10, padding:"10px 20px",
+                fontSize:14, fontWeight:800, cursor:"pointer" }}>
+              ＋ 新しい取引先を追加・企業IDを発行
+            </button>
+          </div>
+          {showAdd && (
+            <div style={{ background:C.bg, border:"2px solid "+C.green,
+              borderRadius:14, padding:"16px", marginBottom:16 }}>
+              <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:12 }}>📝 新規取引先情報</div>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+                {[["会社名 ※必須","name","例：株式会社〇〇建設"],["担当者名","contact","例：田中 太郎"],
+                  ["電話番号","phone","例：090-0000-0000"],["メールアドレス","email","例：tanaka@example.com"]
+                ].map(([label,key,ph])=>(
+                  <div key={key}>
+                    <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 }}>{label}</div>
+                    <input value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))}
+                      placeholder={ph}
+                      style={{ width:"100%", fontSize:14, padding:"10px 12px", borderRadius:8,
+                        border:"1px solid "+C.grayL, boxSizing:"border-box",
+                        fontFamily:"inherit", outline:"none" }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ background:"#f0faf5", borderRadius:10, padding:"10px 14px",
+                marginBottom:12, fontSize:13, color:"#1a5c3a" }}>
+                発行される企業ID：<b style={{ fontSize:15 }}>{nextId()}</b>
+              </div>
+              <div style={{ display:"flex", gap:10 }}>
+                <button onClick={handleAdd}
+                  style={{ background:`linear-gradient(135deg,${C.blue},${C.navy})`,
+                    color:C.white, border:"none", borderRadius:8, padding:"10px 20px",
+                    fontSize:14, fontWeight:800, cursor:"pointer" }}>
+                  ✅ 企業IDを発行する
+                </button>
+                <button onClick={()=>setShowAdd(false)}
+                  style={{ background:C.grayPale, color:C.navy, border:"1px solid "+C.grayL,
+                    borderRadius:8, padding:"10px 20px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          )}
+          <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead>
+              <tr style={{ background:C.navy }}>
+                {["企業ID","会社名","担当者","電話番号","登録日"].map(h=>(
+                  <th key={h} style={{ padding:"10px 14px", fontSize:13, fontWeight:700,
+                    color:C.white, textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {cpLoading ? (
+                <tr><td colSpan={5} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
+              ) : companies.length === 0 ? (
+                <tr><td colSpan={5} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
+              ) : companies.map((co,i)=>(
+                <tr key={co.id} style={{ background:i%2===0?C.white:C.bg }}>
+                  <td style={{ padding:"10px 14px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:14, fontWeight:800, color:C.blue }}>{co.id}</span>
+                      <CopyBtn value={co.id} label="コピー" />
+                    </div>
+                  </td>
+                  <td style={{ padding:"10px 14px", fontSize:14, fontWeight:600, color:C.navy }}>{co.name}</td>
+                  <td style={{ padding:"10px 14px", fontSize:13, color:C.navy }}>{co.contact}</td>
+                  <td style={{ padding:"10px 14px" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                      <span style={{ fontSize:13 }}>{co.phone}</span>
+                      <CopyBtn value={co.phone||''} label="コピー" />
+                    </div>
+                  </td>
+                  <td style={{ padding:"10px 14px", fontSize:13, color:C.gray }}>{co.since}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── メイン ───────────────────────────────────────────────
+function AdminApp({ onLogout }) {
+  const [orders,   setOrders]   = useState([]);
+  const [chats,    setChats]    = useState({});
+  const [loading,  setLoading]  = useState(true);
+  const [dbError,  setDbError]  = useState(null);
+  const [selected, setSelected] = useState(null);
+  const [filter,   setFilter]   = useState("全て");
+  const [search,   setSearch]   = useState("");
+  const [showComp, setShowComp] = useState(false);
+
+  const fetchOrders = async () => {
+    const { data, error } = await sb
+      .from('orders')
+      .select('*, schedules(*)')
+      .order('created_at', { ascending: false });
+    if (error) { setDbError(error.message); setLoading(false); return; }
+    setOrders((data || []).map(mapOrder));
+    setLoading(false);
+    setDbError(null);
+  };
+
+  useEffect(() => {
+    fetchOrders();
+    const channel = sb.channel('admin-orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+      .subscribe();
+    return () => sb.removeChannel(channel);
+  }, []);
+
+  // 選択案件のメッセージを遅延ロード
+  useEffect(() => {
+    if (!selected) return;
+    const id = selected.id;
+    if (chats[id] !== undefined) return;
+    sb.from('messages').select('*').eq('order_id', id).order('id').then(({ data }) => {
+      setChats(c => ({ ...c, [id]: (data || []).map(mapChat) }));
+    });
+  }, [selected?.id]);
+
+  // 自動完了：日程確定 && 終了時刻超過 → 完了に変更
+  useEffect(() => {
+    const check = async () => {
+      const { data } = await sb
+        .from('orders').select('id')
+        .eq('status', '日程確定');
+      if (!data || data.length === 0) return;
+      const ids = data.map(o => o.id);
+      const { data: schData } = await sb
+        .from('schedules').select('order_id, work_date, end_time')
+        .in('order_id', ids).order('sort_order');
+      if (!schData) return;
+      const firstSch = {};
+      schData.forEach(s => { if (!firstSch[s.order_id]) firstSch[s.order_id] = s; });
+      const now = new Date();
+      let changed = false;
+      for (const id of ids) {
+        const sch = firstSch[id];
+        if (!sch) continue;
+        const [y, mo, d] = sch.work_date.split("-").map(Number);
+        const [h, m] = sch.end_time.split(":").map(Number);
+        if (now > new Date(y, mo - 1, d, h, m)) {
+          const nowIso = new Date().toISOString();
+          await sb.from('orders').update({ status:"完了", status_changed_at:nowIso }).eq('id', id);
+          await sb.from('messages').insert({ order_id:id, from_role:"staff", text:"工事が完了しました。ありがとうございました✅", is_read:false });
+          changed = true;
+        }
+      }
+      if (changed) fetchOrders();
+    };
+    check();
+    const t = setInterval(check, 60000);
+    return () => clearInterval(t);
+  }, []);
+
+  const filtered = orders
+    .filter(o => filter === "全て" || o.status === filter)
+    .filter(o => !search ||
+      o.site.includes(search) || o.company.includes(search) ||
+      o.id.includes(search) || o.person.includes(search));
+
+  const sorted = [...filtered].sort((a, b) => {
+    const priority = { "調整中":0, "キャンセル相談中":1, "日程変更相談中":1, "日程相談中":2, "日程確定":3, "完了":4, "キャンセル":5 };
+    if ((priority[a.status] ?? 9) !== (priority[b.status] ?? 9)) return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
+    if (a.status === "調整中") return a.createdAt - b.createdAt;
+    if (a.status === "日程相談中") return a.statusChangedAt - b.statusChangedAt;
+    return 0;
+  });
+
+  const handleStatusChange = async (id, newStatus) => {
+    const nowIso = new Date().toISOString();
+    const nowMs  = Date.now();
+    await sb.from('orders').update({ status:newStatus, status_changed_at:nowIso }).eq('id', id);
+    setOrders(os => os.map(o => o.id === id ? { ...o, status:newStatus, statusChangedAt:nowMs } : o));
+    if (selected?.id === id) setSelected(s => ({ ...s, status:newStatus, statusChangedAt:nowMs }));
+    const autoMsg = {
+      "日程確定":   "日程の調整がつきました。よろしくお願いします📅",
+      "日程相談中": "ごめんなさい、ご希望の日程では予定がつきませんでした💦\nご希望に近い別日程でしたら対応できそうですが、いかがですか？",
+      "完了":       "工事が完了しました。ありがとうございました✅",
+      "キャンセル": "キャンセルを承りました。またのご利用をお待ちしております。",
+    };
+    if (autoMsg[newStatus]) {
+      const { data } = await sb.from('messages').insert({
+        order_id:id, from_role:"staff", text:autoMsg[newStatus], is_read:false,
+      }).select().single();
+      if (data) setChats(c => ({ ...c, [id]: [...(c[id] || []), mapChat(data)] }));
+    }
+  };
+
+  const addChat = async (id, msg) => {
+    const { data } = await sb.from('messages').insert({
+      order_id:id, from_role:msg.from, text:msg.text, is_read:false,
+    }).select().single();
+    const saved = data ? mapChat(data) : { ...msg };
+    setChats(c => ({ ...c, [id]: [...(c[id] || []), saved] }));
+  };
+
+  const adjCount  = orders.filter(o => o.status === "調整中").length;
+  const soudCount = orders.filter(o => ["日程相談中","キャンセル相談中","日程変更相談中"].includes(o.status)).length;
+
+  if (loading) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh",
+      fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif",
+      flexDirection:"column", gap:16, background:C.bg }}>
+      <div style={{ fontSize:40 }}>⏳</div>
+      <div style={{ fontSize:18, fontWeight:700, color:C.navy }}>受注データを読み込み中...</div>
+    </div>
+  );
+
+  if (dbError) return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:"100vh",
+      fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif",
+      flexDirection:"column", gap:16, background:C.bg, padding:32 }}>
+      <div style={{ fontSize:40 }}>⚠️</div>
+      <div style={{ fontSize:18, fontWeight:700, color:C.red }}>データの読み込みに失敗しました</div>
+      <div style={{ fontSize:13, color:C.gray, background:"#fff0f0", padding:"12px 20px",
+        borderRadius:10, maxWidth:500 }}>{dbError}</div>
+      <button onClick={fetchOrders} style={{ padding:"12px 24px", background:C.blue,
+        color:C.white, border:"none", borderRadius:10, fontSize:15, fontWeight:700, cursor:"pointer" }}>
+        再試行
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{ display:"flex", height:"100vh", overflow:"hidden",
+      fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <style>{`
+        @keyframes urgentPulse { 0%,100%{opacity:1} 50%{opacity:0.65} }
+        * { box-sizing:border-box; }
+        ::-webkit-scrollbar { width:6px; height:6px; }
+        ::-webkit-scrollbar-track { background:#f0f4f9; }
+        ::-webkit-scrollbar-thumb { background:#c0cce0; border-radius:3px; }
+      `}</style>
+
+      {/* サイドバー */}
+      <div style={{ width:60, background:C.sidebar, display:"flex", flexDirection:"column",
+        alignItems:"center", padding:"16px 0", gap:14, flexShrink:0 }}>
+        <div style={{ width:36, height:36, background:"rgba(255,255,255,0.2)",
+          borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>
+          📋
+        </div>
+        <div style={{ width:36, height:36, background:"rgba(255,255,255,0.08)",
+          borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
+          fontSize:18, cursor:"pointer" }} onClick={()=>setShowComp(true)}>
+          🏢
+        </div>
+        {(adjCount+soudCount)>0 && (
+          <div style={{ background:C.red, color:C.white, borderRadius:"50%",
+            width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:12, fontWeight:900, animation:"urgentPulse 2s ease-in-out infinite" }}>
+            {adjCount+soudCount}
+          </div>
+        )}
+        <div style={{ flex:1 }}/>
+        <button onClick={onLogout} style={{ width:44, height:44, background:"rgba(255,255,255,0.1)", border:"none", borderRadius:8, color:"rgba(255,255,255,0.7)", fontSize:10, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2 }}>
+          <span style={{fontSize:16}}>🚪</span>
+          <span>ログアウト</span>
+        </button>
+      </div>
+
+      <OrderList orders={sorted} selected={selected} onSelect={setSelected}
+        filter={filter} setFilter={setFilter} search={search} setSearch={setSearch} />
+
+      <DetailPanel order={selected} chats={chats}
+        onAddChat={addChat} onStatusChange={handleStatusChange} />
+
+      {showComp && <CompanyPanel onClose={()=>setShowComp(false)} />}
+    </div>
+  );
+}
+
+
+    // ── メインルーター ──────────────────────────────────────
+    function App() {
+      const [screen, setScreen] = React.useState("login");
+      const [userRole, setUserRole] = React.useState(null);
+
+      const handleLogin = (role) => {
+        setUserRole(role);
+        setScreen(role === "admin" ? "admin" : "history");
+      };
+
+      if (screen === "login")    return <LoginApp onLogin={handleLogin} onRegister={() => setScreen("register")} />;
+      if (screen === "register") return <RegisterApp onDone={() => setScreen("login")} onBack={() => setScreen("login")} />;
+      if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => setScreen("mypage")} onLogout={() => setScreen("login")} />;
+      if (screen === "order")    return <OrderApp onDone={() => setScreen("history")} onBack={() => setScreen("history")} />;
+      if (screen === "mypage")   return <MyPageApp onBack={() => setScreen("history")} onLogout={() => setScreen("login")} />;
+      if (screen === "admin")    return <AdminApp onLogout={() => setScreen("login")} />;
+      return null;
+    }
+
+    class ErrorBoundary extends React.Component {
+      constructor(props) { super(props); this.state = { error: null }; }
+      static getDerivedStateFromError(error) { return { error }; }
+      render() {
+        if (this.state.error) {
+          return (
+            <div style={{padding:"40px",fontFamily:"monospace",background:"#fff0f0",minHeight:"100vh"}}>
+              <h2 style={{color:"#e63946",marginBottom:"16px",fontFamily:"sans-serif"}}>⚠️ エラーが発生しました</h2>
+              <pre style={{background:"#fee",padding:"16px",borderRadius:"8px",
+                fontSize:"13px",overflow:"auto",whiteSpace:"pre-wrap",
+                border:"1px solid #e63946",lineHeight:"1.6"}}>
+                {this.state.error.toString()}{'\n\n'}{this.state.error.stack}
+              </pre>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    try {
+      ReactDOM.createRoot(document.getElementById('root')).render(
+        <ErrorBoundary><App /></ErrorBoundary>
+      );
+    } catch(err) {
+      document.getElementById('root').innerHTML =
+        '<div style="padding:40px;background:#fff0f0;font-family:monospace;min-height:100vh">' +
+        '<h2 style="color:#e63946;font-family:sans-serif;margin-bottom:16px">⚠️ 初期化エラー</h2>' +
+        '<pre style="background:#fee;padding:16px;border-radius:8px;font-size:13px;white-space:pre-wrap;border:1px solid #e63946">' +
+        (err.name + ': ' + err.message + '\n\n' + (err.stack || '')).replace(/</g,'&lt;') +
+        '</pre></div>';
+    }
+
+  </script>
+  <script>
+    (function() {
+      try {
+        var src = document.getElementById('jsx-source').textContent;
+        var compiled = Babel.transform(src, {
+          presets: ['react'],
+          filename: 'app.jsx'
+        }).code;
+        new Function('React', 'ReactDOM', compiled)(window.React, window.ReactDOM);
+      } catch(e) {
+        var msg = (e.name || 'Error') + ': ' + e.message + '\n\n' + (e.stack || '');
+        msg = msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        document.getElementById('root').innerHTML =
+          '<div style="padding:40px;background:#fff0f0;font-family:monospace;min-height:100vh">' +
+          '<h2 style="color:#e63946;font-family:sans-serif;margin-bottom:16px">&#9888;&#65039; エラーが発生しました</h2>' +
+          '<pre style="background:#fee;padding:16px;border-radius:8px;font-size:13px;' +
+          'white-space:pre-wrap;border:1px solid #e63946;line-height:1.6;overflow:auto">' +
+          msg + '</pre></div>';
+      }
+    })();
+  </script>
+</body>
+</html>
