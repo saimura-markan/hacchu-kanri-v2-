@@ -2687,9 +2687,26 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
   const [filter,    setFilter]    = useState("全て");
   const [screen,    setScreen]    = useState("list");
   const [currentId, setCurrentId] = useState(null);
-  const [, setTick] = useState(0);
+  const [, setTick]               = useState(0);
+  const [loading,   setLoading]   = useState(true);
+  const [dbError,   setDbError]   = useState(null);
 
   const current = orders.find(o => o.id === currentId) || null;
+
+  const fetchOrders = async () => {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) { setLoading(false); return; }
+    const { data, error } = await sb
+      .from('orders')
+      .select('*, schedules(*)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    if (error) { setDbError(error.message); setLoading(false); return; }
+    setOrders((data || []).map(mapOrder));
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchOrders(); }, []);
 
   useEffect(() => {
     const autoComplete = (os) => {
@@ -2742,8 +2759,13 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
 
   const getUnread = id => (chats[id]||[]).filter(m=>m.from==="staff"&&!m.read).length;
 
-  const openChat = order => {
-    setChats(c=>({ ...c, [order.id]:(c[order.id]||[]).map(m=>({...m,read:true})) }));
+  const openChat = async (order) => {
+    if (chats[order.id] === undefined) {
+      const { data } = await sb.from('messages').select('*').eq('order_id', order.id).order('id');
+      setChats(c => ({ ...c, [order.id]: (data || []).map(mapChat) }));
+    } else {
+      setChats(c => ({ ...c, [order.id]: (c[order.id] || []).map(m => ({ ...m, read: true })) }));
+    }
     setCurrentId(order.id);
     setScreen("chat");
   };
@@ -2761,6 +2783,27 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
   };
 
   const filtered = filter==="全て" ? orders : orders.filter(o=>o.status===filter);
+
+  if (loading) return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <EliSVG size={56} />
+      <div style={{ marginTop:16, fontSize:15, color:C.navy, fontWeight:700 }}>読み込み中…</div>
+    </div>
+  );
+
+  if (dbError) return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif", padding:24 }}>
+      <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
+      <div style={{ fontSize:15, color:C.red, fontWeight:700, marginBottom:16, textAlign:"center" }}>データの読み込みに失敗しました</div>
+      <div style={{ fontSize:13, color:C.gray, marginBottom:24, textAlign:"center" }}>{dbError}</div>
+      <button onClick={fetchOrders} style={{ background:C.blue, color:C.white, border:"none",
+        borderRadius:12, padding:"12px 28px", fontSize:15, fontWeight:700, cursor:"pointer" }}>
+        再試行
+      </button>
+    </div>
+  );
 
   if (screen==="chat" && current) return (
     <ChatScreen role={role} order={current} messages={chats[current.id]||[]}
