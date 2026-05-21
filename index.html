@@ -2088,48 +2088,6 @@ const HI_SVC_ICON = {
   "養生・家具移動・荷上":"🛗","解体":"🏚️","産廃":"🚛","清掃・家具移動":"🧹",
 };
 
-const _hiNow = Date.now();
-const _hiFuture = (d) => { const t = new Date(); t.setDate(t.getDate()+d); return t.toISOString().split("T")[0]; };
-const HI_ORDERS = [
-  { id:"B-2024-101", service:"養生・家具移動・荷上", status:"日程確定",
-    site:"〇〇マンション101号室", address:"大阪府堺市北区〇〇町1-2-3",
-    schedules:[{ date:_hiFuture(3), start:"09:00", end:"17:00", workers:"3人", details:["養生","家具移動"] }],
-    key:"管理室で受取", parking:"建物前2台", note:"", created:"2024-06-10 17:32",
-    createdAt: _hiNow - 2*3600000, statusChangedAt: _hiNow - 1*3600000 },
-  { id:"B-2024-102", service:"清掃・家具移動", status:"調整中",
-    site:"△△ビル3F", address:"大阪府大阪市北区△△町4-5-6",
-    schedules:[{ date:_hiFuture(5), start:"13:00", end:"18:00", workers:"2人", details:["ハウスクリーニング"] }],
-    key:"在宅", parking:"近隣コインP", note:"", created:"2024-06-11 09:05",
-    createdAt: _hiNow - 20*3600000, statusChangedAt: _hiNow - 20*3600000 },
-  { id:"B-2024-103", service:"解体", status:"日程相談中",
-    site:"□□邸リフォーム", address:"大阪府堺市中区□□町7-8-9",
-    schedules:[{ date:_hiFuture(7), start:"08:00", end:"17:00", workers:"4人", details:["フロアめくり"] }],
-    key:"", parking:"敷地内駐車可", note:"", created:"2024-06-09 14:20",
-    createdAt: _hiNow - 50*3600000, statusChangedAt: _hiNow - 50*3600000 },
-  { id:"B-2024-104", service:"産廃", status:"完了",
-    site:"◇◇現場", address:"大阪府堺市南区◇◇町1-1-1",
-    schedules:[{ date:_hiFuture(-5), start:"10:00", end:"14:00", workers:"", details:["廃材回収"] }],
-    key:"", parking:"現場内", note:"", created:"2024-06-01 11:00",
-    createdAt: _hiNow - 200*3600000, statusChangedAt: _hiNow - 100*3600000 },
-];
-
-const HI_INIT_CHATS = {
-  "B-2024-101": [
-    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-10 17:32", read:true },
-    { id:2, from:"staff", text:"日程の調整がつきました。よろしくお願いします📅", time:"2024-06-11 10:00", read:false },
-  ],
-  "B-2024-102": [
-    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-11 09:05", read:true },
-  ],
-  "B-2024-103": [
-    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-09 14:20", read:true },
-    { id:2, from:"staff", text:"ごめんなさい、ご希望の日程では予定がつきませんでした💦\nご希望に近い別日程でしたら対応できそうですが、いかがですか？", time:"2024-06-10 09:30", read:false },
-  ],
-  "B-2024-104": [
-    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-01 11:00", read:true },
-    { id:2, from:"staff", text:"工事が完了しました。ありがとうございました✅", time:"2024-06-05 16:00", read:true },
-  ],
-};
 
 const HI_CSS = `
   @keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}}
@@ -2724,8 +2682,8 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
 
 // ── メイン ───────────────────────────────────────────────
 function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
-  const [orders,    setOrders]    = useState(HI_ORDERS);
-  const [chats,     setChats]     = useState(HI_INIT_CHATS);
+  const [orders,    setOrders]    = useState([]);
+  const [chats,     setChats]     = useState({});
   const [filter,    setFilter]    = useState("全て");
   const [screen,    setScreen]    = useState("list");
   const [currentId, setCurrentId] = useState(null);
