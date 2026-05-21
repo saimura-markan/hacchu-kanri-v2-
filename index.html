@@ -2564,12 +2564,16 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
 
   useEffect(() => {
+    const oid = order.id;
     const channel = sb
-      .channel(`chat-${order.id}`)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages',
-        filter:`order_id=eq.${order.id}` },
-        (payload) => { onSend(order.id, mapChat(payload.new)); })
-      .subscribe();
+      .channel(`chat-${oid}`)
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' },
+        (payload) => {
+          if (payload.new.order_id === oid) onSend(oid, mapChat(payload.new));
+        })
+      .subscribe((status, err) => {
+        if (err) console.error('[Realtime chat]', status, err);
+      });
     return () => sb.removeChannel(channel);
   }, [order.id]);
 
@@ -4138,9 +4142,9 @@ function AdminApp({ onLogout }) {
     }
     const channel = sb
       .channel(`admin-chat-${id}`)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages',
-        filter:`order_id=eq.${id}` },
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' },
         (payload) => {
+          if (payload.new.order_id !== id) return;
           setChats(c => {
             const existing = c[id] || [];
             const msg = mapChat(payload.new);
@@ -4148,7 +4152,9 @@ function AdminApp({ onLogout }) {
             return { ...c, [id]: [...existing, msg] };
           });
         })
-      .subscribe();
+      .subscribe((status, err) => {
+        if (err) console.error('[Realtime admin-chat]', status, err);
+      });
     return () => sb.removeChannel(channel);
   }, [selected?.id]);
 
