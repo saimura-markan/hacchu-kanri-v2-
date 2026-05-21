@@ -2992,20 +2992,21 @@ function PwField({ label, value, onChange, error, placeholder }) {
   );
 }
 
-function MyPrimaryBtn({ children, onClick, color }) {
+function MyPrimaryBtn({ children, onClick, color, disabled }) {
   const [hov, setHov] = useState(false);
-  const bg = color==="green"
+  const bg = disabled ? "#b0bec5"
+    : color==="green"
     ? "linear-gradient(135deg,#2eaa72,#1a7a50)"
     : "linear-gradient(135deg,#2952c8,#0a1f5c)";
   return (
-    <button onClick={onClick}
+    <button onClick={onClick} disabled={disabled}
       onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       style={{ display:"block", width:"100%", background:bg,
         color:C.white, border:"none", borderRadius:14,
         fontSize:17, fontWeight:800, padding:"17px 0",
-        cursor:"pointer", fontFamily:"inherit",
-        boxShadow:hov?"0 8px 24px rgba(10,31,92,0.3)":"0 4px 16px rgba(10,31,92,0.15)",
-        transform:hov?"translateY(-1px)":"translateY(0)",
+        cursor:disabled?"not-allowed":"pointer", fontFamily:"inherit",
+        boxShadow:disabled?"none":hov?"0 8px 24px rgba(10,31,92,0.3)":"0 4px 16px rgba(10,31,92,0.15)",
+        transform:hov&&!disabled?"translateY(-1px)":"translateY(0)",
         transition:"all 0.2s" }}>
       {children}
     </button>
@@ -3050,20 +3051,32 @@ function Toast({ msg }) {
 }
 
 // ── パスワード変更モーダル ───────────────────────────────
-function PwModal({ onClose }) {
+function PwModal({ onClose, email }) {
   const [current, setCurrent]   = useState("");
   const [newPw, setNewPw]       = useState("");
   const [confirm, setConfirm]   = useState("");
   const [errors, setErrors]     = useState({});
   const [done, setDone]         = useState(false);
+  const [saving, setSaving]     = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const e = {};
-    if (!current)        e.current = "現在のパスワードを入力してください";
-    if (newPw.length<8)  e.newPw   = "8文字以上で入力してください";
-    if (newPw !== confirm) e.confirm = "パスワードが一致しません";
+    if (!current)          e.current = "現在のパスワードを入力してください";
+    if (newPw.length < 8)  e.newPw   = "8文字以上で入力してください";
+    if (newPw !== confirm)  e.confirm = "パスワードが一致しません";
     setErrors(e);
-    if (!Object.keys(e).length) setDone(true);
+    if (Object.keys(e).length) return;
+    setSaving(true);
+    const { error: signInErr } = await sb.auth.signInWithPassword({ email, password: current });
+    if (signInErr) {
+      setErrors({ current: "現在のパスワードが正しくありません" });
+      setSaving(false);
+      return;
+    }
+    const { error: updateErr } = await sb.auth.updateUser({ password: newPw });
+    setSaving(false);
+    if (updateErr) { setErrors({ newPw: updateErr.message }); return; }
+    setDone(true);
   };
 
   return (
@@ -3104,7 +3117,7 @@ function PwModal({ onClose }) {
               </div>
 
               <div style={{ marginBottom:12 }}>
-                <MyPrimaryBtn onClick={handleSave}>変更を保存する</MyPrimaryBtn>
+                <MyPrimaryBtn onClick={handleSave} disabled={saving}>{saving ? "変更中…" : "変更を保存する"}</MyPrimaryBtn>
               </div>
               <MySubBtn onClick={onClose}>キャンセル</MySubBtn>
             </>
@@ -3128,24 +3141,77 @@ function PwModal({ onClose }) {
 
 // ── メイン ───────────────────────────────────────────────
 function MyPageApp({ onBack, onLogout }) {
-  const [name, setName]   = useState("榮藤 美香");
-  const [phone, setPhone] = useState("08088891665");
-  const [errors, setErrors] = useState({});
-  const [toast, setToast]   = useState("");
+  const [name,      setName]      = useState("");
+  const [phone,     setPhone]     = useState("");
+  const [email,     setEmail]     = useState("");
+  const [company,   setCompany]   = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [userId,    setUserId]    = useState(null);
+  const [errors,    setErrors]    = useState({});
+  const [toast,     setToast]     = useState("");
   const [showPwModal, setShowPwModal] = useState(false);
+  const [loading,   setLoading]   = useState(true);
+  const [dbError,   setDbError]   = useState(null);
+  const [saving,    setSaving]    = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      setUserId(user.id);
+      setEmail(user.email || "");
+      const { data, error } = await sb
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      if (error && error.code !== 'PGRST116') {
+        setDbError(error.message);
+      } else if (data) {
+        setName(data.name || "");
+        setPhone(data.phone || "");
+        setCompany(data.company || "");
+        setCompanyId(data.company_id || "");
+      }
+      setLoading(false);
+    };
+    load();
+  }, []);
 
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(()=>setToast(""), 3000);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const e = {};
     if (!name.trim()) e.name = "氏名を入力してください";
     if (!/^[\d\-]{10,13}$/.test(phone.replace(/\s/g,""))) e.phone = "正しい電話番号を入力してください";
     setErrors(e);
-    if (!Object.keys(e).length) showToast("変更を保存しました");
+    if (Object.keys(e).length) return;
+    setSaving(true);
+    const { error } = await sb.from('profiles').upsert({ id: userId, name, phone });
+    setSaving(false);
+    if (error) { showToast("保存に失敗しました"); return; }
+    showToast("変更を保存しました");
   };
+
+  if (loading) return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <EliSVG size={56} />
+      <div style={{ marginTop:16, fontSize:15, color:C.navy, fontWeight:700 }}>読み込み中…</div>
+    </div>
+  );
+
+  if (dbError) return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+      minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif", padding:24 }}>
+      <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
+      <div style={{ fontSize:15, color:C.red, fontWeight:700, marginBottom:8 }}>データの読み込みに失敗しました</div>
+      <div style={{ fontSize:13, color:C.gray }}>{dbError}</div>
+    </div>
+  );
 
   return (
     <div style={{ background:C.bg, minHeight:"100vh",
@@ -3162,16 +3228,16 @@ function MyPageApp({ onBack, onLogout }) {
           boxShadow:"0 4px 24px rgba(10,31,92,0.10)", border:"1px solid "+C.grayL, marginBottom:16 }}>
 
           <MyEliRow>
-            {name.split(" ")[0]}さん、<br />情報を確認・変更できます✏️
+            {(name || "担当者").split(" ")[0]}さん、<br />情報を確認・変更できます✏️
           </MyEliRow>
 
           <div style={{ padding:"0 24px 28px" }}>
 
             {/* 変更不可 */}
             <SectionTitle icon="🏢">会社情報</SectionTitle>
-            <ReadOnlyField label="契約社名" value="株式会社オガチャン" />
-            <ReadOnlyField label="メールアドレス（ログインID）" value="jimu@markan.co.jp" />
-            <ReadOnlyField label="企業ID" value="ELI-1001" />
+            <ReadOnlyField label="契約社名" value={company} />
+            <ReadOnlyField label="メールアドレス（ログインID）" value={email} />
+            <ReadOnlyField label="企業ID" value={companyId} />
 
             <div style={{ height:1, background:C.grayL, margin:"20px 0" }}/>
 
@@ -3185,7 +3251,7 @@ function MyPageApp({ onBack, onLogout }) {
               error={errors.phone} hint="ログイン時の確認に使用します" />
 
             <div style={{ marginBottom:12 }}>
-              <MyPrimaryBtn onClick={handleSave} color="green">変更を保存する</MyPrimaryBtn>
+              <MyPrimaryBtn onClick={handleSave} color="green" disabled={saving}>{saving ? "保存中…" : "変更を保存する"}</MyPrimaryBtn>
             </div>
 
             <div style={{ height:1, background:C.grayL, margin:"20px 0" }}/>
@@ -3244,7 +3310,7 @@ function MyPageApp({ onBack, onLogout }) {
         </div>
       </div>
 
-      {showPwModal && <PwModal onClose={()=>setShowPwModal(false)} />}
+      {showPwModal && <PwModal onClose={()=>setShowPwModal(false)} email={email} />}
       <Toast msg={toast} />
     </div>
   );
