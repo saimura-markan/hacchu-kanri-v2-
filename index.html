@@ -3544,48 +3544,55 @@ function Legend() {
 }
 
 // ── 受注カード ───────────────────────────────────────────
-function AdOrderCard({ order, isSelected, onClick }) {
-  useTimer(); // 毎分再描画
+function AdOrderCard({ order, isSelected, isChecked, onClick, onToggleCheck }) {
+  useTimer();
   const timer = getOrderTimer(order);
 
   return (
-    <button onClick={onClick}
-      style={{ width:"100%", padding:"12px 14px", textAlign:"left", cursor:"pointer",
+    <div onClick={onClick}
+      style={{ width:"100%", padding:"10px 12px 10px 10px", textAlign:"left", cursor:"pointer",
         background: isSelected ? "#ddeeff" : timer.cardBg,
-        borderBottom:"1px solid "+C.grayL, border:"none",
+        borderBottom:"1px solid "+C.grayL,
         borderLeft:"4px solid "+(isSelected?C.blue:timer.leftBorder),
         transition:"background 0.5s, border-color 0.5s",
         animation: timer.pulse && !isSelected ? "urgentPulse 1.5s ease-in-out infinite" : "none",
-        outline:"none" }}>
+        display:"flex", alignItems:"flex-start", gap:8 }}>
 
-      <div style={{ display:"flex", justifyContent:"space-between",
-        alignItems:"flex-start", marginBottom:5, gap:6 }}>
-        <div style={{ fontSize:13, fontWeight:800, color:C.navy,
-          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
-          {AD_SVC_ICON[order.service]} {order.site}
+      <div onClick={e=>{ e.stopPropagation(); onToggleCheck(order.id); }}
+        style={{ paddingTop:3, flexShrink:0 }}>
+        <input type="checkbox" checked={!!isChecked} onChange={()=>{}}
+          style={{ cursor:"pointer", width:14, height:14, accentColor:C.red }} />
+      </div>
+
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between",
+          alignItems:"flex-start", marginBottom:4, gap:6 }}>
+          <div style={{ fontSize:13, fontWeight:800, color:C.navy,
+            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
+            {AD_SVC_ICON[order.service]} {order.site}
+          </div>
+          <ADStatusBadge status={order.status} />
         </div>
-        <ADStatusBadge status={order.status} />
+        <div style={{ fontSize:11, color:C.gray, lineHeight:1.7, marginBottom: timer.show?4:0 }}>
+          <div>{order.company}</div>
+          <div>{order.schedules[0].date}　{order.id}</div>
+        </div>
+        {timer.show && (
+          <span style={{ display:"inline-block", background:timer.badgeBg,
+            color:timer.badgeText, borderRadius:5, padding:"2px 7px",
+            fontSize:11, fontWeight:800,
+            animation: timer.pulse ? "urgentPulse 1.5s ease-in-out infinite" : "none" }}>
+            {timer.label}
+          </span>
+        )}
       </div>
-
-      <div style={{ fontSize:11, color:C.gray, lineHeight:1.7, marginBottom: timer.show?5:0 }}>
-        <div>{order.company}</div>
-        <div>{order.schedules[0].date}　{order.id}</div>
-      </div>
-
-      {timer.show && (
-        <span style={{ display:"inline-block", background:timer.badgeBg,
-          color:timer.badgeText, borderRadius:5, padding:"3px 8px",
-          fontSize:11, fontWeight:800,
-          animation: timer.pulse ? "urgentPulse 1.5s ease-in-out infinite" : "none" }}>
-          {timer.label}
-        </span>
-      )}
-    </button>
+    </div>
   );
 }
 
 // ── 受注一覧パネル ───────────────────────────────────────
-function OrderList({ orders, selected, onSelect, filter, setFilter, search, setSearch }) {
+function OrderList({ orders, selected, onSelect, filter, setFilter, search, setSearch,
+                      checkedIds, onToggleCheck, onDeleteSelected, onDeleteTest }) {
   useTimer();
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
   const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
@@ -3657,6 +3664,24 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 
       <Legend />
 
+      <div style={{ padding:"6px 10px", borderBottom:"1px solid "+C.grayL,
+        display:"flex", gap:6, flexWrap:"wrap" }}>
+        <button onClick={onDeleteTest}
+          style={{ padding:"4px 10px", fontSize:11, fontWeight:700, borderRadius:6,
+            border:"1.5px solid #f5c842", background:"#fffbe6", color:"#8a6800",
+            cursor:"pointer", fontFamily:"inherit" }}>
+          🧹 テストデータ削除
+        </button>
+        {checkedIds.length > 0 && (
+          <button onClick={()=>onDeleteSelected(checkedIds)}
+            style={{ padding:"4px 10px", fontSize:11, fontWeight:700, borderRadius:6,
+              border:"1.5px solid "+C.red, background:"#ffeeee", color:C.red,
+              cursor:"pointer", fontFamily:"inherit" }}>
+            🗑️ 選択した {checkedIds.length}件を削除
+          </button>
+        )}
+      </div>
+
       <div style={{ flex:1, overflowY:"auto" }}>
         {orders.length===0 ? (
           <div style={{ textAlign:"center", padding:"40px 16px", color:C.gray }}>
@@ -3666,7 +3691,9 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
         ) : orders.map(order=>(
           <AdOrderCard key={order.id} order={order}
             isSelected={selected?.id===order.id}
-            onClick={()=>onSelect(order)} />
+            isChecked={checkedIds.includes(order.id)}
+            onClick={()=>onSelect(order)}
+            onToggleCheck={onToggleCheck} />
         ))}
       </div>
     </div>
@@ -3674,7 +3701,7 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit }) {
+function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete }) {
   const [tab, setTab]           = useState("detail");
   const [chatInput, setChatInput] = useState("");
   const [editMode, setEditMode] = useState(false);
@@ -3991,6 +4018,14 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit }) {
               <CopyBtn value={prowonText} label="全項目をコピーする" />
             </div>
 
+            <button onClick={()=>onDelete([order.id])}
+              style={{ width:"100%", marginTop:12, padding:"11px", fontSize:14,
+                fontWeight:800, color:C.red, background:"#fff0f0",
+                border:"2px solid "+C.red, borderRadius:12, cursor:"pointer",
+                fontFamily:"inherit" }}>
+              🗑️ この案件を削除する
+            </button>
+
             </>)}
           </div>
         </div>
@@ -4264,10 +4299,11 @@ function AdminApp({ onLogout }) {
   const [chats,    setChats]    = useState({});
   const [loading,  setLoading]  = useState(true);
   const [dbError,  setDbError]  = useState(null);
-  const [selected, setSelected] = useState(null);
-  const [filter,   setFilter]   = useState("全て");
-  const [search,   setSearch]   = useState("");
-  const [showComp, setShowComp] = useState(false);
+  const [selected,   setSelected]   = useState(null);
+  const [filter,     setFilter]     = useState("全て");
+  const [search,     setSearch]     = useState("");
+  const [showComp,   setShowComp]   = useState(false);
+  const [checkedIds, setCheckedIds] = useState([]);
 
   const fetchOrders = async () => {
     const { data, error } = await sb
@@ -4386,6 +4422,32 @@ function AdminApp({ onLogout }) {
     if (selected?.id === id) setSelected(s => ({ ...s, status:newStatus, statusChangedAt:nowMs }));
   };
 
+  const handleDelete = async (ids) => {
+    if (!window.confirm(`${ids.length}件の案件を削除します。\n関連する日程・メッセージも全て削除されます。\nこの操作は取り消せません。`)) return;
+    await sb.from('messages').delete().in('order_id', ids);
+    await sb.from('schedules').delete().in('order_id', ids);
+    await sb.from('orders').delete().in('id', ids);
+    setOrders(os => os.filter(o => !ids.includes(o.id)));
+    setCheckedIds(prev => prev.filter(id => !ids.includes(id)));
+    if (selected && ids.includes(selected.id)) setSelected(null);
+  };
+
+  const handleDeleteTest = async () => {
+    const testOrders = orders.filter(o =>
+      o.site.includes('テスト') || o.company.includes('テスト') ||
+      o.site.toLowerCase().includes('test') || o.company.toLowerCase().includes('test')
+    );
+    if (testOrders.length === 0) { alert('テストデータが見つかりません'); return; }
+    const ids = testOrders.map(o => o.id);
+    if (!window.confirm(`テストデータ ${testOrders.length}件を削除します。\n（現場名・会社名に「テスト」を含む案件）\nよろしいですか？`)) return;
+    await sb.from('messages').delete().in('order_id', ids);
+    await sb.from('schedules').delete().in('order_id', ids);
+    await sb.from('orders').delete().in('id', ids);
+    setOrders(os => os.filter(o => !ids.includes(o.id)));
+    setCheckedIds(prev => prev.filter(id => !ids.includes(id)));
+    if (selected && ids.includes(selected.id)) setSelected(null);
+  };
+
   const handleEdit = async (id, editData) => {
     const order = orders.find(o => o.id === id);
     const statusChanged = order && order.status !== editData.status;
@@ -4496,10 +4558,15 @@ function AdminApp({ onLogout }) {
       </div>
 
       <OrderList orders={sorted} selected={selected} onSelect={setSelected}
-        filter={filter} setFilter={setFilter} search={search} setSearch={setSearch} />
+        filter={filter} setFilter={setFilter} search={search} setSearch={setSearch}
+        checkedIds={checkedIds}
+        onToggleCheck={id=>setCheckedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}
+        onDeleteSelected={handleDelete}
+        onDeleteTest={handleDeleteTest} />
 
       <DetailPanel order={selected} chats={chats}
-        onAddChat={addChat} onStatusChange={handleStatusChange} onEdit={handleEdit} />
+        onAddChat={addChat} onStatusChange={handleStatusChange}
+        onEdit={handleEdit} onDelete={handleDelete} />
 
       {showComp && <CompanyPanel onClose={()=>setShowComp(false)} />}
     </div>
