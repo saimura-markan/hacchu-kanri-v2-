@@ -2593,15 +2593,17 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
     if (!input.trim()) return;
     const text = input.trim();
     setInput("");
-    const { error } = await sb.from('messages').insert({
+    const { data: row, error } = await sb.from('messages').insert({
       order_id: order.id,
       from_role: role === 'admin' ? 'staff' : 'user',
       text,
-    });
+    }).select().single();
     if (error) {
       console.error('[ChatScreen send]', error);
       setInput(text);
+      return;
     }
+    onSend(order.id, mapChat(row));
   };
 
   return (
@@ -4246,9 +4248,17 @@ function AdminApp({ onLogout }) {
   };
 
   const addChat = async (id, msg) => {
-    await sb.from('messages').insert({
+    const { data: row, error } = await sb.from('messages').insert({
       order_id:id, from_role:msg.from, text:msg.text, is_read:false,
-    });
+    }).select().single();
+    if (!error && row) {
+      setChats(c => {
+        const existing = c[id] || [];
+        const newMsg = mapChat(row);
+        if (existing.some(m => m.id === newMsg.id)) return c;
+        return { ...c, [id]: [...existing, newMsg] };
+      });
+    }
   };
 
   const adjCount  = orders.filter(o => o.status === "調整中").length;
