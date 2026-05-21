@@ -1569,7 +1569,7 @@ function StepService({ onSelect, doneServices, onBack }) {
 }
 
 // ── STEP 2: 詳細入力 ────────────────────────────────────
-function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData }) {
+function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData, personName }) {
   const svc=SERVICES.find(s=>s.id===serviceId);
   const init=savedData||{};
   const [siteName,  setSiteName]  = useState(init.siteName||"");
@@ -1647,7 +1647,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
         <div style={{ padding:"14px 18px" }}>
           <div style={{ fontSize:16, fontWeight:700, color:C.navy,
             background:C.grayPale, borderRadius:10, padding:"12px 16px" }}>
-            榮藤 美香（ログイン情報から自動入力）
+            {personName || "…"}（ログイン情報から自動入力）
           </div>
         </div>
       </Card>
@@ -1781,7 +1781,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
 }
 
 // ── 確認・最終確認・完了 ─────────────────────────────────
-function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll }) {
+function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll, personName }) {
   const svc=SERVICES.find(s=>s.id===serviceId);
   const allDone=doneServices.length>=SERVICES.length;
   const ConfRow=({label,value})=>value?(
@@ -1807,7 +1807,7 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
           <ConfRow label="作業区分" value={svc.icon+" "+svc.label} />
           <ConfRow label="現場名"   value={formData.siteName} />
           <ConfRow label="住所"     value={formData.address} />
-          <ConfRow label="担当者"   value="榮藤 美香" />
+          <ConfRow label="担当者"   value={personName || "…"} />
         </div>
       </Card>
       {formData.schedules.map((sch,i)=>(
@@ -1949,8 +1949,17 @@ function OrderApp({ onDone, onBack }) {
   const [orders,       setOrders]       = useState([]);
   const [savedForms,   setSavedForms]   = useState({});
   const firstSiteData = orders[0]?.data||null;
-  const [submitting, setSubmitting] = useState(false);
-  const [savedIds,   setSavedIds]   = useState([]);
+  const [submitting,  setSubmitting]  = useState(false);
+  const [savedIds,    setSavedIds]    = useState([]);
+  const [personName,  setPersonName]  = useState("");
+
+  useEffect(() => {
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      sb.from('profiles').select('name').eq('id', user.id).single()
+        .then(({ data }) => { if (data?.name) setPersonName(data.name); });
+    });
+  }, []);
 
   const STYLE=`@keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}} @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}`;
 
@@ -2053,12 +2062,14 @@ function OrderApp({ onDone, onBack }) {
                 addrOk:firstSiteData.addrOk,keyInfo:firstSiteData.keyInfo}:{})}
             isAdditional={doneServices.length>0&&!doneServices.includes(currentSvc)}
             firstSiteData={firstSiteData}
+            personName={personName}
             onSubmit={handleFormSubmit}
             onBack={()=>setPhase(doneServices.includes(currentSvc)?"confirm":"service")} />
         )}
         {phase==="confirm"&&currentSvc&&(
           <StepConfirm serviceId={currentSvc} formData={savedForms[currentSvc]}
             doneServices={doneServices}
+            personName={personName}
             onEdit={()=>setPhase("form")}
             onAddMore={()=>{ setCurrentSvc(null); setPhase("service"); }}
             onSubmitAll={handleSubmitAll}/>
@@ -2858,14 +2869,14 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
           })}
         </div>
 
+        <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
+
         {/* 一覧 */}
         {filtered.map(order=>(
           <HiOrderCard key={order.id} role={role} order={order}
             unreadCount={getUnread(order.id)}
             onClick={()=>{ setCurrentId(order.id); setScreen("detail"); }} />
         ))}
-
-        <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
 
         {/* フッター */}
         <div style={{ background:C.white, borderRadius:16, marginTop:16,
