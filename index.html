@@ -1781,7 +1781,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
 }
 
 // ── 確認・最終確認・完了 ─────────────────────────────────
-function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll, personName }) {
+function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll, personName, images, onImagesChange }) {
   const svc=SERVICES.find(s=>s.id===serviceId);
   const allDone=doneServices.length>=SERVICES.length;
   const ConfRow=({label,value})=>value?(
@@ -1832,6 +1832,17 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
         </Card>
       ))}
       <OrSubBtn onClick={onEdit}>✏️ この作業の内容を修正する</OrSubBtn>
+
+      <Card>
+        <CardTitle icon="📷">現場写真・資料（任意）</CardTitle>
+        <div style={{ padding:"4px 18px 16px" }}>
+          <div style={{ fontSize:13, color:C.gray, marginBottom:10 }}>
+            写真を添付すると担当者がスムーズに対応できます。最大1MBに自動圧縮されます。
+          </div>
+          <OrImagePicker images={images||[]} onChange={onImagesChange} />
+        </div>
+      </Card>
+
       <div style={{ display:"flex", alignItems:"center", gap:12, margin:"20px 0" }}>
         <div style={{ flex:1, height:2, background:C.grayL, borderRadius:1 }}/>
         <span style={{ fontSize:14, color:C.gray, fontWeight:700 }}>次のステップ</span>
@@ -1851,7 +1862,7 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
   );
 }
 
-function FinalConfirm({ orders, onBack, onSubmit, submitting }) {
+function FinalConfirm({ orders, images, onBack, onSubmit, submitting }) {
   return (
     <div style={{ padding:"0 16px 40px" }}>
       <EliTalk size={60}>全ての作業内容です✅<br />問題なければ発注してください！</EliTalk>
@@ -1885,6 +1896,21 @@ function FinalConfirm({ orders, onBack, onSubmit, submitting }) {
           </div>
         );
       })}
+      {images && images.length > 0 && (
+        <div style={{ background:C.white, border:"1px solid "+C.grayL, borderRadius:14,
+          padding:"12px 16px", marginBottom:14 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:8 }}>
+            📷 添付画像 {images.length}枚
+          </div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
+            {images.map((img, i) => (
+              <img key={i} src={img.url} alt=""
+                style={{ width:60, height:60, objectFit:"cover", borderRadius:6,
+                  border:"1px solid "+C.grayL }} />
+            ))}
+          </div>
+        </div>
+      )}
       <div style={{ background:C.yellowL, border:"1px solid #f5c842", borderRadius:14,
         padding:"14px 16px", marginBottom:16, fontSize:14, color:"#7a5a00", lineHeight:1.8 }}>
         📞 送信後、<b>24時間以内</b>に担当者よりご連絡いたします
@@ -1942,6 +1968,102 @@ function OrStepBar({ phase }) {
   );
 }
 
+// ── 画像圧縮ユーティリティ ──────────────────────────────
+async function compressImage(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 1920, MAX_BYTES = 1 * 1024 * 1024;
+        let w = img.width, h = img.height;
+        if (w > MAX_DIM || h > MAX_DIM) {
+          if (w > h) { h = Math.round(h * MAX_DIM / w); w = MAX_DIM; }
+          else       { w = Math.round(w * MAX_DIM / h); h = MAX_DIM; }
+        }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        const tryQ = q => cv.toBlob(blob => {
+          if (blob.size <= MAX_BYTES || q <= 0.3) resolve(blob);
+          else tryQ(Math.round((q - 0.1) * 10) / 10);
+        }, 'image/jpeg', q);
+        tryQ(0.85);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function OrImagePicker({ images, onChange }) {
+  const [busy, setBusy] = useState(false);
+  const pick = async e => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setBusy(true);
+    try {
+      const newImgs = await Promise.all(files.map(async f => {
+        const blob = await compressImage(f);
+        const url  = URL.createObjectURL(blob);
+        const name = f.name.replace(/\.[^.]+$/, '.jpg');
+        return { blob, url, name };
+      }));
+      onChange([...images, ...newImgs]);
+    } finally { setBusy(false); e.target.value = ''; }
+  };
+  const remove = i => {
+    URL.revokeObjectURL(images[i].url);
+    onChange(images.filter((_, j) => j !== i));
+  };
+  return (
+    <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-start" }}>
+      {images.map((img, i) => (
+        <div key={i} style={{ position:"relative" }}>
+          <img src={img.url} alt=""
+            style={{ width:76, height:76, objectFit:"cover", borderRadius:8,
+              border:"1px solid "+C.grayL, display:"block" }} />
+          <button onClick={() => remove(i)}
+            style={{ position:"absolute", top:-7, right:-7, width:22, height:22,
+              background:C.red, color:"white", border:"none", borderRadius:"50%",
+              cursor:"pointer", fontSize:14, fontWeight:900, padding:0,
+              display:"flex", alignItems:"center", justifyContent:"center" }}>
+            ×
+          </button>
+          <div style={{ fontSize:10, color:C.gray, textAlign:"center", marginTop:2 }}>
+            {(img.blob.size/1024).toFixed(0)}KB
+          </div>
+        </div>
+      ))}
+      <label style={{ width:76, height:76, border:"2px dashed "+C.blue, borderRadius:8,
+        display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+        cursor:busy?"default":"pointer", color:C.blue, flexShrink:0, opacity:busy?0.5:1 }}>
+        {busy
+          ? <div style={{ fontSize:11, textAlign:"center" }}>圧縮中…</div>
+          : <><span style={{ fontSize:26 }}>📷</span><span style={{ fontSize:10, fontWeight:700 }}>追加</span></>}
+        <input type="file" accept="image/*" multiple onChange={pick}
+          disabled={busy} style={{ display:"none" }} />
+      </label>
+    </div>
+  );
+}
+
+function ImageLightbox({ url, onClose }) {
+  return (
+    <div onClick={onClose}
+      style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:9999,
+        display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
+      <img src={url} alt="" onClick={e => e.stopPropagation()}
+        style={{ maxWidth:"95vw", maxHeight:"95vh", objectFit:"contain", borderRadius:8 }} />
+      <button onClick={onClose}
+        style={{ position:"absolute", top:14, right:14, background:"rgba(255,255,255,0.2)",
+          border:"none", color:"white", borderRadius:"50%", width:40, height:40,
+          fontSize:20, cursor:"pointer", display:"flex",
+          alignItems:"center", justifyContent:"center" }}>✕</button>
+    </div>
+  );
+}
+
 function OrderApp({ onDone, onBack }) {
   const [phase,        setPhase]        = useState("service");
   const [currentSvc,   setCurrentSvc]   = useState(null);
@@ -1949,9 +2071,10 @@ function OrderApp({ onDone, onBack }) {
   const [orders,       setOrders]       = useState([]);
   const [savedForms,   setSavedForms]   = useState({});
   const firstSiteData = orders[0]?.data||null;
-  const [submitting,  setSubmitting]  = useState(false);
-  const [savedIds,    setSavedIds]    = useState([]);
-  const [personName,  setPersonName]  = useState("");
+  const [submitting,      setSubmitting]      = useState(false);
+  const [savedIds,        setSavedIds]        = useState([]);
+  const [personName,      setPersonName]      = useState("");
+  const [attachedImages,  setAttachedImages]  = useState([]);
 
   useEffect(() => {
     sb.auth.getUser().then(({ data: { user } }) => {
@@ -2007,6 +2130,13 @@ function OrderApp({ onDone, onBack }) {
             sort_order: i,
           }))
         );
+      }
+      for (let i = 0; i < attachedImages.length; i++) {
+        const img  = attachedImages[i];
+        const path = `${newOrder.id}/${i}_${img.name}`;
+        const { error: upErr } = await sb.storage.from('order-images')
+          .upload(path, img.blob, { contentType:'image/jpeg', upsert:true });
+        if (!upErr) await sb.from('order_images').insert({ order_id:newOrder.id, storage_path:path });
       }
       await sb.from('messages').insert({
         order_id:  newOrder.id,
@@ -2070,12 +2200,15 @@ function OrderApp({ onDone, onBack }) {
           <StepConfirm serviceId={currentSvc} formData={savedForms[currentSvc]}
             doneServices={doneServices}
             personName={personName}
+            images={attachedImages}
+            onImagesChange={setAttachedImages}
             onEdit={()=>setPhase("form")}
             onAddMore={()=>{ setCurrentSvc(null); setPhase("service"); }}
             onSubmitAll={handleSubmitAll}/>
         )}
         {phase==="finalConfirm"&&(
-          <FinalConfirm orders={orders} onBack={()=>setPhase("confirm")} onSubmit={()=>handleActualSubmit(orders)} submitting={submitting}/>
+          <FinalConfirm orders={orders} images={attachedImages}
+            onBack={()=>setPhase("confirm")} onSubmit={()=>handleActualSubmit(orders)} submitting={submitting}/>
         )}
       </div>
     </div>
@@ -3348,6 +3481,9 @@ function mapOrder(row) {
     workers: s.workers     || '',
     details: Array.isArray(s.details) ? s.details : [],
   }));
+  const images = (row.order_images || [])
+    .sort((a, b) => (a.created_at||'').localeCompare(b.created_at||''))
+    .map(img => img.storage_path);
   return {
     id:             row.id,
     company:        row.company    || '',
@@ -3362,6 +3498,7 @@ function mapOrder(row) {
     key:            row.key_info   || '',
     parking:        row.parking    || '',
     note:           row.note       || '',
+    images,
     createdAt: row.created_at
       ? new Date(row.created_at).getTime() : Date.now(),
     statusChangedAt: row.status_changed_at
@@ -3697,9 +3834,10 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete }) {
   const [tab, setTab]           = useState("detail");
   const [chatInput, setChatInput] = useState("");
-  const [editMode, setEditMode] = useState(false);
-  const [editData, setEditData] = useState(null);
-  const [saving, setSaving]     = useState(false);
+  const [editMode,    setEditMode]    = useState(false);
+  const [editData,    setEditData]    = useState(null);
+  const [saving,      setSaving]      = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
   const bottomRef = useRef(null);
   useTimer();
 
@@ -4003,6 +4141,29 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
               </div>
             ))}
 
+            {order.images && order.images.length > 0 && (
+              <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
+                marginBottom:14, overflow:"hidden" }}>
+                <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
+                  padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
+                  📷 添付画像（{order.images.length}枚）
+                </div>
+                <div style={{ padding:"12px 16px", display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {order.images.map((path, i) => {
+                    const url = sb.storage.from('order-images').getPublicUrl(path).data.publicUrl;
+                    return (
+                      <img key={i} src={url} alt="" onClick={() => setLightboxUrl(url)}
+                        style={{ width:90, height:90, objectFit:"cover", borderRadius:8,
+                          cursor:"pointer", border:"1px solid "+C.grayL,
+                          transition:"opacity 0.2s" }}
+                        onMouseEnter={e=>e.target.style.opacity="0.8"}
+                        onMouseLeave={e=>e.target.style.opacity="1"} />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div style={{ background:"#fffbe6", border:"2px solid #f5c842",
               borderRadius:14, padding:"16px 18px" }}>
               <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:8 }}>
@@ -4010,6 +4171,8 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
               </div>
               <CopyBtn value={prowonText} label="全項目をコピーする" />
             </div>
+
+            {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
 
             <button onClick={()=>onDelete([order.id])}
               style={{ width:"100%", marginTop:12, padding:"11px", fontSize:14,
@@ -4384,7 +4547,7 @@ function AdminApp({ onLogout }) {
   const fetchOrders = async () => {
     const { data, error } = await sb
       .from('orders')
-      .select('*, schedules(*)')
+      .select('*, schedules(*), order_images(*)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (error) { setDbError(error.message); setLoading(false); return; }
