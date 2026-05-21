@@ -2563,6 +2563,7 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
   const bottomRef = useRef(null);
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
 
+  // Realtime subscription（即時反映）
   useEffect(() => {
     const oid = order.id;
     const channel = sb
@@ -2577,15 +2578,30 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
     return () => sb.removeChannel(channel);
   }, [order.id]);
 
+  // ポーリング（Realtime が届かない場合のフォールバック、3秒間隔）
+  useEffect(() => {
+    const oid = order.id;
+    const poll = async () => {
+      const { data } = await sb.from('messages').select('*').eq('order_id', oid).order('id');
+      if (data) data.forEach(row => onSend(oid, mapChat(row)));
+    };
+    const timer = setInterval(poll, 3000);
+    return () => clearInterval(timer);
+  }, [order.id]);
+
   const handleSend = async () => {
     if (!input.trim()) return;
     const text = input.trim();
     setInput("");
-    await sb.from('messages').insert({
+    const { error } = await sb.from('messages').insert({
       order_id: order.id,
       from_role: role === 'admin' ? 'staff' : 'user',
       text,
     });
+    if (error) {
+      console.error('[ChatScreen send]', error);
+      setInput(text);
+    }
   };
 
   return (
@@ -4155,7 +4171,22 @@ function AdminApp({ onLogout }) {
       .subscribe((status, err) => {
         if (err) console.error('[Realtime admin-chat]', status, err);
       });
-    return () => sb.removeChannel(channel);
+    const pollTimer = setInterval(async () => {
+      const { data } = await sb.from('messages').select('*').eq('order_id', id).order('id');
+      if (data) {
+        setChats(c => {
+          const existing = c[id] || [];
+          const incoming = data.map(mapChat);
+          const merged = [...existing];
+          incoming.forEach(msg => {
+            if (!merged.some(m => m.id === msg.id)) merged.push(msg);
+          });
+          if (merged.length === existing.length) return c;
+          return { ...c, [id]: merged };
+        });
+      }
+    }, 3000);
+    return () => { sb.removeChannel(channel); clearInterval(pollTimer); };
   }, [selected?.id]);
 
   // 自動完了：日程確定 && 終了時刻超過 → 完了に変更
