@@ -1524,7 +1524,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
 }
 
 // ── STEP 1: 作業区分選択 ────────────────────────────────
-function StepService({ onSelect, doneServices }) {
+function StepService({ onSelect, doneServices, onBack }) {
   return (
     <div style={{ padding:"0 16px 32px" }}>
       <EliTalk>
@@ -1563,6 +1563,7 @@ function StepService({ onSelect, doneServices }) {
       {doneServices.length>0&&(
         <OrBigBtn onClick={()=>onSelect(null)} color="green">✅ これで全部！確認画面へ進む</OrBigBtn>
       )}
+      <OrSubBtn onClick={onBack}>← 注文履歴にもどる</OrSubBtn>
     </div>
   );
 }
@@ -2044,7 +2045,7 @@ function OrderApp({ onDone, onBack }) {
       <style>{STYLE}</style>
       <OrTopBar title={getTitle()}/><OrStepBar phase={phase}/>
       <div style={{ maxWidth:480, margin:"0 auto" }}>
-        {phase==="service"&&<StepService onSelect={handleSelectService} doneServices={doneServices}/>}
+        {phase==="service"&&<StepService onSelect={handleSelectService} doneServices={doneServices} onBack={onBack}/>}
         {phase==="form"&&currentSvc&&(
           <StepForm serviceId={currentSvc}
             savedData={savedForms[currentSvc]||(doneServices.length>0&&firstSiteData
