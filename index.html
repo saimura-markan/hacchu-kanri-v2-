@@ -3592,7 +3592,7 @@ function AdOrderCard({ order, isSelected, isChecked, onClick, onToggleCheck }) {
 
 // ── 受注一覧パネル ───────────────────────────────────────
 function OrderList({ orders, selected, onSelect, filter, setFilter, search, setSearch,
-                      checkedIds, onToggleCheck, onDeleteSelected, onDeleteTest }) {
+                      checkedIds, onToggleCheck, onDeleteSelected }) {
   useTimer();
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
   const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
@@ -3664,23 +3664,16 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 
       <Legend />
 
-      <div style={{ padding:"6px 10px", borderBottom:"1px solid "+C.grayL,
-        display:"flex", gap:6, flexWrap:"wrap" }}>
-        <button onClick={onDeleteTest}
-          style={{ padding:"4px 10px", fontSize:11, fontWeight:700, borderRadius:6,
-            border:"1.5px solid #f5c842", background:"#fffbe6", color:"#8a6800",
-            cursor:"pointer", fontFamily:"inherit" }}>
-          🧹 テストデータ削除
-        </button>
-        {checkedIds.length > 0 && (
+      {checkedIds.length > 0 && (
+        <div style={{ padding:"6px 10px", borderBottom:"1px solid "+C.grayL }}>
           <button onClick={()=>onDeleteSelected(checkedIds)}
-            style={{ padding:"4px 10px", fontSize:11, fontWeight:700, borderRadius:6,
+            style={{ width:"100%", padding:"6px 10px", fontSize:12, fontWeight:700, borderRadius:6,
               border:"1.5px solid "+C.red, background:"#ffeeee", color:C.red,
               cursor:"pointer", fontFamily:"inherit" }}>
-            🗑️ 選択した {checkedIds.length}件を削除
+            🗑️ 選択した {checkedIds.length}件を削除（論理削除）
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div style={{ flex:1, overflowY:"auto" }}>
         {orders.length===0 ? (
@@ -4023,7 +4016,7 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
                 fontWeight:800, color:C.red, background:"#fff0f0",
                 border:"2px solid "+C.red, borderRadius:12, cursor:"pointer",
                 fontFamily:"inherit" }}>
-              🗑️ この案件を削除する
+              🗑️ この案件を削除済みに移動する
             </button>
 
             </>)}
@@ -4293,6 +4286,88 @@ function CompanyPanel({ onClose }) {
   );
 }
 
+// ── 削除済みパネル ──────────────────────────────────────
+function DeletedPanel({ onClose, onRestore, onHardDelete }) {
+  const [items,      setItems]      = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [checkedIds, setCheckedIds] = useState([]);
+
+  useEffect(() => {
+    sb.from('orders').select('*, schedules(*)')
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false })
+      .then(({ data }) => { setItems((data||[]).map(mapOrder)); setLoading(false); });
+  }, []);
+
+  const toggle = id => setCheckedIds(prev =>
+    prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+
+  const removeFromList = ids =>
+    setItems(is => is.filter(o => !ids.includes(o.id)));
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:C.bg }}>
+      <div style={{ background:"linear-gradient(135deg,#5a3e85,#7b5ea7)",
+        padding:"14px 20px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+        <button onClick={onClose}
+          style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white",
+            borderRadius:8, padding:"6px 12px", fontSize:13, fontWeight:700,
+            cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
+        <div style={{ fontSize:16, fontWeight:900, color:"white", flex:1 }}>🗑️ 削除済み案件</div>
+        <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)" }}>{items.length}件</div>
+      </div>
+
+      {checkedIds.length > 0 && (
+        <div style={{ padding:"8px 16px", background:C.white,
+          borderBottom:"1px solid "+C.grayL, display:"flex", gap:8 }}>
+          <button onClick={()=>onRestore(checkedIds, ids=>{removeFromList(ids); setCheckedIds([]); })}
+            style={{ flex:1, padding:"8px", fontSize:13, fontWeight:700, borderRadius:8,
+              border:"2px solid "+C.blue, background:C.blueL, color:C.blue,
+              cursor:"pointer", fontFamily:"inherit" }}>
+            ♻️ 選択{checkedIds.length}件を復元
+          </button>
+          <button onClick={()=>onHardDelete(checkedIds, ids=>{removeFromList(ids); setCheckedIds([]); })}
+            style={{ flex:1, padding:"8px", fontSize:13, fontWeight:700, borderRadius:8,
+              border:"2px solid "+C.red, background:"#ffeeee", color:C.red,
+              cursor:"pointer", fontFamily:"inherit" }}>
+            💥 完全削除
+          </button>
+        </div>
+      )}
+
+      <div style={{ flex:1, overflowY:"auto", padding:16 }}>
+        {loading ? (
+          <div style={{ textAlign:"center", padding:40, color:C.gray }}>読み込み中…</div>
+        ) : items.length === 0 ? (
+          <div style={{ textAlign:"center", padding:40, color:C.gray }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>✅</div>
+            <div>削除済み案件はありません</div>
+          </div>
+        ) : items.map(o => (
+          <div key={o.id} onClick={()=>toggle(o.id)}
+            style={{ background:checkedIds.includes(o.id)?"#fff0f8":C.white,
+              border:"1px solid "+(checkedIds.includes(o.id)?C.red:C.grayL),
+              borderRadius:12, padding:"12px 14px", marginBottom:10,
+              cursor:"pointer", display:"flex", gap:10, alignItems:"flex-start" }}>
+            <input type="checkbox" checked={checkedIds.includes(o.id)} onChange={()=>{}}
+              onClick={e=>e.stopPropagation()}
+              style={{ marginTop:3, cursor:"pointer", accentColor:C.red, width:15, height:15 }} />
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:3 }}>
+                {AD_SVC_ICON[o.service]} {o.site}
+              </div>
+              <div style={{ fontSize:12, color:C.gray }}>
+                {o.company}　{o.schedules[0]?.date||""}　{o.id}
+              </div>
+            </div>
+            <ADStatusBadge status={o.status} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── メイン ───────────────────────────────────────────────
 function AdminApp({ onLogout }) {
   const [orders,   setOrders]   = useState([]);
@@ -4302,13 +4377,15 @@ function AdminApp({ onLogout }) {
   const [selected,   setSelected]   = useState(null);
   const [filter,     setFilter]     = useState("全て");
   const [search,     setSearch]     = useState("");
-  const [showComp,   setShowComp]   = useState(false);
-  const [checkedIds, setCheckedIds] = useState([]);
+  const [showComp,    setShowComp]    = useState(false);
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [checkedIds,  setCheckedIds]  = useState([]);
 
   const fetchOrders = async () => {
     const { data, error } = await sb
       .from('orders')
       .select('*, schedules(*)')
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (error) { setDbError(error.message); setLoading(false); return; }
     setOrders((data || []).map(mapOrder));
@@ -4423,29 +4500,29 @@ function AdminApp({ onLogout }) {
   };
 
   const handleDelete = async (ids) => {
-    if (!window.confirm(`${ids.length}件の案件を削除します。\n関連する日程・メッセージも全て削除されます。\nこの操作は取り消せません。`)) return;
-    await sb.from('messages').delete().in('order_id', ids);
-    await sb.from('schedules').delete().in('order_id', ids);
-    await sb.from('orders').delete().in('id', ids);
+    if (!window.confirm(`${ids.length}件を削除済みに移動します。\n削除済みタブから復元できます。`)) return;
+    const deletedAt = new Date().toISOString();
+    await sb.from('orders').update({ deleted_at: deletedAt }).in('id', ids);
     setOrders(os => os.filter(o => !ids.includes(o.id)));
     setCheckedIds(prev => prev.filter(id => !ids.includes(id)));
     if (selected && ids.includes(selected.id)) setSelected(null);
   };
 
-  const handleDeleteTest = async () => {
-    const testOrders = orders.filter(o =>
-      o.site.includes('テスト') || o.company.includes('テスト') ||
-      o.site.toLowerCase().includes('test') || o.company.toLowerCase().includes('test')
-    );
-    if (testOrders.length === 0) { alert('テストデータが見つかりません'); return; }
-    const ids = testOrders.map(o => o.id);
-    if (!window.confirm(`テストデータ ${testOrders.length}件を削除します。\n（現場名・会社名に「テスト」を含む案件）\nよろしいですか？`)) return;
+  const handleRestore = async (ids, onSuccess) => {
+    if (!window.confirm(`${ids.length}件を復元します。`)) return;
+    await sb.from('orders').update({ deleted_at: null }).in('id', ids);
+    const { data } = await sb.from('orders').select('*, schedules(*)')
+      .in('id', ids).is('deleted_at', null);
+    if (data) setOrders(os => [...os, ...data.map(mapOrder)]);
+    onSuccess(ids);
+  };
+
+  const handleHardDelete = async (ids, onSuccess) => {
+    if (!window.confirm(`${ids.length}件を完全削除します。\nこの操作は取り消せません。`)) return;
     await sb.from('messages').delete().in('order_id', ids);
     await sb.from('schedules').delete().in('order_id', ids);
     await sb.from('orders').delete().in('id', ids);
-    setOrders(os => os.filter(o => !ids.includes(o.id)));
-    setCheckedIds(prev => prev.filter(id => !ids.includes(id)));
-    if (selected && ids.includes(selected.id)) setSelected(null);
+    onSuccess(ids);
   };
 
   const handleEdit = async (id, editData) => {
@@ -4543,6 +4620,13 @@ function AdminApp({ onLogout }) {
           fontSize:18, cursor:"pointer" }} onClick={()=>setShowComp(true)}>
           🏢
         </div>
+        <div title="削除済み案件"
+          style={{ width:36, height:36,
+            background:showDeleted?"rgba(255,100,100,0.35)":"rgba(255,255,255,0.08)",
+            borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:18, cursor:"pointer" }} onClick={()=>setShowDeleted(d=>!d)}>
+          🗑️
+        </div>
         {(adjCount+soudCount)>0 && (
           <div style={{ background:C.red, color:C.white, borderRadius:"50%",
             width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center",
@@ -4557,16 +4641,20 @@ function AdminApp({ onLogout }) {
         </button>
       </div>
 
-      <OrderList orders={sorted} selected={selected} onSelect={setSelected}
-        filter={filter} setFilter={setFilter} search={search} setSearch={setSearch}
-        checkedIds={checkedIds}
-        onToggleCheck={id=>setCheckedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}
-        onDeleteSelected={handleDelete}
-        onDeleteTest={handleDeleteTest} />
+      {showDeleted ? (
+        <DeletedPanel onClose={()=>setShowDeleted(false)}
+          onRestore={handleRestore} onHardDelete={handleHardDelete} />
+      ) : (<>
+        <OrderList orders={sorted} selected={selected} onSelect={setSelected}
+          filter={filter} setFilter={setFilter} search={search} setSearch={setSearch}
+          checkedIds={checkedIds}
+          onToggleCheck={id=>setCheckedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}
+          onDeleteSelected={handleDelete} />
 
-      <DetailPanel order={selected} chats={chats}
-        onAddChat={addChat} onStatusChange={handleStatusChange}
-        onEdit={handleEdit} onDelete={handleDelete} />
+        <DetailPanel order={selected} chats={chats}
+          onAddChat={addChat} onStatusChange={handleStatusChange}
+          onEdit={handleEdit} onDelete={handleDelete} />
+      </>)}
 
       {showComp && <CompanyPanel onClose={()=>setShowComp(false)} />}
     </div>
