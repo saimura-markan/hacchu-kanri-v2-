@@ -67,12 +67,6 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_JYkjSrSixBp9jquMeq6hKw_YMwwiDSx';
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // ── テスト用ダミーアカウント ────────────────────────────
-    const TEST_USERS = [
-      { email: "admin@test.com", password: "1234", role: "admin" },
-      { email: "user@test.com",  password: "1234", role: "user"  },
-    ];
-
     // ── 画像パス ────────────────────────────────────────────
     const ELI_IMG  = "./eli_img.png";
     const LOGO_IMG = "./logo_img.png";
@@ -264,15 +258,19 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors]     = useState({});
+  const [loading, setLoading]   = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     const errs = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "正しいメールアドレスを入力してください";
     if (!password) errs.password = "パスワードを入力してください";
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    const matched = TEST_USERS.find(u => u.email === email.toLowerCase() && u.password === password);
-    if (!matched) { setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
-    onLogin(email, matched.role);
+    setLoading(true);
+    const { data, error } = await sb.auth.signInWithPassword({ email: email.toLowerCase(), password });
+    setLoading(false);
+    if (error) { setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
+    const role = data.user?.user_metadata?.role ?? "user";
+    onLogin(email, role);
   };
 
   return (
@@ -303,7 +301,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
             <TextLink onClick={onForgot}>パスワードをわすれた方はこちら</TextLink>
           </div>
 
-          <PrimaryBtn onClick={handleLogin}>ログイン →</PrimaryBtn>
+          <PrimaryBtn onClick={handleLogin} disabled={loading}>{loading ? "ログイン中…" : "ログイン →"}</PrimaryBtn>
 
           <div style={{ textAlign: "center", marginTop: 24 }}>
             <div style={{ fontSize: 14, color: C.gray, marginBottom: 10 }}>
