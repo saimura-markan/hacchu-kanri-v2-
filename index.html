@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>E-Li 工事 受発注システム</title>
+  <title>LiBot 工事 受発注システム</title>
   <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"
     onerror="showLoadError('React')"></script>
   <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"
@@ -93,7 +93,7 @@
     // ログイン画面
     // ═══════════════════════════════════════════════════════
 
-// ── E-Liロゴ（SVG） ──────────────────────────────────────
+// ── LiBotロゴ（SVG） ──────────────────────────────────────
 function EliLogo({ height = 32 }) {
   return (
     <svg height={height} viewBox="0 0 130 44" style={{ display: "block" }}>
@@ -101,9 +101,9 @@ function EliLogo({ height = 32 }) {
       <line x1="0" y1="20" x2="20" y2="16" stroke={C.white} strokeWidth="2.5" opacity="0.8" strokeLinecap="round"/>
       <line x1="0" y1="25" x2="17" y2="22" stroke={C.white} strokeWidth="1.8" opacity="0.55" strokeLinecap="round"/>
       <line x1="0" y1="30" x2="14" y2="28" stroke={C.white} strokeWidth="1.2" opacity="0.35" strokeLinecap="round"/>
-      {/* E-Li テキスト */}
+      {/* LiBot テキスト */}
       <text x="24" y="36" fontSize="32" fontWeight="900" fill={C.white}
-        fontFamily="'Arial Black','Impact',sans-serif" letterSpacing="-1">E-Li</text>
+        fontFamily="'Arial Black','Impact',sans-serif" letterSpacing="-1">LiBot</text>
       {/* スピード弧 */}
       <path d="M 54 5 Q 108 1 120 22 Q 108 40 92 40"
         stroke={C.white} strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.9"/>
@@ -111,7 +111,7 @@ function EliLogo({ height = 32 }) {
   );
 }
 
-// ── イーライくん（SVG） ──────────────────────────────────
+// ── LiBot（SVG） ──────────────────────────────────
 function EliSVG({ size = 56 }) {
   return (
     <svg viewBox="0 0 80 90" width={size} height={size * 1.1} style={{ display:"block" }}>
@@ -132,7 +132,7 @@ function EliSVG({ size = 56 }) {
       <rect x="20" y="58" width="40" height="24" rx="12" fill={C.navyMid}/>
       <rect x="26" y="63" width="28" height="14" rx="7" fill={C.navy}/>
       <text x="40" y="74" textAnchor="middle" fontSize="7" fontWeight="bold"
-        fill={C.yellow} fontFamily="sans-serif">E-Li</text>
+        fill={C.yellow} fontFamily="sans-serif">LiBot</text>
       <rect x="24" y="79" width="12" height="9" rx="5" fill={C.navyMid}/>
       <rect x="44" y="79" width="12" height="9" rx="5" fill={C.navyMid}/>
     </svg>
@@ -321,7 +321,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
           borderRadius: 16, padding: "16px 20px",
           display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>E-Li Service Desk</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>LiBot Service Desk</div>
             <div style={{ fontSize: 18, fontWeight: 900, color: C.white }}>06-6392-3882</div>
             <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>平日 9:00〜18:00</div>
           </div>
@@ -421,7 +421,7 @@ function RgTopBar() {
 function EliRow({ children }) {
   return (
     <div style={{ padding:"24px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:20 }}>
-      <img src={ELI_IMG} alt="イーライくん" style={{ width:90, height:"auto",
+      <img src={ELI_IMG} alt="LiBot" style={{ width:90, height:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
       <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
@@ -735,7 +735,7 @@ function RgDone({ data, companyId, onDone }) {
   };
   return (
     <div style={{ padding:"24px", textAlign:"center" }}>
-      <img src={ELI_IMG} alt="イーライくん" style={{ width:110, height:"auto",
+      <img src={ELI_IMG} alt="LiBot" style={{ width:110, height:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", marginBottom:16 }} />
       <div style={{ fontSize:24, fontWeight:800, color:C.navy, marginBottom:8 }}>
@@ -851,7 +851,7 @@ function RegisterApp({ onDone, onBack }) {
               </div>
             </div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
               <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
             </div>
           </div>
@@ -2162,7 +2162,7 @@ function HiBigBtn({ children, onClick, color, disabled }) {
   );
 }
 
-// ── イーライくんのメッセージ ─────────────────────────────
+// ── LiBotのメッセージ ─────────────────────────────
 function EliMessage({ orders, chats }) {
   const adjCount    = orders.filter(o=>o.status==="調整中").length;
   const soudanCount = orders.filter(o=>o.status==="日程相談中").length;
@@ -2485,7 +2485,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
             borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:24, flexShrink:0 }}>💬</div>
           <div>
-            <div style={{ fontSize:16, fontWeight:900, color:C.white }}>イーライくんとチャット</div>
+            <div style={{ fontSize:16, fontWeight:900, color:C.white }}>LiBotとチャット</div>
             <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", marginTop:2 }}>
               担当者への連絡・日程相談はこちら
             </div>
@@ -2652,7 +2652,7 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
                   </div>
                 )}
                 <div style={{ maxWidth:"78%" }}>
-                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>🤖 イーライくん</div>}
+                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>🤖 LiBot</div>}
                   {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue,   marginBottom:3, fontWeight:600 }}>👷 担当者</div>}
                   {!isOwn && msg.from==="user"  && role==="admin" && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 ユーザー</div>}
                   <div style={{
@@ -2841,7 +2841,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
 
       <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 40px" }}>
 
-        {/* イーライくんのメッセージ */}
+        {/* LiBotのメッセージ */}
         <EliMessage orders={orders} chats={chats} />
 
         {/* フィルター */}
@@ -2884,7 +2884,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
             alignItems:"center", justifyContent:"center", gap:4 }}>
             <div style={{ fontSize:28 }}>🕐</div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
               <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
             </div>
           </div>
@@ -2925,7 +2925,7 @@ function MyTopBar({ onBack, onLogout }) {
 function MyEliRow({ children }) {
   return (
     <div style={{ padding:"20px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:16 }}>
-      <img src={ELI_IMG} alt="イーライくん" style={{ width:80, height:"auto",
+      <img src={ELI_IMG} alt="LiBot" style={{ width:80, height:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
       <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
@@ -3303,7 +3303,7 @@ function MyPageApp({ onBack, onLogout }) {
               </div>
             </div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
               <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
             </div>
           </div>
@@ -3604,7 +3604,7 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
       display:"flex", flexDirection:"column", flexShrink:0, height:"100vh", overflow:"hidden" }}>
 
       <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`, padding:"14px 14px 10px" }}>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>E-Li 管理者画面</div>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>LiBot 管理者画面</div>
         <div style={{ fontSize:17, fontWeight:900, color:C.white }}>受注一覧</div>
         <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
           {adjCount>0 && (
