@@ -3341,6 +3341,7 @@ const AD_SVC_ICON = {
 function mapOrder(row) {
   const schRows = (row.schedules || []).sort((a,b) => (a.sort_order||0) - (b.sort_order||0));
   const schedules = schRows.map(s => ({
+    id:      s.id,
     date:    s.work_date   || '',
     start:   s.start_time  || '',
     end:     s.end_time    || '',
@@ -3673,13 +3674,43 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ order, chats, onAddChat, onStatusChange }) {
+function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit }) {
   const [tab, setTab]           = useState("detail");
   const [chatInput, setChatInput] = useState("");
+  const [editMode, setEditMode] = useState(false);
+  const [editData, setEditData] = useState(null);
+  const [saving, setSaving]     = useState(false);
   const bottomRef = useRef(null);
   useTimer();
 
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[chats, tab]);
+  useEffect(()=>{ setEditMode(false); setEditData(null); }, [order?.id]);
+
+  const startEdit = () => {
+    setEditData({
+      status: order.status,
+      schedules: order.schedules.map(s => ({ ...s, detailsText: (s.details||[]).join('・') })),
+    });
+    setEditMode(true);
+  };
+  const cancelEdit = () => { setEditMode(false); setEditData(null); };
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        status: editData.status,
+        schedules: editData.schedules.map(s => ({
+          ...s,
+          details: s.detailsText.split(/[・、,\n]/).map(t=>t.trim()).filter(Boolean),
+        })),
+      };
+      await onEdit(order.id, payload);
+      setEditMode(false);
+      setEditData(null);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (!order) return (
     <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
@@ -3786,6 +3817,112 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange }) {
         <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
           <div style={{ maxWidth:700, margin:"0 auto" }}>
 
+            {/* 編集ボタン */}
+            {!editMode && (
+              <button onClick={startEdit}
+                style={{ width:"100%", marginBottom:16, padding:"11px", fontSize:14,
+                  fontWeight:800, color:C.blue, background:C.blueL,
+                  border:"2px solid "+C.blue, borderRadius:12, cursor:"pointer",
+                  fontFamily:"inherit" }}>
+                ✏️ 日程・ステータスを編集する
+              </button>
+            )}
+
+            {/* 編集フォーム */}
+            {editMode && editData && (
+              <div style={{ background:C.white, borderRadius:14, border:"2px solid "+C.blue,
+                marginBottom:16, overflow:"hidden" }}>
+                <div style={{ background:`linear-gradient(135deg,${C.blue},#1a5fbf)`,
+                  padding:"12px 18px", fontSize:14, fontWeight:800, color:C.white }}>
+                  ✏️ 編集モード
+                </div>
+                <div style={{ padding:"16px 18px" }}>
+                  <div style={{ marginBottom:18 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.gray, marginBottom:6 }}>ステータス</div>
+                    <select value={editData.status}
+                      onChange={e=>setEditData(d=>({...d,status:e.target.value}))}
+                      style={{ fontSize:14, padding:"10px 12px", borderRadius:8,
+                        border:"2px solid "+C.blue, width:"100%", fontFamily:"inherit",
+                        color:C.navy, fontWeight:700 }}>
+                      {AD_STATUS_LIST.map(s=>(
+                        <option key={s} value={s}>{AD_STATUS[s].icon} {s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {editData.schedules.map((sch,i)=>(
+                    <div key={i} style={{ border:"1px solid "+C.grayL, borderRadius:10,
+                      padding:"14px", marginBottom:14, background:"#f9fbff" }}>
+                      <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:12 }}>
+                        📅 日程 {i+1}
+                      </div>
+                      <div style={{ marginBottom:10 }}>
+                        <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>日付</div>
+                        <input type="date" value={sch.date}
+                          onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,date:e.target.value}:s)}))}
+                          style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
+                            border:"1px solid "+C.grayL, width:"100%",
+                            fontFamily:"inherit", boxSizing:"border-box" }} />
+                      </div>
+                      <div style={{ display:"flex", gap:12, marginBottom:10 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>開始時間</div>
+                          <input type="time" value={sch.start}
+                            onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,start:e.target.value}:s)}))}
+                            style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
+                              border:"1px solid "+C.grayL, width:"100%",
+                              fontFamily:"inherit", boxSizing:"border-box" }} />
+                        </div>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>終了時間</div>
+                          <input type="time" value={sch.end}
+                            onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,end:e.target.value}:s)}))}
+                            style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
+                              border:"1px solid "+C.grayL, width:"100%",
+                              fontFamily:"inherit", boxSizing:"border-box" }} />
+                        </div>
+                      </div>
+                      <div style={{ marginBottom:10 }}>
+                        <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>作業者数</div>
+                        <input type="text" value={sch.workers}
+                          onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,workers:e.target.value}:s)}))}
+                          placeholder="例：3人"
+                          style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
+                            border:"1px solid "+C.grayL, width:"100%",
+                            fontFamily:"inherit", boxSizing:"border-box" }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>作業内容（「・」区切り）</div>
+                        <input type="text" value={sch.detailsText}
+                          onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,detailsText:e.target.value}:s)}))}
+                          placeholder="例：養生・家具移動・荷上げ"
+                          style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
+                            border:"1px solid "+C.grayL, width:"100%",
+                            fontFamily:"inherit", boxSizing:"border-box" }} />
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ display:"flex", gap:12 }}>
+                    <button onClick={saveEdit} disabled={saving}
+                      style={{ flex:2, padding:"13px", fontSize:15, fontWeight:800,
+                        background:C.blue, color:C.white, border:"none", borderRadius:10,
+                        cursor:saving?"not-allowed":"pointer", opacity:saving?0.7:1,
+                        fontFamily:"inherit" }}>
+                      {saving?"保存中…":"💾 保存する"}
+                    </button>
+                    <button onClick={cancelEdit} disabled={saving}
+                      style={{ flex:1, padding:"13px", fontSize:14, fontWeight:700,
+                        background:C.grayL, color:C.gray, border:"none", borderRadius:10,
+                        cursor:"pointer", fontFamily:"inherit" }}>
+                      キャンセル
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 既存の詳細ビュー */}
+            {!editMode && (<>
+
             {/* 警告バナー */}
             {showBanner && (
               <div style={{ background: timer.level==="over"?"#ffd0d0":"#ffe4e4",
@@ -3853,6 +3990,8 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange }) {
               </div>
               <CopyBtn value={prowonText} label="全項目をコピーする" />
             </div>
+
+            </>)}
           </div>
         </div>
       )}
@@ -4247,6 +4386,37 @@ function AdminApp({ onLogout }) {
     if (selected?.id === id) setSelected(s => ({ ...s, status:newStatus, statusChangedAt:nowMs }));
   };
 
+  const handleEdit = async (id, editData) => {
+    const order = orders.find(o => o.id === id);
+    const statusChanged = order && order.status !== editData.status;
+    const nowMs = Date.now();
+    const orderUpdate = { status: editData.status };
+    if (statusChanged) orderUpdate.status_changed_at = new Date().toISOString();
+    await sb.from('orders').update(orderUpdate).eq('id', id);
+    for (const sch of editData.schedules) {
+      if (sch.id) {
+        await sb.from('schedules').update({
+          work_date:  sch.date,
+          start_time: sch.start,
+          end_time:   sch.end,
+          workers:    sch.workers,
+          details:    sch.details,
+        }).eq('id', sch.id);
+      }
+    }
+    const updatedSchedules = editData.schedules.map(({ id:sid, date, start, end, workers, details }) =>
+      ({ id:sid, date, start, end, workers, details }));
+    setOrders(os => os.map(o => {
+      if (o.id !== id) return o;
+      return { ...o, status:editData.status, schedules:updatedSchedules,
+        statusChangedAt: statusChanged ? nowMs : o.statusChangedAt };
+    }));
+    if (selected?.id === id) {
+      setSelected(s => ({ ...s, status:editData.status, schedules:updatedSchedules,
+        statusChangedAt: statusChanged ? nowMs : s.statusChangedAt }));
+    }
+  };
+
   const addChat = async (id, msg) => {
     const { data: row, error } = await sb.from('messages').insert({
       order_id:id, from_role:msg.from, text:msg.text, is_read:false,
@@ -4329,7 +4499,7 @@ function AdminApp({ onLogout }) {
         filter={filter} setFilter={setFilter} search={search} setSearch={setSearch} />
 
       <DetailPanel order={selected} chats={chats}
-        onAddChat={addChat} onStatusChange={handleStatusChange} />
+        onAddChat={addChat} onStatusChange={handleStatusChange} onEdit={handleEdit} />
 
       {showComp && <CompanyPanel onClose={()=>setShowComp(false)} />}
     </div>
