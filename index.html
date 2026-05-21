@@ -2559,27 +2559,29 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
 // LOGO_IMG は共有定数を使用
 
 function ChatScreen({ role, order, messages, onSend, onBack }) {
-  const [input,  setInput]  = useState("");
-  const [typing, setTyping] = useState(false);
+  const [input, setInput] = useState("");
   const bottomRef = useRef(null);
-  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[messages,typing]);
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
 
-  const now = () => {
-    const d = new Date();
-    return `${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
-  };
+  useEffect(() => {
+    const channel = sb
+      .channel(`chat-${order.id}`)
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages',
+        filter:`order_id=eq.${order.id}` },
+        (payload) => { onSend(order.id, mapChat(payload.new)); })
+      .subscribe();
+    return () => sb.removeChannel(channel);
+  }, [order.id]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
-    onSend(order.id, { id:Date.now(), from:"user", text:input.trim(), time:now(), read:true });
+    const text = input.trim();
     setInput("");
-    setTyping(true);
-    setTimeout(()=>{
-      setTyping(false);
-      onSend(order.id, { id:Date.now()+1, from:"eli",
-        text:"メッセージを受け取りました😊\n担当者が確認次第、ご返答いたします。\nお急ぎの場合は📞 06-6392-3882 へどうぞ。",
-        time:now(), read:true });
-    },1500);
+    await sb.from('messages').insert({
+      order_id: order.id,
+      from_role: role === 'admin' ? 'staff' : 'user',
+      text,
+    });
   };
 
   return (
@@ -2649,20 +2651,6 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
             );
           })}
 
-          {typing && (
-            <div style={{ display:"flex", alignItems:"flex-end", gap:8, marginBottom:16 }}>
-              <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
-                display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🤖</div>
-              <div style={{ background:C.white, borderRadius:"4px 20px 20px 20px",
-                padding:"14px 18px", border:`1px solid ${C.grayL}`,
-                display:"flex", gap:5, alignItems:"center" }}>
-                {[0,1,2].map(i=>(
-                  <div key={i} style={{ width:8, height:8, borderRadius:"50%",
-                    background:C.blue, animation:`dotB 1.2s ease ${i*0.2}s infinite` }} />
-                ))}
-              </div>
-            </div>
-          )}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -2762,7 +2750,11 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
   };
 
   const addMessage = (orderId, msg) => {
-    setChats(c=>({ ...c, [orderId]:[...(c[orderId]||[]),msg] }));
+    setChats(c => {
+      const existing = c[orderId] || [];
+      if (existing.some(m => m.id === msg.id)) return c;
+      return { ...c, [orderId]: [...existing, msg] };
+    });
   };
 
   const counts = {
@@ -4135,14 +4127,29 @@ function AdminApp({ onLogout }) {
     return () => sb.removeChannel(channel);
   }, []);
 
-  // 選択案件のメッセージを遅延ロード
+  // 選択案件のメッセージを遅延ロード + Realtime購読
   useEffect(() => {
     if (!selected) return;
     const id = selected.id;
-    if (chats[id] !== undefined) return;
-    sb.from('messages').select('*').eq('order_id', id).order('id').then(({ data }) => {
-      setChats(c => ({ ...c, [id]: (data || []).map(mapChat) }));
-    });
+    if (chats[id] === undefined) {
+      sb.from('messages').select('*').eq('order_id', id).order('id').then(({ data }) => {
+        setChats(c => ({ ...c, [id]: (data || []).map(mapChat) }));
+      });
+    }
+    const channel = sb
+      .channel(`admin-chat-${id}`)
+      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages',
+        filter:`order_id=eq.${id}` },
+        (payload) => {
+          setChats(c => {
+            const existing = c[id] || [];
+            const msg = mapChat(payload.new);
+            if (existing.some(m => m.id === msg.id)) return c;
+            return { ...c, [id]: [...existing, msg] };
+          });
+        })
+      .subscribe();
+    return () => sb.removeChannel(channel);
   }, [selected?.id]);
 
   // 自動完了：日程確定 && 終了時刻超過 → 完了に変更
@@ -4202,11 +4209,9 @@ function AdminApp({ onLogout }) {
   };
 
   const addChat = async (id, msg) => {
-    const { data } = await sb.from('messages').insert({
+    await sb.from('messages').insert({
       order_id:id, from_role:msg.from, text:msg.text, is_read:false,
-    }).select().single();
-    const saved = data ? mapChat(data) : { ...msg };
-    setChats(c => ({ ...c, [id]: [...(c[id] || []), saved] }));
+    });
   };
 
   const adjCount  = orders.filter(o => o.status === "調整中").length;
