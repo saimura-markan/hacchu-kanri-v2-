@@ -267,9 +267,21 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
     const { data, error } = await sb.auth.signInWithPassword({ email: email.toLowerCase(), password });
-    setLoading(false);
-    if (error) { setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
+    if (error) { setLoading(false); setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
     const role = data.user?.user_metadata?.role ?? "user";
+    if (role !== "admin") {
+      const { data: profile } = await sb.from('profiles').select('company_id').eq('id', data.user.id).single();
+      if (profile?.company_id) {
+        const { data: company } = await sb.from('companies').select('is_active').eq('id', profile.company_id).single();
+        if (company && !company.is_active) {
+          await sb.auth.signOut();
+          setLoading(false);
+          setErrors({ password: "ご利用の企業アカウントが無効化されています。担当者にご確認ください。" });
+          return;
+        }
+      }
+    }
+    setLoading(false);
     onLogin(email, role);
   };
 
@@ -563,33 +575,32 @@ function RgStepBar({ step }) {
 }
 
 // ── STEP 1: 企業ID入力 ──────────────────────────────────
-function Step1({ companyId, setCompanyId, onNext }) {
+function Step1({ companyId, setCompanyId, setCompanyName, onNext }) {
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [verifiedName, setVerifiedName] = useState("");
 
-  // モック企業データ
-  const COMPANIES = {
-    "ELI-1001": "株式会社山田工務店",
-    "ELI-1002": "有限会社佐藤建設",
-    "ELI-1003": "田中リフォーム株式会社",
-  };
-
-  const handleCheck = () => {
+  const handleCheck = async () => {
     if (!companyId.trim()) { setError("企業IDを入力してください"); return; }
     if (!/^ELI-\d{4}$/.test(companyId.toUpperCase())) {
       setError("企業IDの形式が正しくありません（例：ELI-1001）"); return;
     }
     setChecking(true);
-    setTimeout(()=>{
-      setChecking(false);
-      const company = COMPANIES[companyId.toUpperCase()];
-      if (company) { setVerified(true); setError(""); }
-      else { setError("企業IDが見つかりません。担当者にご確認ください。"); }
-    }, 800);
+    const { data } = await sb.from('companies')
+      .select('name, is_active')
+      .eq('id', companyId.toUpperCase())
+      .single();
+    setChecking(false);
+    if (!data) { setError("企業IDが見つかりません。担当者にご確認ください。"); return; }
+    if (!data.is_active) { setError("この企業IDは現在無効です。担当者にご確認ください。"); return; }
+    setVerifiedName(data.name);
+    setCompanyName(data.name);
+    setVerified(true);
+    setError("");
   };
 
-  const company = COMPANIES[companyId.toUpperCase()];
+  const company = verifiedName;
 
   return (
     <div style={{ padding:"0 24px 28px" }}>
@@ -642,15 +653,10 @@ function Step1({ companyId, setCompanyId, onNext }) {
 }
 
 // ── STEP 2: 個人情報入力 ────────────────────────────────
-function Step2({ data, setData, companyId, onNext, onBack }) {
+function Step2({ data, setData, companyId, companyName, onNext, onBack }) {
   const [errors, setErrors] = useState({});
 
-  const COMPANIES = {
-    "ELI-1001": "株式会社山田工務店",
-    "ELI-1002": "有限会社佐藤建設",
-    "ELI-1003": "田中リフォーム株式会社",
-  };
-  const company = COMPANIES[companyId] || "";
+  const company = companyName || "";
   const pw = data.password || "";
 
   const validate = () => {
@@ -727,12 +733,7 @@ function Step2({ data, setData, companyId, onNext, onBack }) {
 }
 
 // ── 完了画面 ─────────────────────────────────────────────
-function RgDone({ data, companyId, onDone }) {
-  const COMPANIES = {
-    "ELI-1001": "株式会社山田工務店",
-    "ELI-1002": "有限会社佐藤建設",
-    "ELI-1003": "田中リフォーム株式会社",
-  };
+function RgDone({ data, companyId, companyName, onDone }) {
   return (
     <div style={{ padding:"24px", textAlign:"center" }}>
       <img src={ELI_IMG} alt="LiBot" style={{ width:110, height:"auto",
@@ -751,7 +752,7 @@ function RgDone({ data, companyId, onDone }) {
           登録情報
         </div>
         {[
-          ["会社名", COMPANIES[companyId]],
+          ["会社名", companyName],
           ["氏名",   data.name],
           ["メール（ログインID）", data.email],
         ].map(([k,v])=>(
@@ -785,6 +786,7 @@ function RegisterApp({ onDone, onBack }) {
   const [step, setStep]           = useState(0);
   const [done, setDone]           = useState(false);
   const [companyId, setCompanyId] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [data, setData]           = useState({
     name:"", phone:"", email:"", password:"", confirmPw:"",
   });
@@ -811,17 +813,17 @@ function RegisterApp({ onDone, onBack }) {
               <RgStepBar step={step} />
               {step===0 && (
                 <Step1 companyId={companyId} setCompanyId={setCompanyId}
-                  onNext={()=>setStep(1)} />
+                  setCompanyName={setCompanyName} onNext={()=>setStep(1)} />
               )}
               {step===1 && (
                 <Step2 data={data} setData={setData} companyId={companyId}
-                  onNext={()=>setDone(true)} onBack={()=>setStep(0)} />
+                  companyName={companyName} onNext={()=>setDone(true)} onBack={()=>setStep(0)} />
               )}
             </>
           ) : (
             <>
               <EliRow>登録ありがとうございます！🎉<br />メールをご確認ください</EliRow>
-              <RgDone data={data} companyId={companyId} onDone={onDone} />
+              <RgDone data={data} companyId={companyId} companyName={companyName} onDone={onDone} />
             </>
           )}
         </div>
@@ -4340,11 +4342,19 @@ function CompanyPanel({ onClose }) {
     const newId = nextId();
     const since = new Date().toISOString().slice(0, 10);
     const { data } = await sb.from('companies')
-      .insert({ id:newId, ...form, since })
+      .insert({ id:newId, ...form, since, is_active:true })
       .select().single();
     if (data) setCompanies(c => [...c, data]);
     setForm({ name:"", contact:"", phone:"", email:"" });
     setShowAdd(false);
+  };
+
+  const handleToggle = async (id, currentActive) => {
+    const { data } = await sb.from('companies')
+      .update({ is_active: !currentActive })
+      .eq('id', id)
+      .select().single();
+    if (data) setCompanies(cs => cs.map(c => c.id === id ? { ...c, is_active: !currentActive } : c));
   };
 
   return (
@@ -4411,7 +4421,7 @@ function CompanyPanel({ onClose }) {
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:C.navy }}>
-                {["企業ID","会社名","担当者","電話番号","登録日"].map(h=>(
+                {["企業ID","会社名","担当者","電話番号","登録日","状態"].map(h=>(
                   <th key={h} style={{ padding:"10px 14px", fontSize:13, fontWeight:700,
                     color:C.white, textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -4419,9 +4429,9 @@ function CompanyPanel({ onClose }) {
             </thead>
             <tbody>
               {cpLoading ? (
-                <tr><td colSpan={5} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
+                <tr><td colSpan={6} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
               ) : companies.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
+                <tr><td colSpan={6} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
               ) : companies.map((co,i)=>(
                 <tr key={co.id} style={{ background:i%2===0?C.white:C.bg }}>
                   <td style={{ padding:"10px 14px" }}>
@@ -4439,6 +4449,16 @@ function CompanyPanel({ onClose }) {
                     </div>
                   </td>
                   <td style={{ padding:"10px 14px", fontSize:13, color:C.gray }}>{co.since}</td>
+                  <td style={{ padding:"10px 14px" }}>
+                    <button onClick={()=>handleToggle(co.id, co.is_active)}
+                      style={{ padding:"4px 12px", borderRadius:6, fontSize:12, fontWeight:700,
+                        cursor:"pointer", border:"2px solid",
+                        borderColor:co.is_active?C.green:C.red,
+                        background:co.is_active?"#f0faf5":"#fff0f0",
+                        color:co.is_active?C.green:C.red }}>
+                      {co.is_active?"✅ 有効":"🚫 無効"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
