@@ -705,7 +705,7 @@ function LoginApp({ onLogin, onRegister }) {
 function RgTopBar() {
   return (
     <div style={{ padding:"28px 24px 20px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-      <img src={LOGO_IMG} alt="E-Li" style={{ height:60, width:"auto", objectFit:"contain" }} />
+      <img src={LOGO_IMG} alt="E-Li" style={{ height:54, width:"auto", objectFit:"contain" }} />
       <div style={{ textAlign:"right" }}>
         <div style={{ fontSize:12, color:C.gray, marginBottom:2 }}>工事 受発注システム</div>
         <div style={{ fontSize:17, fontWeight:900, color:C.navy, lineHeight:1.4 }}>
@@ -719,7 +719,7 @@ function RgTopBar() {
 function EliRow({ children }) {
   return (
     <div style={{ padding:"24px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:20 }}>
-      <img src={ELI_IMG} alt="LiBot" style={{ width:90, height:"auto",
+      <img src={ELI_IMG} alt="LiBot" style={{ height:100, width:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
       <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
@@ -1022,7 +1022,7 @@ function Step2({ data, setData, companyId, companyName, onNext, onBack }) {
 function RgDone({ data, companyId, companyName, onDone }) {
   return (
     <div style={{ padding:"24px", textAlign:"center" }}>
-      <img src={ELI_IMG} alt="LiBot" style={{ width:110, height:"auto",
+      <img src={ELI_IMG} alt="LiBot" style={{ height:100, width:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", marginBottom:16 }} />
       <div style={{ fontSize:24, fontWeight:800, color:C.navy, marginBottom:8 }}>
@@ -1248,7 +1248,7 @@ function OrTopBar({ title }) {
     <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
       padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
       boxShadow:"0 2px 8px rgba(10,31,92,0.06)", position:"sticky", top:0, zIndex:50 }}>
-      <img src={LOGO_IMG} alt="E-Li" style={{ height:44, width:"auto", objectFit:"contain" }} />
+      <img src={LOGO_IMG} alt="E-Li" style={{ height:54, width:"auto", objectFit:"contain" }} />
       <div style={{ textAlign:"right" }}>
         <div style={{ fontSize:11, color:C.gray }}>工事 受発注システム</div>
         <div style={{ fontSize:15, fontWeight:800, color:C.navy }}>{title}</div>
@@ -1260,7 +1260,7 @@ function OrTopBar({ title }) {
 function EliTalk({ children, size=70 }) {
   return (
     <div style={{ display:"flex", alignItems:"flex-end", gap:12, margin:"16px 0 20px" }}>
-      <img src={ELI_IMG} style={{ width:size, height:"auto", flexShrink:0,
+      <img src={ELI_IMG} style={{ height:100, width:"auto", flexShrink:0,
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.15))" }} />
       <div style={{ background:C.grayPale, borderRadius:"4px 18px 18px 18px",
@@ -2214,7 +2214,7 @@ function FinalConfirm({ orders, images, onBack, onSubmit, submitting }) {
 function OrDone({ onReset, onDone, orderId }) {
   return (
     <div style={{ padding:"32px 24px", textAlign:"center" }}>
-      <img src={ELI_IMG} style={{ width:120, height:"auto",
+      <img src={ELI_IMG} style={{ height:100, width:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 8px 20px rgba(10,31,92,0.15))", marginBottom:16 }} />
       <div style={{ fontSize:26, fontWeight:900, color:C.navy, marginBottom:8 }}>発注しました！🎉</div>
@@ -2565,6 +2565,8 @@ const HI_CSS = `
   @keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
   @keyframes hiBlink{0%,100%{opacity:1}50%{opacity:0.25}}
+  .hi-main-content{max-width:480px;margin:0 auto;padding:16px 16px 40px}
+  @media(min-width:1025px){.hi-main-content{max-width:600px}}
 `;
 
 function HiStatusBadge({ status, large }) {
@@ -2639,10 +2641,8 @@ function EliMessage({ orders, chats }) {
 
   return (
     <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:20 }}>
-      <img src="https://api.dicebear.com/7.x/bottts/svg?seed=eli&backgroundColor=0a1f5c"
-        style={{ width:72, height:72, borderRadius:"50%", flexShrink:0,
-          animation:"eliFloat 3s ease-in-out infinite",
-          border:"3px solid #e4e9f5" }} />
+      <img src={ELI_IMG} alt="LiBot"
+        style={{ height:100, width:"auto", flexShrink:0 }} />
       <div style={{ flex:1 }}>
         {msgs.map((msg,i)=>(
           <div key={i} style={{ background:C.grayPale,
@@ -2883,11 +2883,11 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
         <button onClick={onBack} style={{ background:C.grayPale, border:"none",
           borderRadius:10, padding:"8px 14px", fontSize:14, fontWeight:700,
           color:C.navy, cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
-        <img src={LOGO_IMG} style={{ height:36, objectFit:"contain" }} />
+        <img src={LOGO_IMG} style={{ height:54, objectFit:"contain" }} />
         <div style={{ flex:1, textAlign:"right", fontSize:14, fontWeight:800, color:C.navy }}>詳細</div>
       </div>
 
-      <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 40px" }}>
+      <div className="hi-main-content">
         {/* ステータスバー */}
         <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
           borderRadius:18, padding:"18px 20px", marginBottom:16 }}>
@@ -3094,9 +3094,7 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
           fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
           ← もどる
         </button>
-        <div style={{ width:38, height:38, background:"rgba(255,255,255,0.2)",
-          borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:22, flexShrink:0 }}>🤖</div>
+        <img src={ELI_IMG} style={{ height:50, width:"auto", flexShrink:0 }} />
         <div style={{ flex:1, minWidth:0 }}>
           <div style={{ fontSize:14, fontWeight:900, color:C.white,
             overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
@@ -3122,14 +3120,14 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
                 display:"flex", flexDirection:isOwn?"row-reverse":"row",
                 alignItems:"flex-end", gap:8, marginBottom:16, animation:"msgIn 0.3s ease" }}>
                 {!isOwn && (
-                  <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
-                    display:"flex", alignItems:"center", justifyContent:"center",
-                    fontSize:18, flexShrink:0 }}>
-                    {msg.from==="staff" ? "👷" : "🤖"}
-                  </div>
+                  msg.from==="staff"
+                    ? <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
+                        display:"flex", alignItems:"center", justifyContent:"center",
+                        fontSize:18, flexShrink:0 }}>👷</div>
+                    : <img src={ELI_IMG} style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
                 )}
                 <div style={{ maxWidth:"78%" }}>
-                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>🤖 LiBot</div>}
+                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>LiBot</div>}
                   {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue,   marginBottom:3, fontWeight:600 }}>👷 担当者</div>}
                   {!isOwn && msg.from==="user"  && role==="admin" && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 ユーザー</div>}
                   <div style={{
@@ -3310,14 +3308,14 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
       <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
         padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
         boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
-        <img src={LOGO_IMG} style={{ height:36, objectFit:"contain" }} />
+        <img src={LOGO_IMG} style={{ height:54, objectFit:"contain" }} />
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
           <button onClick={onMyPage} style={{ padding:"6px 14px", background:"#eef3ff", border:"1px solid #2952c8", borderRadius:8, color:"#2952c8", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>👤 マイページ</button>
           <button onClick={onLogout} style={{ padding:"6px 14px", background:C.grayPale, border:"1px solid "+C.grayL, borderRadius:8, color:C.gray, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>ログアウト</button>
         </div>
       </div>
 
-      <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 40px" }}>
+      <div className="hi-main-content">
 
         {/* LiBotのメッセージ */}
         <EliMessage orders={orders} chats={chats} />
@@ -3353,17 +3351,23 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
         <div style={{ background:C.white, borderRadius:16, marginTop:16,
           boxShadow:"0 2px 12px rgba(10,31,92,0.07)", border:"1px solid "+C.grayL,
           display:"flex", overflow:"hidden" }}>
-          <div style={{ flex:1, padding:"16px", borderRight:"1px solid "+C.grayL }}>
+          <div style={{ flex:1, padding:"16px", borderRight:"1px solid "+C.grayL,
+            display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2 }}>
             <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>📞 電話受付</div>
             <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>06-6392-3882</div>
             <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>平日 9:00〜18:00</div>
+            <div style={{ fontSize:10, color:C.gray, marginTop:6 }}>OSAKA MARUKAN</div>
           </div>
           <div style={{ flex:1, padding:"16px", display:"flex", flexDirection:"column",
-            alignItems:"center", justifyContent:"center", gap:4 }}>
-            <div style={{ fontSize:28 }}>🕐</div>
+            alignItems:"center", justifyContent:"center", gap:6 }}>
+            <div style={{ fontSize:32 }}>🕐</div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
-              <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
+              <div style={{ fontSize:10, fontWeight:700, color:C.navy, lineHeight:1.4 }}>
+                24時間365日、現場を止めない受発注システム。
+              </div>
+              <div style={{ fontSize:10, color:C.gray, lineHeight:1.4 }}>
+                現場と未来をつなぐ、信頼のパートナー。
+              </div>
             </div>
           </div>
         </div>
@@ -3386,7 +3390,7 @@ function MyTopBar({ onBack, onLogout }) {
       <div style={{ display:"flex", alignItems:"center", gap:10 }}>
         <button onClick={onBack} style={{ padding:"6px 14px", background:C.grayPale, border:"1px solid "+C.grayL,
           borderRadius:8, color:C.navy, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
-        <img src={LOGO_IMG} alt="E-Li" style={{ height:36, width:"auto", objectFit:"contain" }} />
+        <img src={LOGO_IMG} alt="E-Li" style={{ height:54, width:"auto", objectFit:"contain" }} />
       </div>
       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
         <div style={{ textAlign:"right" }}>
@@ -3403,8 +3407,7 @@ function MyTopBar({ onBack, onLogout }) {
 function MyEliRow({ children }) {
   return (
     <div style={{ padding:"20px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:16 }}>
-      <img src={ELI_IMG} alt="LiBot" style={{ width:80, height:"auto",
-        animation:"eliFloat 3s ease-in-out infinite",
+      <img src={ELI_IMG} alt="LiBot" style={{ height:100, width:"auto",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
       <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
         padding:"12px 16px", fontSize:15, color:C.navy, fontWeight:700,
@@ -3760,29 +3763,23 @@ function MyPageApp({ onBack, onLogout }) {
         <div style={{ background:C.white, borderRadius:16,
           boxShadow:"0 2px 12px rgba(10,31,92,0.07)", border:"1px solid "+C.grayL,
           display:"flex", overflow:"hidden" }}>
-          <div style={{ flex:1, padding:"18px 16px", borderRight:"1px solid "+C.grayL }}>
+          <div style={{ flex:1, padding:"16px", borderRight:"1px solid "+C.grayL,
+            display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2 }}>
             <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>📞 電話受付</div>
-            <div style={{ fontSize:20, fontWeight:900, color:C.navy }}>06-6392-3882</div>
+            <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>06-6392-3882</div>
             <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>平日 9:00〜18:00</div>
+            <div style={{ fontSize:10, color:C.gray, marginTop:6 }}>OSAKA MARUKAN</div>
           </div>
-          <div style={{ flex:1, padding:"18px 16px", display:"flex", flexDirection:"column",
-            alignItems:"center", justifyContent:"center", gap:4 }}>
-            <div style={{ position:"relative", width:52, height:52 }}>
-              <svg viewBox="0 0 52 52" width="52" height="52">
-                <circle cx="26" cy="26" r="23" fill="none" stroke="#2952c8" strokeWidth="2.5" opacity="0.25"/>
-                <circle cx="26" cy="26" r="23" fill="none" stroke="#2952c8" strokeWidth="2.5" strokeLinecap="round"/>
-                <path d="M 37 18 Q 42 26 37 34" stroke="#2952c8" strokeWidth="2" fill="none" strokeLinecap="round"/>
-                <path d="M 35 32 L 37 34 L 39 32" stroke="#2952c8" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
-                justifyContent:"center", flexDirection:"column", lineHeight:1 }}>
-                <span style={{ fontSize:11, fontWeight:900, color:C.navy }}>24</span>
-                <span style={{ fontSize:9, color:C.blue, fontWeight:700 }}>/365</span>
-              </div>
-            </div>
+          <div style={{ flex:1, padding:"16px", display:"flex", flexDirection:"column",
+            alignItems:"center", justifyContent:"center", gap:6 }}>
+            <div style={{ fontSize:28 }}>🕐</div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
-              <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
+              <div style={{ fontSize:10, fontWeight:700, color:C.navy, lineHeight:1.4 }}>
+                24時間365日、現場を止めない受発注システム。
+              </div>
+              <div style={{ fontSize:10, color:C.gray, lineHeight:1.4 }}>
+                現場と未来をつなぐ、信頼のパートナー。
+              </div>
             </div>
           </div>
         </div>
