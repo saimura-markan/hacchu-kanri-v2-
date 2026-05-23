@@ -4323,6 +4323,8 @@ function CompanyPanel({ onClose }) {
   const [showAdd, setShowAdd]     = useState(false);
   const [form, setForm]           = useState({ name:"", contact:"", phone:"", email:"" });
   const [cpLoading, setCpLoading] = useState(true);
+  const [addError, setAddError]   = useState("");
+  const [addSaving, setAddSaving] = useState(false);
 
   useEffect(() => {
     sb.from('companies').select('*').order('id').then(({ data }) => {
@@ -4339,11 +4341,18 @@ function CompanyPanel({ onClose }) {
 
   const handleAdd = async () => {
     if (!form.name) return;
+    setAddError("");
+    setAddSaving(true);
     const newId = nextId();
     const since = new Date().toISOString().slice(0, 10);
-    const { data } = await sb.from('companies')
+    const { data, error } = await sb.from('companies')
       .insert({ id:newId, ...form, since, is_active:true })
       .select().single();
+    setAddSaving(false);
+    if (error) {
+      setAddError("登録に失敗しました: " + error.message);
+      return;
+    }
     if (data) setCompanies(c => [...c, data]);
     setForm({ name:"", contact:"", phone:"", email:"" });
     setShowAdd(false);
@@ -4409,14 +4418,20 @@ function CompanyPanel({ onClose }) {
                 marginBottom:12, fontSize:13, color:"#1a5c3a" }}>
                 発行される企業ID：<b style={{ fontSize:15 }}>{nextId()}</b>
               </div>
+              {addError && (
+                <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:8,
+                  padding:"10px 14px", marginBottom:12, fontSize:13, color:C.red, fontWeight:600 }}>
+                  ⚠️ {addError}
+                </div>
+              )}
               <div style={{ display:"flex", gap:10 }}>
-                <button onClick={handleAdd}
-                  style={{ background:`linear-gradient(135deg,${C.blue},${C.navy})`,
+                <button onClick={handleAdd} disabled={addSaving}
+                  style={{ background:addSaving?"#b0bec5":`linear-gradient(135deg,${C.blue},${C.navy})`,
                     color:C.white, border:"none", borderRadius:8, padding:"10px 20px",
-                    fontSize:14, fontWeight:800, cursor:"pointer" }}>
-                  ✅ 企業IDを発行する
+                    fontSize:14, fontWeight:800, cursor:addSaving?"not-allowed":"pointer" }}>
+                  {addSaving ? "登録中…" : "✅ 企業IDを発行する"}
                 </button>
-                <button onClick={()=>setShowAdd(false)}
+                <button onClick={()=>{ setShowAdd(false); setAddError(""); }}
                   style={{ background:C.grayPale, color:C.navy, border:"1px solid "+C.grayL,
                     borderRadius:8, padding:"10px 20px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
                   キャンセル
