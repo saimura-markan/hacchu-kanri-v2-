@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>LiBot 工事 受発注システム</title>
+  <title>E-Li 工事 受発注システム</title>
   <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"
     onerror="showLoadError('React')"></script>
   <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"
@@ -18,240 +18,6 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #f0f4f9; }
     ::-webkit-scrollbar-thumb { background: #c0cce0; border-radius: 3px; }
-
-    /* ─────────────────────────────────────────────────
-       アニメーション
-    ───────────────────────────────────────────────── */
-    @keyframes eliFloat {
-      0%, 100% { transform: translateY(0); }
-      50%       { transform: translateY(-10px); }
-    }
-
-    /* ─────────────────────────────────────────────────
-       ログイン画面
-    ───────────────────────────────────────────────── */
-    .login-root {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      background-color: #050d1a;
-      background-image:
-        linear-gradient(rgba(41,82,200,0.07) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(41,82,200,0.07) 1px, transparent 1px);
-      background-size: 48px 48px;
-      font-family: 'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;
-      position: relative;
-    }
-    .login-root::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 80% 80% at 50% 50%, rgba(7,20,40,0) 0%, rgba(5,13,26,0.6) 100%),
-        radial-gradient(ellipse 65% 55% at 15% 65%, rgba(41,82,200,0.18) 0%, transparent 100%),
-        radial-gradient(ellipse 55% 45% at 85% 25%, rgba(41,82,200,0.12) 0%, transparent 100%);
-      pointer-events: none;
-      z-index: 0;
-    }
-    .login-container {
-      position: relative;
-      z-index: 1;
-      max-width: 1200px;
-      margin: 0 auto;
-      width: 100%;
-      padding: 32px 28px 20px;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    .login-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 36px;
-    }
-    .login-hero-left {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 0;
-    }
-    .login-service-label {
-      font-size: 12px;
-      font-weight: 700;
-      color: #fff;
-      letter-spacing: 4px;
-      margin-bottom: 4px;
-    }
-    .login-logo-img {
-      height: 160px;
-      width: auto;
-      display: block;
-      object-fit: contain;
-      object-position: left center;
-      margin-left: -18px;
-      align-self: flex-start;
-      mix-blend-mode: screen;
-      filter: brightness(0) invert(1);
-    }
-    .login-ruby {
-      font-size: 12px;
-      color: #fff;
-      letter-spacing: 6px;
-      font-weight: 600;
-      margin-top: 2px;
-      margin-bottom: 8px;
-    }
-    .login-catchcopy {
-      font-size: 42px;
-      font-weight: 900;
-      color: #fff;
-      letter-spacing: -0.5px;
-      line-height: 1.2;
-      text-shadow: 0 2px 12px rgba(41,82,200,0.4);
-      margin-bottom: 4px;
-    }
-    .login-subcatch {
-      font-size: 16px;
-      color: #fff;
-      font-weight: 500;
-      line-height: 1.6;
-      margin-top: 0;
-    }
-    .login-sub {
-      display: none;
-    }
-    .login-libot {
-      height: 300px;
-      width: auto;
-      object-fit: contain;
-      animation: none;
-      filter: drop-shadow(0 8px 24px rgba(41,82,200,0.4));
-    }
-    .login-features {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
-      margin-bottom: 32px;
-    }
-    .login-feat-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 14px;
-      padding: 18px 12px;
-      transition: background 0.25s, border-color 0.25s, transform 0.25s, box-shadow 0.25s;
-      cursor: default;
-    }
-    .login-feat-item:hover {
-      background: rgba(0,168,255,0.07);
-      border-color: rgba(0,168,255,0.3);
-      transform: translateY(-3px);
-      box-shadow: 0 8px 28px rgba(0,168,255,0.12);
-    }
-    .login-feat-icon {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 40px;
-      height: 40px;
-    }
-    .login-feat-icon svg {
-      filter: drop-shadow(0 0 4px #00a8ff) drop-shadow(0 0 8px rgba(0,168,255,0.5));
-      transition: filter 0.25s;
-    }
-    .login-feat-item:hover .login-feat-icon svg {
-      filter: drop-shadow(0 0 6px #00a8ff) drop-shadow(0 0 14px rgba(0,168,255,0.75)) drop-shadow(0 0 22px rgba(0,168,255,0.3));
-    }
-    .login-feat-title { font-size: 13px; font-weight: 800; color: #fff; }
-    .login-feat-desc  { font-size: 11px; color: rgba(255,255,255,0.5); text-align: center; }
-    .login-card-outer {
-      display: flex;
-      justify-content: center;
-      padding-bottom: 32px;
-    }
-    .login-card {
-      width: 100%;
-      max-width: 760px;
-      background: rgba(255,255,255,0.97);
-      border-radius: 24px;
-      padding: 40px 48px;
-      box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
-    }
-    .login-footer {
-      position: relative;
-      z-index: 1;
-      background: rgba(0,0,0,0.45);
-      border-top: 1px solid rgba(255,255,255,0.06);
-      padding: 16px 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-    .login-footer-left {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      flex-shrink: 0;
-    }
-    .login-footer-logo-img {
-      height: 40px;
-      width: auto;
-      display: block;
-      mix-blend-mode: screen;
-      filter: brightness(1.8);
-    }
-    .login-footer-company {
-      font-size: 14px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.85);
-      white-space: nowrap;
-    }
-    .login-footer-right {
-      text-align: right;
-      font-size: 12px;
-      color: rgba(255,255,255,0.55);
-      line-height: 1.9;
-    }
-    /* ── スマホ（〜480px） ── */
-    @media (max-width: 480px) {
-      .login-container     { padding: 16px 12px 10px; }
-      .login-header        { flex-direction: row; align-items: flex-start; justify-content: space-between; padding: 24px 20px 16px; margin-bottom: 0; }
-      .login-libot         { height: 150px; width: auto; }
-      .login-logo-img      { height: 85px; margin-left: 0; margin-top: 8px; }
-      .login-service-label { font-size: 10px; letter-spacing: 2px; }
-      .login-ruby          { font-size: 10px; letter-spacing: 3px; margin-bottom: 6px; }
-      .login-catchcopy     { font-size: 18px; margin-left: 0; padding-left: 0; }
-      .login-subcatch      { font-size: 12px; margin-left: 0; padding-left: 0; }
-      .login-features      { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
-      .login-feat-item     { padding: 12px 8px; }
-      .login-feat-title    { font-size: 11px; }
-      .login-card          { max-width: 95vw; padding: 24px 16px; }
-      .login-footer        { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 14px; }
-      .login-footer-right  { text-align: left; font-size: 10px; }
-      .login-footer-company{ font-size: 12px; }
-    }
-
-    /* ── タブレット（481〜1024px） ── */
-    @media (min-width: 481px) and (max-width: 1024px) {
-      .login-container     { padding: 24px 20px 16px; }
-      .login-header        { margin-bottom: 28px; }
-      .login-libot         { height: 200px; }
-      .login-logo-img      { height: 100px; margin-left: -12px; }
-      .login-service-label { font-size: 11px; letter-spacing: 3px; }
-      .login-ruby          { font-size: 11px; letter-spacing: 5px; margin-bottom: 10px; }
-      .login-catchcopy     { font-size: 34px; }
-      .login-subcatch      { font-size: 14px; }
-      .login-features      { grid-template-columns: repeat(4, 1fr); gap: 12px; }
-      .login-card          { max-width: 80%; padding: 32px 36px; }
-      .login-footer        { flex-direction: row; }
-      .login-footer-right  { text-align: right; font-size: 12px; }
-      .login-footer-company{ font-size: 13px; }
-    }
   </style>
 </head>
 <body>
@@ -301,10 +67,15 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_JYkjSrSixBp9jquMeq6hKw_YMwwiDSx';
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // ── テスト用ダミーアカウント ────────────────────────────
+    const TEST_USERS = [
+      { email: "admin@test.com", password: "1234", role: "admin" },
+      { email: "user@test.com",  password: "1234", role: "user"  },
+    ];
+
     // ── 画像パス ────────────────────────────────────────────
-    const ELI_IMG    = "./eli_img.png";
-    const LOGO_IMG   = "./logo_img.png";
-    const MARKAN_IMG = "./markan_logo.png";
+    const ELI_IMG  = "./eli_img.png";
+    const LOGO_IMG = "./logo_img.png";
 
     // ── 共有カラーパレット ──────────────────────────────────
     const C = {
@@ -328,7 +99,7 @@
     // ログイン画面
     // ═══════════════════════════════════════════════════════
 
-// ── LiBotロゴ（SVG） ──────────────────────────────────────
+// ── E-Liロゴ（SVG） ──────────────────────────────────────
 function EliLogo({ height = 32 }) {
   return (
     <svg height={height} viewBox="0 0 130 44" style={{ display: "block" }}>
@@ -336,9 +107,9 @@ function EliLogo({ height = 32 }) {
       <line x1="0" y1="20" x2="20" y2="16" stroke={C.white} strokeWidth="2.5" opacity="0.8" strokeLinecap="round"/>
       <line x1="0" y1="25" x2="17" y2="22" stroke={C.white} strokeWidth="1.8" opacity="0.55" strokeLinecap="round"/>
       <line x1="0" y1="30" x2="14" y2="28" stroke={C.white} strokeWidth="1.2" opacity="0.35" strokeLinecap="round"/>
-      {/* LiBot テキスト */}
+      {/* E-Li テキスト */}
       <text x="24" y="36" fontSize="32" fontWeight="900" fill={C.white}
-        fontFamily="'Arial Black','Impact',sans-serif" letterSpacing="-1">LiBot</text>
+        fontFamily="'Arial Black','Impact',sans-serif" letterSpacing="-1">E-Li</text>
       {/* スピード弧 */}
       <path d="M 54 5 Q 108 1 120 22 Q 108 40 92 40"
         stroke={C.white} strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.9"/>
@@ -346,7 +117,7 @@ function EliLogo({ height = 32 }) {
   );
 }
 
-// ── LiBot（SVG） ──────────────────────────────────
+// ── イーライくん（SVG） ──────────────────────────────────
 function EliSVG({ size = 56 }) {
   return (
     <svg viewBox="0 0 80 90" width={size} height={size * 1.1} style={{ display:"block" }}>
@@ -367,7 +138,7 @@ function EliSVG({ size = 56 }) {
       <rect x="20" y="58" width="40" height="24" rx="12" fill={C.navyMid}/>
       <rect x="26" y="63" width="28" height="14" rx="7" fill={C.navy}/>
       <text x="40" y="74" textAnchor="middle" fontSize="7" fontWeight="bold"
-        fill={C.yellow} fontFamily="sans-serif">LiBot</text>
+        fill={C.yellow} fontFamily="sans-serif">E-Li</text>
       <rect x="24" y="79" width="12" height="9" rx="5" fill={C.navyMid}/>
       <rect x="44" y="79" width="12" height="9" rx="5" fill={C.navyMid}/>
     </svg>
@@ -493,145 +264,76 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors]     = useState({});
-  const [loading, setLoading]   = useState(false);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     const errs = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "正しいメールアドレスを入力してください";
     if (!password) errs.password = "パスワードを入力してください";
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    setLoading(true);
-    const { data, error } = await sb.auth.signInWithPassword({ email: email.toLowerCase(), password });
-    if (error) { setLoading(false); setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
-    const role = data.user?.user_metadata?.role ?? "user";
-    if (role !== "admin") {
-      const { data: profile } = await sb.from('profiles').select('company_id').eq('id', data.user.id).single();
-      if (profile?.company_id) {
-        const { data: company } = await sb.from('companies').select('is_active').eq('id', profile.company_id).single();
-        if (company && !company.is_active) {
-          await sb.auth.signOut();
-          setLoading(false);
-          setErrors({ password: "ご利用の企業アカウントが無効化されています。担当者にご確認ください。" });
-          return;
-        }
-      }
-    }
-    setLoading(false);
-    onLogin(email, role);
+    const matched = TEST_USERS.find(u => u.email === email.toLowerCase() && u.password === password);
+    if (!matched) { setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
+    onLogin(email, matched.role);
   };
 
-  const FEATS = [
-    {
-      icon: (
-        <svg viewBox="0 0 24 24" width="32" height="32">
-          <path fill="#00a8ff" d="M16 2L7 13h5L9 22l10-11h-5z"/>
-        </svg>
-      ),
-      title: "スピーディー", desc: "即日対応・迅速発注"
-    },
-    {
-      icon: (
-        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#00a8ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2L3 6v5.5C3 16.9 7 21.5 12 23c5-1.5 9-6.1 9-11.5V6L12 2z"/>
-          <path d="M9 12.5l2 2 4-4"/>
-        </svg>
-      ),
-      title: "セキュア", desc: "SSL暗号化通信"
-    },
-    {
-      icon: (
-        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#00a8ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M5 17A5 5 0 0 1 5 7A8 8 0 0 0 19 7A5 5 0 0 1 19 17H5z"/>
-          <path d="M7 20l3 2.5 5-5"/>
-        </svg>
-      ),
-      title: "クラウド管理", desc: "いつでも確認・管理"
-    },
-    {
-      icon: (
-        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#00a8ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="9"/>
-          <path d="M12 7v5l3.5 3.5"/>
-        </svg>
-      ),
-      title: "24/365", desc: "年中無休サービス"
-    },
-  ];
-
   return (
-    <div className="login-root">
-      <div className="login-container">
+    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <Header title="ログイン" />
 
-        {/* ── ヘッダー行：ロゴ左 / LiBot右 ── */}
-        <div className="login-header">
-          <div className="login-hero-left">
-            <div className="login-service-label">工事 受発注システム</div>
-            <img src={LOGO_IMG} className="login-logo-img" alt="E-Li" />
-            <div className="login-ruby">イーライ</div>
-            <div className="login-catchcopy">発注を、もっとスマートに。</div>
-            <div className="login-subcatch">現場を支える、次世代の受発注システム。</div>
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 16px 40px" }}>
+        <div style={{ background: C.white, borderRadius: 20, padding: "32px 28px",
+          boxShadow: "0 4px 24px rgba(10,31,92,0.08)", border: `1px solid ${C.grayL}` }}>
+
+          {/* タイトル */}
+          <div style={{ textAlign: "center", marginBottom: 28 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: C.navy, marginBottom: 4 }}>ログイン</div>
+            <div style={{ fontSize: 14, color: C.gray }}>メールアドレスとパスワードを入力してください</div>
           </div>
-          <img src={ELI_IMG} className="login-libot" alt="LiBot" />
-        </div>
 
-        {/* ── 特徴アイコン 4つ ── */}
-        <div className="login-features">
-          {FEATS.map(f => (
-            <div key={f.title} className="login-feat-item">
-              <span className="login-feat-icon">{f.icon}</span>
-              <span className="login-feat-title">{f.title}</span>
-              <span className="login-feat-desc">{f.desc}</span>
+          <FieldWrap label="📧 メールアドレス" error={errors.email}>
+            <TextInput type="email" value={email} placeholder="例：tanaka@example.com" error={errors.email}
+              onChange={e => { setEmail(e.target.value); setErrors(er => ({ ...er, email: "" })); }} />
+          </FieldWrap>
+
+          <FieldWrap label="🔑 パスワード" error={errors.password}>
+            <PwInput value={password} error={errors.password}
+              onChange={e => { setPassword(e.target.value); setErrors(er => ({ ...er, password: "" })); }} />
+          </FieldWrap>
+
+          <div style={{ textAlign: "right", marginBottom: 24, marginTop: -8 }}>
+            <TextLink onClick={onForgot}>パスワードをわすれた方はこちら</TextLink>
+          </div>
+
+          <PrimaryBtn onClick={handleLogin}>ログイン →</PrimaryBtn>
+
+          <div style={{ textAlign: "center", marginTop: 24 }}>
+            <div style={{ fontSize: 14, color: C.gray, marginBottom: 10 }}>
+              はじめてご利用の方は
             </div>
-          ))}
-        </div>
-
-        {/* ── ログインカード ── */}
-        <div className="login-card-outer">
-          <div className="login-card">
-            <div style={{ textAlign: "center", marginBottom: 28 }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: C.navy }}>ログイン</div>
-              <div style={{ fontSize: 14, color: C.gray, marginTop: 6 }}>
-                メールアドレスとパスワードを入力してください
-              </div>
-            </div>
-
-            <FieldWrap label="📧 メールアドレス" error={errors.email}>
-              <TextInput type="email" value={email} placeholder="例：tanaka@example.com" error={errors.email}
-                onChange={e => { setEmail(e.target.value); setErrors(er => ({ ...er, email: "" })); }} />
-            </FieldWrap>
-
-            <FieldWrap label="🔑 パスワード" error={errors.password}>
-              <PwInput value={password} error={errors.password}
-                onChange={e => { setPassword(e.target.value); setErrors(er => ({ ...er, password: "" })); }} />
-            </FieldWrap>
-
-            <div style={{ textAlign: "right", marginBottom: 24, marginTop: -8 }}>
-              <TextLink onClick={onForgot}>パスワードをわすれた方はこちら</TextLink>
-            </div>
-
-            <PrimaryBtn onClick={handleLogin} disabled={loading}>
-              {loading ? "ログイン中…" : "ログイン →"}
-            </PrimaryBtn>
-
-            <div style={{ textAlign: "center", marginTop: 24 }}>
-              <div style={{ fontSize: 14, color: C.gray, marginBottom: 10 }}>はじめてご利用の方は</div>
-              <TextLink onClick={onRegister}>新規アカウントを作成する</TextLink>
-            </div>
+            <TextLink onClick={onRegister}>新規アカウントを作成する</TextLink>
           </div>
         </div>
 
+        {/* フッター */}
+        <div style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: C.gray,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+          🔒 SSL暗号化通信で保護されています
+        </div>
+
+        <div style={{ marginTop: 20, background: `linear-gradient(135deg,${C.navy},${C.navyMid})`,
+          borderRadius: 16, padding: "16px 20px",
+          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>E-Li Service Desk</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.white }}>06-6392-3882</div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>平日 9:00〜18:00</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={{ background: C.yellow, borderRadius: 8, padding: "5px 12px",
+              fontSize: 12, fontWeight: 800, color: C.navy }}>LINE・Web対応</div>
+            <EliSVG size={40} />
+          </div>
+        </div>
       </div>
-
-      {/* ── フッター ── */}
-      <footer className="login-footer">
-        <div className="login-footer-left">
-          <span className="login-footer-company">OSAKA MARUKAN</span>
-        </div>
-        <div className="login-footer-right">
-          <div>24時間365日、現場を止めない受発注システム。</div>
-          <div>現場と未来をつなぐ、信頼のパートナー。</div>
-        </div>
-      </footer>
     </div>
   );
 }
@@ -642,13 +344,15 @@ function ForgotScreen({ onBack }) {
   const [sent, setSent]   = useState(false);
 
   return (
-    <div className="login-root" style={{ justifyContent: "center" }}>
-      <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", padding: "40px 20px", position: "relative", zIndex: 1 }}>
-        <div className="login-card">
+    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+      <Header title="パスワードのリセット" />
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 16px 40px" }}>
+        <div style={{ background: C.white, borderRadius: 20, padding: "32px 28px",
+          boxShadow: "0 4px 24px rgba(10,31,92,0.08)", border: `1px solid ${C.grayL}` }}>
           {!sent ? (
             <>
               <div style={{ textAlign: "center", marginBottom: 24 }}>
-                <div style={{ fontSize: 40, marginBottom: 10 }}>📧</div>
+                <div style={{ fontSize: 44, marginBottom: 10 }}>📧</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: C.navy, marginBottom: 6 }}>パスワードのリセット</div>
                 <div style={{ fontSize: 14, color: C.gray, lineHeight: 1.8 }}>
                   登録済みのメールアドレスに<br />リセット用リンクを送ります
@@ -719,7 +423,7 @@ function RgTopBar() {
 function EliRow({ children }) {
   return (
     <div style={{ padding:"24px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:20 }}>
-      <img src={ELI_IMG} alt="LiBot" style={{ width:90, height:"auto",
+      <img src={ELI_IMG} alt="イーライくん" style={{ width:90, height:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
       <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
@@ -861,32 +565,33 @@ function RgStepBar({ step }) {
 }
 
 // ── STEP 1: 企業ID入力 ──────────────────────────────────
-function Step1({ companyId, setCompanyId, setCompanyName, onNext }) {
+function Step1({ companyId, setCompanyId, onNext }) {
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [verified, setVerified] = useState(false);
-  const [verifiedName, setVerifiedName] = useState("");
 
-  const handleCheck = async () => {
+  // モック企業データ
+  const COMPANIES = {
+    "ELI-1001": "株式会社山田工務店",
+    "ELI-1002": "有限会社佐藤建設",
+    "ELI-1003": "田中リフォーム株式会社",
+  };
+
+  const handleCheck = () => {
     if (!companyId.trim()) { setError("企業IDを入力してください"); return; }
     if (!/^ELI-\d{4}$/.test(companyId.toUpperCase())) {
       setError("企業IDの形式が正しくありません（例：ELI-1001）"); return;
     }
     setChecking(true);
-    const { data } = await sb.from('companies')
-      .select('name, is_active')
-      .eq('id', companyId.toUpperCase())
-      .single();
-    setChecking(false);
-    if (!data) { setError("企業IDが見つかりません。担当者にご確認ください。"); return; }
-    if (!data.is_active) { setError("この企業IDは現在無効です。担当者にご確認ください。"); return; }
-    setVerifiedName(data.name);
-    setCompanyName(data.name);
-    setVerified(true);
-    setError("");
+    setTimeout(()=>{
+      setChecking(false);
+      const company = COMPANIES[companyId.toUpperCase()];
+      if (company) { setVerified(true); setError(""); }
+      else { setError("企業IDが見つかりません。担当者にご確認ください。"); }
+    }, 800);
   };
 
-  const company = verifiedName;
+  const company = COMPANIES[companyId.toUpperCase()];
 
   return (
     <div style={{ padding:"0 24px 28px" }}>
@@ -939,10 +644,15 @@ function Step1({ companyId, setCompanyId, setCompanyName, onNext }) {
 }
 
 // ── STEP 2: 個人情報入力 ────────────────────────────────
-function Step2({ data, setData, companyId, companyName, onNext, onBack }) {
+function Step2({ data, setData, companyId, onNext, onBack }) {
   const [errors, setErrors] = useState({});
 
-  const company = companyName || "";
+  const COMPANIES = {
+    "ELI-1001": "株式会社山田工務店",
+    "ELI-1002": "有限会社佐藤建設",
+    "ELI-1003": "田中リフォーム株式会社",
+  };
+  const company = COMPANIES[companyId] || "";
   const pw = data.password || "";
 
   const validate = () => {
@@ -1019,10 +729,15 @@ function Step2({ data, setData, companyId, companyName, onNext, onBack }) {
 }
 
 // ── 完了画面 ─────────────────────────────────────────────
-function RgDone({ data, companyId, companyName, onDone }) {
+function RgDone({ data, companyId, onDone }) {
+  const COMPANIES = {
+    "ELI-1001": "株式会社山田工務店",
+    "ELI-1002": "有限会社佐藤建設",
+    "ELI-1003": "田中リフォーム株式会社",
+  };
   return (
     <div style={{ padding:"24px", textAlign:"center" }}>
-      <img src={ELI_IMG} alt="LiBot" style={{ width:110, height:"auto",
+      <img src={ELI_IMG} alt="イーライくん" style={{ width:110, height:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", marginBottom:16 }} />
       <div style={{ fontSize:24, fontWeight:800, color:C.navy, marginBottom:8 }}>
@@ -1038,7 +753,7 @@ function RgDone({ data, companyId, companyName, onDone }) {
           登録情報
         </div>
         {[
-          ["会社名", companyName],
+          ["会社名", COMPANIES[companyId]],
           ["氏名",   data.name],
           ["メール（ログインID）", data.email],
         ].map(([k,v])=>(
@@ -1072,7 +787,6 @@ function RegisterApp({ onDone, onBack }) {
   const [step, setStep]           = useState(0);
   const [done, setDone]           = useState(false);
   const [companyId, setCompanyId] = useState("");
-  const [companyName, setCompanyName] = useState("");
   const [data, setData]           = useState({
     name:"", phone:"", email:"", password:"", confirmPw:"",
   });
@@ -1099,17 +813,17 @@ function RegisterApp({ onDone, onBack }) {
               <RgStepBar step={step} />
               {step===0 && (
                 <Step1 companyId={companyId} setCompanyId={setCompanyId}
-                  setCompanyName={setCompanyName} onNext={()=>setStep(1)} />
+                  onNext={()=>setStep(1)} />
               )}
               {step===1 && (
                 <Step2 data={data} setData={setData} companyId={companyId}
-                  companyName={companyName} onNext={()=>setDone(true)} onBack={()=>setStep(0)} />
+                  onNext={()=>setDone(true)} onBack={()=>setStep(0)} />
               )}
             </>
           ) : (
             <>
               <EliRow>登録ありがとうございます！🎉<br />メールをご確認ください</EliRow>
-              <RgDone data={data} companyId={companyId} companyName={companyName} onDone={onDone} />
+              <RgDone data={data} companyId={companyId} onDone={onDone} />
             </>
           )}
         </div>
@@ -1139,7 +853,7 @@ function RegisterApp({ onDone, onBack }) {
               </div>
             </div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
               <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
             </div>
           </div>
@@ -1812,7 +1526,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
 }
 
 // ── STEP 1: 作業区分選択 ────────────────────────────────
-function StepService({ onSelect, doneServices, onBack }) {
+function StepService({ onSelect, doneServices }) {
   return (
     <div style={{ padding:"0 16px 32px" }}>
       <EliTalk>
@@ -1851,13 +1565,12 @@ function StepService({ onSelect, doneServices, onBack }) {
       {doneServices.length>0&&(
         <OrBigBtn onClick={()=>onSelect(null)} color="green">✅ これで全部！確認画面へ進む</OrBigBtn>
       )}
-      <OrSubBtn onClick={onBack}>← 注文履歴にもどる</OrSubBtn>
     </div>
   );
 }
 
 // ── STEP 2: 詳細入力 ────────────────────────────────────
-function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData, personName }) {
+function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData }) {
   const svc=SERVICES.find(s=>s.id===serviceId);
   const init=savedData||{};
   const [siteName,  setSiteName]  = useState(init.siteName||"");
@@ -1935,7 +1648,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
         <div style={{ padding:"14px 18px" }}>
           <div style={{ fontSize:16, fontWeight:700, color:C.navy,
             background:C.grayPale, borderRadius:10, padding:"12px 16px" }}>
-            {personName || "…"}（ログイン情報から自動入力）
+            榮藤 美香（ログイン情報から自動入力）
           </div>
         </div>
       </Card>
@@ -2069,7 +1782,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
 }
 
 // ── 確認・最終確認・完了 ─────────────────────────────────
-function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll, personName, images, onImagesChange }) {
+function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll }) {
   const svc=SERVICES.find(s=>s.id===serviceId);
   const allDone=doneServices.length>=SERVICES.length;
   const ConfRow=({label,value})=>value?(
@@ -2095,7 +1808,7 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
           <ConfRow label="作業区分" value={svc.icon+" "+svc.label} />
           <ConfRow label="現場名"   value={formData.siteName} />
           <ConfRow label="住所"     value={formData.address} />
-          <ConfRow label="担当者"   value={personName || "…"} />
+          <ConfRow label="担当者"   value="榮藤 美香" />
         </div>
       </Card>
       {formData.schedules.map((sch,i)=>(
@@ -2120,17 +1833,6 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
         </Card>
       ))}
       <OrSubBtn onClick={onEdit}>✏️ この作業の内容を修正する</OrSubBtn>
-
-      <Card>
-        <CardTitle icon="📷">現場写真・資料（任意）</CardTitle>
-        <div style={{ padding:"4px 18px 16px" }}>
-          <div style={{ fontSize:13, color:C.gray, marginBottom:10 }}>
-            写真を添付すると担当者がスムーズに対応できます。最大1MBに自動圧縮されます。
-          </div>
-          <OrImagePicker images={images||[]} onChange={onImagesChange} />
-        </div>
-      </Card>
-
       <div style={{ display:"flex", alignItems:"center", gap:12, margin:"20px 0" }}>
         <div style={{ flex:1, height:2, background:C.grayL, borderRadius:1 }}/>
         <span style={{ fontSize:14, color:C.gray, fontWeight:700 }}>次のステップ</span>
@@ -2150,7 +1852,7 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
   );
 }
 
-function FinalConfirm({ orders, images, onBack, onSubmit, submitting }) {
+function FinalConfirm({ orders, onBack, onSubmit, submitting }) {
   return (
     <div style={{ padding:"0 16px 40px" }}>
       <EliTalk size={60}>全ての作業内容です✅<br />問題なければ発注してください！</EliTalk>
@@ -2184,21 +1886,6 @@ function FinalConfirm({ orders, images, onBack, onSubmit, submitting }) {
           </div>
         );
       })}
-      {images && images.length > 0 && (
-        <div style={{ background:C.white, border:"1px solid "+C.grayL, borderRadius:14,
-          padding:"12px 16px", marginBottom:14 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:8 }}>
-            📷 添付画像 {images.length}枚
-          </div>
-          <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-            {images.map((img, i) => (
-              <img key={i} src={img.url} alt=""
-                style={{ width:60, height:60, objectFit:"cover", borderRadius:6,
-                  border:"1px solid "+C.grayL }} />
-            ))}
-          </div>
-        </div>
-      )}
       <div style={{ background:C.yellowL, border:"1px solid #f5c842", borderRadius:14,
         padding:"14px 16px", marginBottom:16, fontSize:14, color:"#7a5a00", lineHeight:1.8 }}>
         📞 送信後、<b>24時間以内</b>に担当者よりご連絡いたします
@@ -2256,127 +1943,6 @@ function OrStepBar({ phase }) {
   );
 }
 
-// ── 画像圧縮ユーティリティ ──────────────────────────────
-async function compressImage(file) {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const img = new Image();
-      img.onload = () => {
-        const MAX_DIM = 1920, MAX_BYTES = 1 * 1024 * 1024;
-        let w = img.width, h = img.height;
-        if (w > MAX_DIM || h > MAX_DIM) {
-          if (w > h) { h = Math.round(h * MAX_DIM / w); w = MAX_DIM; }
-          else       { w = Math.round(w * MAX_DIM / h); h = MAX_DIM; }
-        }
-        const cv = document.createElement('canvas');
-        cv.width = w; cv.height = h;
-        cv.getContext('2d').drawImage(img, 0, 0, w, h);
-        const tryQ = q => cv.toBlob(blob => {
-          if (blob.size <= MAX_BYTES || q <= 0.3) resolve(blob);
-          else tryQ(Math.round((q - 0.1) * 10) / 10);
-        }, 'image/jpeg', q);
-        tryQ(0.85);
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function OrImagePicker({ images, onChange }) {
-  const [busy, setBusy] = useState(false);
-  const pick = async e => {
-    const files = Array.from(e.target.files);
-    if (!files.length) return;
-    setBusy(true);
-    try {
-      const newImgs = await Promise.all(files.map(async f => {
-        const blob = await compressImage(f);
-        const url  = URL.createObjectURL(blob);
-        const name = f.name.replace(/\.[^.]+$/, '.jpg');
-        return { blob, url, name };
-      }));
-      onChange([...images, ...newImgs]);
-    } finally { setBusy(false); e.target.value = ''; }
-  };
-  const remove = i => {
-    URL.revokeObjectURL(images[i].url);
-    onChange(images.filter((_, j) => j !== i));
-  };
-  return (
-    <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-start" }}>
-      {images.map((img, i) => (
-        <div key={i} style={{ position:"relative" }}>
-          <img src={img.url} alt=""
-            style={{ width:76, height:76, objectFit:"cover", borderRadius:8,
-              border:"1px solid "+C.grayL, display:"block" }} />
-          <button onClick={() => remove(i)}
-            style={{ position:"absolute", top:-7, right:-7, width:22, height:22,
-              background:C.red, color:"white", border:"none", borderRadius:"50%",
-              cursor:"pointer", fontSize:14, fontWeight:900, padding:0,
-              display:"flex", alignItems:"center", justifyContent:"center" }}>
-            ×
-          </button>
-          <div style={{ fontSize:10, color:C.gray, textAlign:"center", marginTop:2 }}>
-            {(img.blob.size/1024).toFixed(0)}KB
-          </div>
-        </div>
-      ))}
-      <label style={{ width:76, height:76, border:"2px dashed "+C.blue, borderRadius:8,
-        display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-        cursor:busy?"default":"pointer", color:C.blue, flexShrink:0, opacity:busy?0.5:1 }}>
-        {busy
-          ? <div style={{ fontSize:11, textAlign:"center" }}>圧縮中…</div>
-          : <><span style={{ fontSize:26 }}>📷</span><span style={{ fontSize:10, fontWeight:700 }}>追加</span></>}
-        <input type="file" accept="image/*" multiple onChange={pick}
-          disabled={busy} style={{ display:"none" }} />
-      </label>
-    </div>
-  );
-}
-
-function ImageLightbox({ url, onClose }) {
-  return (
-    <div onClick={onClose}
-      style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:9999,
-        display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer" }}>
-      <img src={url} alt="" onClick={e => e.stopPropagation()}
-        style={{ maxWidth:"95vw", maxHeight:"95vh", objectFit:"contain", borderRadius:8 }} />
-      <button onClick={onClose}
-        style={{ position:"absolute", top:14, right:14, background:"rgba(255,255,255,0.2)",
-          border:"none", color:"white", borderRadius:"50%", width:40, height:40,
-          fontSize:20, cursor:"pointer", display:"flex",
-          alignItems:"center", justifyContent:"center" }}>✕</button>
-    </div>
-  );
-}
-
-// Storageの署名付きURLで画像を表示（Public/Privateバケット両対応）
-function SignedImage({ path, onClickUrl, style }) {
-  const [url, setUrl] = useState("");
-  useEffect(() => {
-    sb.storage.from('order-images').createSignedUrl(path, 3600)
-      .then(({ data, error }) => {
-        if (error) { console.error('[SignedImage]', path, error.message); return; }
-        if (data?.signedUrl) setUrl(data.signedUrl);
-      });
-  }, [path]);
-  if (!url) return (
-    <div style={{ ...style, background:C.grayL, display:"flex",
-      alignItems:"center", justifyContent:"center", fontSize:11, color:C.gray, flexShrink:0 }}>
-      読込中
-    </div>
-  );
-  return (
-    <img src={url} alt=""
-      onClick={() => onClickUrl && onClickUrl(url)}
-      style={style}
-      onMouseEnter={e => { e.currentTarget.style.opacity = "0.8"; }}
-      onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }} />
-  );
-}
-
 function OrderApp({ onDone, onBack }) {
   const [phase,        setPhase]        = useState("service");
   const [currentSvc,   setCurrentSvc]   = useState(null);
@@ -2384,18 +1950,8 @@ function OrderApp({ onDone, onBack }) {
   const [orders,       setOrders]       = useState([]);
   const [savedForms,   setSavedForms]   = useState({});
   const firstSiteData = orders[0]?.data||null;
-  const [submitting,      setSubmitting]      = useState(false);
-  const [savedIds,        setSavedIds]        = useState([]);
-  const [personName,      setPersonName]      = useState("");
-  const [attachedImages,  setAttachedImages]  = useState([]);
-
-  useEffect(() => {
-    sb.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      sb.from('profiles').select('name').eq('id', user.id).single()
-        .then(({ data }) => { if (data?.name) setPersonName(data.name); });
-    });
-  }, []);
+  const [submitting, setSubmitting] = useState(false);
+  const [savedIds,   setSavedIds]   = useState([]);
 
   const STYLE=`@keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}} @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}`;
 
@@ -2416,7 +1972,7 @@ function OrderApp({ onDone, onBack }) {
     setPhase("confirm");
   };
 
-  const saveToSupabase = async (ordersList, images) => {
+  const saveToSupabase = async (ordersList) => {
     const ids = [];
     for (const order of ordersList) {
       const svc = SERVICES.find(s => s.id === order.serviceId);
@@ -2444,23 +2000,6 @@ function OrderApp({ onDone, onBack }) {
           }))
         );
       }
-      for (let i = 0; i < images.length; i++) {
-        const img  = images[i];
-        // 特殊文字・日本語を含むファイル名はアップロード失敗の原因になるため連番JPEGに統一
-        const path = `${newOrder.id}/${i}.jpg`;
-        const { error: upErr } = await sb.storage.from('order-images')
-          .upload(path, img.blob, { contentType:'image/jpeg', upsert:true });
-        if (upErr) {
-          console.error('[画像アップロード失敗]', upErr.message);
-          throw new Error(`画像のアップロードに失敗しました: ${upErr.message}`);
-        }
-        const { error: dbErr } = await sb.from('order_images')
-          .insert({ order_id:newOrder.id, path:path });
-        if (dbErr) {
-          console.error('[order_images 登録失敗]', dbErr.message);
-          throw new Error(`画像情報の保存に失敗しました: ${dbErr.message}`);
-        }
-      }
       await sb.from('messages').insert({
         order_id:  newOrder.id,
         from_role: 'eli',
@@ -2473,14 +2012,12 @@ function OrderApp({ onDone, onBack }) {
 
   const handleActualSubmit = async (ordersList) => {
     setSubmitting(true);
-    // 呼び出し時点のimagesを引数として渡してstaleクローズャ問題を回避
-    const images = attachedImages;
     try {
-      const ids = await saveToSupabase(ordersList, images);
+      const ids = await saveToSupabase(ordersList);
       setSavedIds(ids);
       setPhase("done");
     } catch(e) {
-      alert('送信エラーが発生しました。\n\n' + e.message);
+      alert('送信エラーが発生しました。もう一度お試しください。');
       console.error(e);
     } finally {
       setSubmitting(false);
@@ -2509,7 +2046,7 @@ function OrderApp({ onDone, onBack }) {
       <style>{STYLE}</style>
       <OrTopBar title={getTitle()}/><OrStepBar phase={phase}/>
       <div style={{ maxWidth:480, margin:"0 auto" }}>
-        {phase==="service"&&<StepService onSelect={handleSelectService} doneServices={doneServices} onBack={onBack}/>}
+        {phase==="service"&&<StepService onSelect={handleSelectService} doneServices={doneServices}/>}
         {phase==="form"&&currentSvc&&(
           <StepForm serviceId={currentSvc}
             savedData={savedForms[currentSvc]||(doneServices.length>0&&firstSiteData
@@ -2517,23 +2054,18 @@ function OrderApp({ onDone, onBack }) {
                 addrOk:firstSiteData.addrOk,keyInfo:firstSiteData.keyInfo}:{})}
             isAdditional={doneServices.length>0&&!doneServices.includes(currentSvc)}
             firstSiteData={firstSiteData}
-            personName={personName}
             onSubmit={handleFormSubmit}
             onBack={()=>setPhase(doneServices.includes(currentSvc)?"confirm":"service")} />
         )}
         {phase==="confirm"&&currentSvc&&(
           <StepConfirm serviceId={currentSvc} formData={savedForms[currentSvc]}
             doneServices={doneServices}
-            personName={personName}
-            images={attachedImages}
-            onImagesChange={setAttachedImages}
             onEdit={()=>setPhase("form")}
             onAddMore={()=>{ setCurrentSvc(null); setPhase("service"); }}
             onSubmitAll={handleSubmitAll}/>
         )}
         {phase==="finalConfirm"&&(
-          <FinalConfirm orders={orders} images={attachedImages}
-            onBack={()=>setPhase("confirm")} onSubmit={()=>handleActualSubmit(orders)} submitting={submitting}/>
+          <FinalConfirm orders={orders} onBack={()=>setPhase("confirm")} onSubmit={()=>handleActualSubmit(orders)} submitting={submitting}/>
         )}
       </div>
     </div>
@@ -2558,6 +2090,48 @@ const HI_SVC_ICON = {
   "養生・家具移動・荷上":"🛗","解体":"🏚️","産廃":"🚛","清掃・家具移動":"🧹",
 };
 
+const _hiNow = Date.now();
+const _hiFuture = (d) => { const t = new Date(); t.setDate(t.getDate()+d); return t.toISOString().split("T")[0]; };
+const HI_ORDERS = [
+  { id:"B-2024-101", service:"養生・家具移動・荷上", status:"日程確定",
+    site:"〇〇マンション101号室", address:"大阪府堺市北区〇〇町1-2-3",
+    schedules:[{ date:_hiFuture(3), start:"09:00", end:"17:00", workers:"3人", details:["養生","家具移動"] }],
+    key:"管理室で受取", parking:"建物前2台", note:"", created:"2024-06-10 17:32",
+    createdAt: _hiNow - 2*3600000, statusChangedAt: _hiNow - 1*3600000 },
+  { id:"B-2024-102", service:"清掃・家具移動", status:"調整中",
+    site:"△△ビル3F", address:"大阪府大阪市北区△△町4-5-6",
+    schedules:[{ date:_hiFuture(5), start:"13:00", end:"18:00", workers:"2人", details:["ハウスクリーニング"] }],
+    key:"在宅", parking:"近隣コインP", note:"", created:"2024-06-11 09:05",
+    createdAt: _hiNow - 20*3600000, statusChangedAt: _hiNow - 20*3600000 },
+  { id:"B-2024-103", service:"解体", status:"日程相談中",
+    site:"□□邸リフォーム", address:"大阪府堺市中区□□町7-8-9",
+    schedules:[{ date:_hiFuture(7), start:"08:00", end:"17:00", workers:"4人", details:["フロアめくり"] }],
+    key:"", parking:"敷地内駐車可", note:"", created:"2024-06-09 14:20",
+    createdAt: _hiNow - 50*3600000, statusChangedAt: _hiNow - 50*3600000 },
+  { id:"B-2024-104", service:"産廃", status:"完了",
+    site:"◇◇現場", address:"大阪府堺市南区◇◇町1-1-1",
+    schedules:[{ date:_hiFuture(-5), start:"10:00", end:"14:00", workers:"", details:["廃材回収"] }],
+    key:"", parking:"現場内", note:"", created:"2024-06-01 11:00",
+    createdAt: _hiNow - 200*3600000, statusChangedAt: _hiNow - 100*3600000 },
+];
+
+const HI_INIT_CHATS = {
+  "B-2024-101": [
+    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-10 17:32", read:true },
+    { id:2, from:"staff", text:"日程の調整がつきました。よろしくお願いします📅", time:"2024-06-11 10:00", read:false },
+  ],
+  "B-2024-102": [
+    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-11 09:05", read:true },
+  ],
+  "B-2024-103": [
+    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-09 14:20", read:true },
+    { id:2, from:"staff", text:"ごめんなさい、ご希望の日程では予定がつきませんでした💦\nご希望に近い別日程でしたら対応できそうですが、いかがですか？", time:"2024-06-10 09:30", read:false },
+  ],
+  "B-2024-104": [
+    { id:1, from:"eli",   text:"受け付けました！🤖\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。", time:"2024-06-01 11:00", read:true },
+    { id:2, from:"staff", text:"工事が完了しました。ありがとうございました✅", time:"2024-06-05 16:00", read:true },
+  ],
+};
 
 const HI_CSS = `
   @keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}}
@@ -2620,7 +2194,7 @@ function HiBigBtn({ children, onClick, color, disabled }) {
   );
 }
 
-// ── LiBotのメッセージ ─────────────────────────────
+// ── イーライくんのメッセージ ─────────────────────────────
 function EliMessage({ orders, chats }) {
   const adjCount    = orders.filter(o=>o.status==="調整中").length;
   const soudanCount = orders.filter(o=>o.status==="日程相談中").length;
@@ -2745,7 +2319,6 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
   const [reschedDate, setReschedDate] = useState("");
   const [reschedTime, setReschedTime] = useState("");
   const [reschedErr,  setReschedErr]  = useState("");
-  const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const st = HI_STATUS[order.status] || HI_STATUS["調整中"];
   const noReqStatuses = ["完了", "キャンセル", "キャンセル相談中"];
@@ -2944,7 +2517,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
             borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
             fontSize:24, flexShrink:0 }}>💬</div>
           <div>
-            <div style={{ fontSize:16, fontWeight:900, color:C.white }}>LiBotとチャット</div>
+            <div style={{ fontSize:16, fontWeight:900, color:C.white }}>イーライくんとチャット</div>
             <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", marginTop:2 }}>
               担当者への連絡・日程相談はこちら
             </div>
@@ -3003,23 +2576,6 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           </div>
         ))}
 
-        {/* 添付画像 */}
-        {order.images && order.images.length > 0 && (
-          <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
-            boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
-            <div style={{ fontSize:15, fontWeight:800, color:C.navy,
-              borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📷 添付画像</div>
-            <div style={{ padding:"14px 18px", display:"flex", gap:10, flexWrap:"wrap" }}>
-              {order.images.map((path, i) => (
-                <SignedImage key={i} path={path}
-                  onClickUrl={url => setLightboxUrl(url)}
-                  style={{ width:90, height:90, objectFit:"cover", borderRadius:10,
-                    cursor:"pointer", border:"1px solid "+C.grayL }} />
-              ))}
-            </div>
-          </div>
-        )}
-
         <button onClick={onBack}
           style={{ display:"block", width:"100%", background:C.white, color:C.navy,
             border:"2px solid "+C.grayL, borderRadius:14, fontSize:16, fontWeight:700,
@@ -3027,7 +2583,6 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           ← 一覧にもどる
         </button>
       </div>
-      {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
     </div>
   );
 }
@@ -3036,51 +2591,27 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
 // LOGO_IMG は共有定数を使用
 
 function ChatScreen({ role, order, messages, onSend, onBack }) {
-  const [input, setInput] = useState("");
+  const [input,  setInput]  = useState("");
+  const [typing, setTyping] = useState(false);
   const bottomRef = useRef(null);
-  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
+  useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[messages,typing]);
 
-  // Realtime subscription（即時反映）
-  useEffect(() => {
-    const oid = order.id;
-    const channel = sb
-      .channel(`chat-${oid}`)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' },
-        (payload) => {
-          if (payload.new.order_id === oid) onSend(oid, mapChat(payload.new));
-        })
-      .subscribe((status, err) => {
-        if (err) console.error('[Realtime chat]', status, err);
-      });
-    return () => sb.removeChannel(channel);
-  }, [order.id]);
+  const now = () => {
+    const d = new Date();
+    return `${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}`;
+  };
 
-  // ポーリング（Realtime が届かない場合のフォールバック、3秒間隔）
-  useEffect(() => {
-    const oid = order.id;
-    const poll = async () => {
-      const { data } = await sb.from('messages').select('*').eq('order_id', oid).order('id');
-      if (data) data.forEach(row => onSend(oid, mapChat(row)));
-    };
-    const timer = setInterval(poll, 3000);
-    return () => clearInterval(timer);
-  }, [order.id]);
-
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!input.trim()) return;
-    const text = input.trim();
+    onSend(order.id, { id:Date.now(), from:"user", text:input.trim(), time:now(), read:true });
     setInput("");
-    const { data: row, error } = await sb.from('messages').insert({
-      order_id: order.id,
-      from_role: role === 'admin' ? 'staff' : 'user',
-      text,
-    }).select().single();
-    if (error) {
-      console.error('[ChatScreen send]', error);
-      setInput(text);
-      return;
-    }
-    onSend(order.id, mapChat(row));
+    setTyping(true);
+    setTimeout(()=>{
+      setTyping(false);
+      onSend(order.id, { id:Date.now()+1, from:"eli",
+        text:"メッセージを受け取りました😊\n担当者が確認次第、ご返答いたします。\nお急ぎの場合は📞 06-6392-3882 へどうぞ。",
+        time:now(), read:true });
+    },1500);
   };
 
   return (
@@ -3129,7 +2660,7 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
                   </div>
                 )}
                 <div style={{ maxWidth:"78%" }}>
-                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>🤖 LiBot</div>}
+                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>🤖 イーライくん</div>}
                   {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue,   marginBottom:3, fontWeight:600 }}>👷 担当者</div>}
                   {!isOwn && msg.from==="user"  && role==="admin" && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 ユーザー</div>}
                   <div style={{
@@ -3150,6 +2681,20 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
             );
           })}
 
+          {typing && (
+            <div style={{ display:"flex", alignItems:"flex-end", gap:8, marginBottom:16 }}>
+              <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
+                display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>🤖</div>
+              <div style={{ background:C.white, borderRadius:"4px 20px 20px 20px",
+                padding:"14px 18px", border:`1px solid ${C.grayL}`,
+                display:"flex", gap:5, alignItems:"center" }}>
+                {[0,1,2].map(i=>(
+                  <div key={i} style={{ width:8, height:8, borderRadius:"50%",
+                    background:C.blue, animation:`dotB 1.2s ease ${i*0.2}s infinite` }} />
+                ))}
+              </div>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
       </div>
@@ -3157,8 +2702,8 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
       <div style={{ background:C.white, borderTop:`2px solid ${C.grayL}`, padding:"12px 16px", flexShrink:0 }}>
         <div style={{ maxWidth:500, margin:"0 auto", display:"flex", gap:10, alignItems:"flex-end" }}>
           <textarea value={input} onChange={e=>setInput(e.target.value)}
-            onKeyDown={e=>{ if(e.key==="Enter"&&e.shiftKey){ return; } if(e.key==="Enter"){e.preventDefault();} }}
-            placeholder="メッセージを入力... (Shift+Enterで改行)" rows={1}
+            onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSend();} }}
+            placeholder="メッセージを入力... (Enterで送信)" rows={1}
             style={{ flex:1, fontSize:16, padding:"13px 16px", borderRadius:14,
               border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
               color:C.navy, resize:"none", lineHeight:1.5, maxHeight:100, overflowY:"auto", outline:"none" }}
@@ -3181,32 +2726,14 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
 
 // ── メイン ───────────────────────────────────────────────
 function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
-  const [orders,    setOrders]    = useState([]);
-  const [chats,     setChats]     = useState({});
+  const [orders,    setOrders]    = useState(HI_ORDERS);
+  const [chats,     setChats]     = useState(HI_INIT_CHATS);
   const [filter,    setFilter]    = useState("全て");
   const [screen,    setScreen]    = useState("list");
   const [currentId, setCurrentId] = useState(null);
-  const [, setTick]               = useState(0);
-  const [loading,   setLoading]   = useState(true);
-  const [dbError,   setDbError]   = useState(null);
+  const [, setTick] = useState(0);
 
   const current = orders.find(o => o.id === currentId) || null;
-
-  const fetchOrders = async () => {
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) { setLoading(false); return; }
-    const { data, error } = await sb
-      .from('orders')
-      .select('*, schedules(*), order_images(*)')
-      .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-    if (error) { setDbError(error.message); setLoading(false); return; }
-    setOrders((data || []).map(mapOrder));
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchOrders(); }, []);
 
   useEffect(() => {
     const autoComplete = (os) => {
@@ -3234,27 +2761,39 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
     const nowMs = Date.now();
     setOrders(os => os.map(o => o.id === id
       ? { ...o, status: newStatus, statusChangedAt: nowMs } : o));
+    if (newStatus === "日程確定") {
+      const order = orders.find(o => o.id === id);
+      if (order && order.schedules && order.schedules.length > 0) {
+        const DOW = ["日","月","火","水","木","金","土"];
+        const scheduleLines = order.schedules.map(sch => {
+          const [y, m, d] = sch.date.split("-").map(Number);
+          const dow = DOW[new Date(y, m - 1, d).getDay()];
+          return `${m}月${d}日（${dow}）${sch.start}〜`;
+        }).join("\n");
+        const t = new Date();
+        const timeStr = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")} ${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+        const autoMsg = {
+          id: Date.now(),
+          from: "staff",
+          text: `お待たせいたしました。\n下記日程にて段取りができましたので、ご報告申し上げます。\n【作業内容】\n${order.service}\n【日時】\n${scheduleLines}\n当日はよろしくお願いいたします。\n引き続き、何卒よろしくお願い申し上げます。`,
+          time: timeStr,
+          read: false,
+        };
+        setChats(c => ({ ...c, [id]: [...(c[id] || []), autoMsg] }));
+      }
+    }
   };
 
   const getUnread = id => (chats[id]||[]).filter(m=>m.from==="staff"&&!m.read).length;
 
-  const openChat = async (order) => {
-    if (chats[order.id] === undefined) {
-      const { data } = await sb.from('messages').select('*').eq('order_id', order.id).order('id');
-      setChats(c => ({ ...c, [order.id]: (data || []).map(mapChat) }));
-    } else {
-      setChats(c => ({ ...c, [order.id]: (c[order.id] || []).map(m => ({ ...m, read: true })) }));
-    }
+  const openChat = order => {
+    setChats(c=>({ ...c, [order.id]:(c[order.id]||[]).map(m=>({...m,read:true})) }));
     setCurrentId(order.id);
     setScreen("chat");
   };
 
   const addMessage = (orderId, msg) => {
-    setChats(c => {
-      const existing = c[orderId] || [];
-      if (existing.some(m => m.id === msg.id)) return c;
-      return { ...c, [orderId]: [...existing, msg] };
-    });
+    setChats(c=>({ ...c, [orderId]:[...(c[orderId]||[]),msg] }));
   };
 
   const counts = {
@@ -3266,27 +2805,6 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
   };
 
   const filtered = filter==="全て" ? orders : orders.filter(o=>o.status===filter);
-
-  if (loading) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-      minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
-      <EliSVG size={56} />
-      <div style={{ marginTop:16, fontSize:15, color:C.navy, fontWeight:700 }}>読み込み中…</div>
-    </div>
-  );
-
-  if (dbError) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-      minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif", padding:24 }}>
-      <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
-      <div style={{ fontSize:15, color:C.red, fontWeight:700, marginBottom:16, textAlign:"center" }}>データの読み込みに失敗しました</div>
-      <div style={{ fontSize:13, color:C.gray, marginBottom:24, textAlign:"center" }}>{dbError}</div>
-      <button onClick={fetchOrders} style={{ background:C.blue, color:C.white, border:"none",
-        borderRadius:12, padding:"12px 28px", fontSize:15, fontWeight:700, cursor:"pointer" }}>
-        再試行
-      </button>
-    </div>
-  );
 
   if (screen==="chat" && current) return (
     <ChatScreen role={role} order={current} messages={chats[current.id]||[]}
@@ -3319,7 +2837,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
 
       <div style={{ maxWidth:480, margin:"0 auto", padding:"16px 16px 40px" }}>
 
-        {/* LiBotのメッセージ */}
+        {/* イーライくんのメッセージ */}
         <EliMessage orders={orders} chats={chats} />
 
         {/* フィルター */}
@@ -3340,14 +2858,14 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
           })}
         </div>
 
-        <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
-
         {/* 一覧 */}
         {filtered.map(order=>(
           <HiOrderCard key={order.id} role={role} order={order}
             unreadCount={getUnread(order.id)}
             onClick={()=>{ setCurrentId(order.id); setScreen("detail"); }} />
         ))}
+
+        <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
 
         {/* フッター */}
         <div style={{ background:C.white, borderRadius:16, marginTop:16,
@@ -3362,7 +2880,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
             alignItems:"center", justifyContent:"center", gap:4 }}>
             <div style={{ fontSize:28 }}>🕐</div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
               <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
             </div>
           </div>
@@ -3403,7 +2921,7 @@ function MyTopBar({ onBack, onLogout }) {
 function MyEliRow({ children }) {
   return (
     <div style={{ padding:"20px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:16 }}>
-      <img src={ELI_IMG} alt="LiBot" style={{ width:80, height:"auto",
+      <img src={ELI_IMG} alt="イーライくん" style={{ width:80, height:"auto",
         animation:"eliFloat 3s ease-in-out infinite",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
       <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
@@ -3474,21 +2992,20 @@ function PwField({ label, value, onChange, error, placeholder }) {
   );
 }
 
-function MyPrimaryBtn({ children, onClick, color, disabled }) {
+function MyPrimaryBtn({ children, onClick, color }) {
   const [hov, setHov] = useState(false);
-  const bg = disabled ? "#b0bec5"
-    : color==="green"
+  const bg = color==="green"
     ? "linear-gradient(135deg,#2eaa72,#1a7a50)"
     : "linear-gradient(135deg,#2952c8,#0a1f5c)";
   return (
-    <button onClick={onClick} disabled={disabled}
+    <button onClick={onClick}
       onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       style={{ display:"block", width:"100%", background:bg,
         color:C.white, border:"none", borderRadius:14,
         fontSize:17, fontWeight:800, padding:"17px 0",
-        cursor:disabled?"not-allowed":"pointer", fontFamily:"inherit",
-        boxShadow:disabled?"none":hov?"0 8px 24px rgba(10,31,92,0.3)":"0 4px 16px rgba(10,31,92,0.15)",
-        transform:hov&&!disabled?"translateY(-1px)":"translateY(0)",
+        cursor:"pointer", fontFamily:"inherit",
+        boxShadow:hov?"0 8px 24px rgba(10,31,92,0.3)":"0 4px 16px rgba(10,31,92,0.15)",
+        transform:hov?"translateY(-1px)":"translateY(0)",
         transition:"all 0.2s" }}>
       {children}
     </button>
@@ -3533,32 +3050,20 @@ function Toast({ msg }) {
 }
 
 // ── パスワード変更モーダル ───────────────────────────────
-function PwModal({ onClose, email }) {
+function PwModal({ onClose }) {
   const [current, setCurrent]   = useState("");
   const [newPw, setNewPw]       = useState("");
   const [confirm, setConfirm]   = useState("");
   const [errors, setErrors]     = useState({});
   const [done, setDone]         = useState(false);
-  const [saving, setSaving]     = useState(false);
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const e = {};
-    if (!current)          e.current = "現在のパスワードを入力してください";
-    if (newPw.length < 8)  e.newPw   = "8文字以上で入力してください";
-    if (newPw !== confirm)  e.confirm = "パスワードが一致しません";
+    if (!current)        e.current = "現在のパスワードを入力してください";
+    if (newPw.length<8)  e.newPw   = "8文字以上で入力してください";
+    if (newPw !== confirm) e.confirm = "パスワードが一致しません";
     setErrors(e);
-    if (Object.keys(e).length) return;
-    setSaving(true);
-    const { error: signInErr } = await sb.auth.signInWithPassword({ email, password: current });
-    if (signInErr) {
-      setErrors({ current: "現在のパスワードが正しくありません" });
-      setSaving(false);
-      return;
-    }
-    const { error: updateErr } = await sb.auth.updateUser({ password: newPw });
-    setSaving(false);
-    if (updateErr) { setErrors({ newPw: updateErr.message }); return; }
-    setDone(true);
+    if (!Object.keys(e).length) setDone(true);
   };
 
   return (
@@ -3599,7 +3104,7 @@ function PwModal({ onClose, email }) {
               </div>
 
               <div style={{ marginBottom:12 }}>
-                <MyPrimaryBtn onClick={handleSave} disabled={saving}>{saving ? "変更中…" : "変更を保存する"}</MyPrimaryBtn>
+                <MyPrimaryBtn onClick={handleSave}>変更を保存する</MyPrimaryBtn>
               </div>
               <MySubBtn onClick={onClose}>キャンセル</MySubBtn>
             </>
@@ -3623,77 +3128,24 @@ function PwModal({ onClose, email }) {
 
 // ── メイン ───────────────────────────────────────────────
 function MyPageApp({ onBack, onLogout }) {
-  const [name,      setName]      = useState("");
-  const [phone,     setPhone]     = useState("");
-  const [email,     setEmail]     = useState("");
-  const [company,   setCompany]   = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [userId,    setUserId]    = useState(null);
-  const [errors,    setErrors]    = useState({});
-  const [toast,     setToast]     = useState("");
+  const [name, setName]   = useState("榮藤 美香");
+  const [phone, setPhone] = useState("08088891665");
+  const [errors, setErrors] = useState({});
+  const [toast, setToast]   = useState("");
   const [showPwModal, setShowPwModal] = useState(false);
-  const [loading,   setLoading]   = useState(true);
-  const [dbError,   setDbError]   = useState(null);
-  const [saving,    setSaving]    = useState(false);
-
-  useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await sb.auth.getUser();
-      if (!user) { setLoading(false); return; }
-      setUserId(user.id);
-      setEmail(user.email || "");
-      const { data, error } = await sb
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      if (error && error.code !== 'PGRST116') {
-        setDbError(error.message);
-      } else if (data) {
-        setName(data.name || "");
-        setPhone(data.phone || "");
-        setCompany(data.company || "");
-        setCompanyId(data.company_id || "");
-      }
-      setLoading(false);
-    };
-    load();
-  }, []);
 
   const showToast = (msg) => {
     setToast(msg);
     setTimeout(()=>setToast(""), 3000);
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     const e = {};
     if (!name.trim()) e.name = "氏名を入力してください";
     if (!/^[\d\-]{10,13}$/.test(phone.replace(/\s/g,""))) e.phone = "正しい電話番号を入力してください";
     setErrors(e);
-    if (Object.keys(e).length) return;
-    setSaving(true);
-    const { error } = await sb.from('profiles').upsert({ id: userId, name, phone });
-    setSaving(false);
-    if (error) { showToast("保存に失敗しました"); return; }
-    showToast("変更を保存しました");
+    if (!Object.keys(e).length) showToast("変更を保存しました");
   };
-
-  if (loading) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-      minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
-      <EliSVG size={56} />
-      <div style={{ marginTop:16, fontSize:15, color:C.navy, fontWeight:700 }}>読み込み中…</div>
-    </div>
-  );
-
-  if (dbError) return (
-    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
-      minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif", padding:24 }}>
-      <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
-      <div style={{ fontSize:15, color:C.red, fontWeight:700, marginBottom:8 }}>データの読み込みに失敗しました</div>
-      <div style={{ fontSize:13, color:C.gray }}>{dbError}</div>
-    </div>
-  );
 
   return (
     <div style={{ background:C.bg, minHeight:"100vh",
@@ -3710,16 +3162,16 @@ function MyPageApp({ onBack, onLogout }) {
           boxShadow:"0 4px 24px rgba(10,31,92,0.10)", border:"1px solid "+C.grayL, marginBottom:16 }}>
 
           <MyEliRow>
-            {(name || "担当者").split(" ")[0]}さん、<br />情報を確認・変更できます✏️
+            {name.split(" ")[0]}さん、<br />情報を確認・変更できます✏️
           </MyEliRow>
 
           <div style={{ padding:"0 24px 28px" }}>
 
             {/* 変更不可 */}
             <SectionTitle icon="🏢">会社情報</SectionTitle>
-            <ReadOnlyField label="契約社名" value={company} />
-            <ReadOnlyField label="メールアドレス（ログインID）" value={email} />
-            <ReadOnlyField label="企業ID" value={companyId} />
+            <ReadOnlyField label="契約社名" value="株式会社オガチャン" />
+            <ReadOnlyField label="メールアドレス（ログインID）" value="jimu@markan.co.jp" />
+            <ReadOnlyField label="企業ID" value="ELI-1001" />
 
             <div style={{ height:1, background:C.grayL, margin:"20px 0" }}/>
 
@@ -3733,7 +3185,7 @@ function MyPageApp({ onBack, onLogout }) {
               error={errors.phone} hint="ログイン時の確認に使用します" />
 
             <div style={{ marginBottom:12 }}>
-              <MyPrimaryBtn onClick={handleSave} color="green" disabled={saving}>{saving ? "保存中…" : "変更を保存する"}</MyPrimaryBtn>
+              <MyPrimaryBtn onClick={handleSave} color="green">変更を保存する</MyPrimaryBtn>
             </div>
 
             <div style={{ height:1, background:C.grayL, margin:"20px 0" }}/>
@@ -3781,7 +3233,7 @@ function MyPageApp({ onBack, onLogout }) {
               </div>
             </div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
               <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
             </div>
           </div>
@@ -3792,7 +3244,7 @@ function MyPageApp({ onBack, onLogout }) {
         </div>
       </div>
 
-      {showPwModal && <PwModal onClose={()=>setShowPwModal(false)} email={email} />}
+      {showPwModal && <PwModal onClose={()=>setShowPwModal(false)} />}
       <Toast msg={toast} />
     </div>
   );
@@ -3819,16 +3271,12 @@ const AD_SVC_ICON = {
 function mapOrder(row) {
   const schRows = (row.schedules || []).sort((a,b) => (a.sort_order||0) - (b.sort_order||0));
   const schedules = schRows.map(s => ({
-    id:      s.id,
     date:    s.work_date   || '',
     start:   s.start_time  || '',
     end:     s.end_time    || '',
     workers: s.workers     || '',
     details: Array.isArray(s.details) ? s.details : [],
   }));
-  const images = (row.order_images || [])
-    .sort((a, b) => (a.created_at||'').localeCompare(b.created_at||''))
-    .map(img => img.path);
   return {
     id:             row.id,
     company:        row.company    || '',
@@ -3843,7 +3291,6 @@ function mapOrder(row) {
     key:            row.key_info   || '',
     parking:        row.parking    || '',
     note:           row.note       || '',
-    images,
     createdAt: row.created_at
       ? new Date(row.created_at).getTime() : Date.now(),
     statusChangedAt: row.status_changed_at
@@ -4026,55 +3473,48 @@ function Legend() {
 }
 
 // ── 受注カード ───────────────────────────────────────────
-function AdOrderCard({ order, isSelected, isChecked, onClick, onToggleCheck }) {
-  useTimer();
+function AdOrderCard({ order, isSelected, onClick }) {
+  useTimer(); // 毎分再描画
   const timer = getOrderTimer(order);
 
   return (
-    <div onClick={onClick}
-      style={{ width:"100%", padding:"10px 12px 10px 10px", textAlign:"left", cursor:"pointer",
+    <button onClick={onClick}
+      style={{ width:"100%", padding:"12px 14px", textAlign:"left", cursor:"pointer",
         background: isSelected ? "#ddeeff" : timer.cardBg,
-        borderBottom:"1px solid "+C.grayL,
+        borderBottom:"1px solid "+C.grayL, border:"none",
         borderLeft:"4px solid "+(isSelected?C.blue:timer.leftBorder),
         transition:"background 0.5s, border-color 0.5s",
         animation: timer.pulse && !isSelected ? "urgentPulse 1.5s ease-in-out infinite" : "none",
-        display:"flex", alignItems:"flex-start", gap:8 }}>
+        outline:"none" }}>
 
-      <div onClick={e=>{ e.stopPropagation(); onToggleCheck(order.id); }}
-        style={{ paddingTop:3, flexShrink:0 }}>
-        <input type="checkbox" checked={!!isChecked} onChange={()=>{}}
-          style={{ cursor:"pointer", width:14, height:14, accentColor:C.red }} />
+      <div style={{ display:"flex", justifyContent:"space-between",
+        alignItems:"flex-start", marginBottom:5, gap:6 }}>
+        <div style={{ fontSize:13, fontWeight:800, color:C.navy,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
+          {AD_SVC_ICON[order.service]} {order.site}
+        </div>
+        <ADStatusBadge status={order.status} />
       </div>
 
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ display:"flex", justifyContent:"space-between",
-          alignItems:"flex-start", marginBottom:4, gap:6 }}>
-          <div style={{ fontSize:13, fontWeight:800, color:C.navy,
-            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
-            {AD_SVC_ICON[order.service]} {order.site}
-          </div>
-          <ADStatusBadge status={order.status} />
-        </div>
-        <div style={{ fontSize:11, color:C.gray, lineHeight:1.7, marginBottom: timer.show?4:0 }}>
-          <div>{order.company}</div>
-          <div>{order.schedules[0].date}　{order.id}</div>
-        </div>
-        {timer.show && (
-          <span style={{ display:"inline-block", background:timer.badgeBg,
-            color:timer.badgeText, borderRadius:5, padding:"2px 7px",
-            fontSize:11, fontWeight:800,
-            animation: timer.pulse ? "urgentPulse 1.5s ease-in-out infinite" : "none" }}>
-            {timer.label}
-          </span>
-        )}
+      <div style={{ fontSize:11, color:C.gray, lineHeight:1.7, marginBottom: timer.show?5:0 }}>
+        <div>{order.company}</div>
+        <div>{order.schedules[0].date}　{order.id}</div>
       </div>
-    </div>
+
+      {timer.show && (
+        <span style={{ display:"inline-block", background:timer.badgeBg,
+          color:timer.badgeText, borderRadius:5, padding:"3px 8px",
+          fontSize:11, fontWeight:800,
+          animation: timer.pulse ? "urgentPulse 1.5s ease-in-out infinite" : "none" }}>
+          {timer.label}
+        </span>
+      )}
+    </button>
   );
 }
 
 // ── 受注一覧パネル ───────────────────────────────────────
-function OrderList({ orders, selected, onSelect, filter, setFilter, search, setSearch,
-                      checkedIds, onToggleCheck, onDeleteSelected }) {
+function OrderList({ orders, selected, onSelect, filter, setFilter, search, setSearch }) {
   useTimer();
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
   const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
@@ -4093,7 +3533,7 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
       display:"flex", flexDirection:"column", flexShrink:0, height:"100vh", overflow:"hidden" }}>
 
       <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`, padding:"14px 14px 10px" }}>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>LiBot 管理者画面</div>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>E-Li 管理者画面</div>
         <div style={{ fontSize:17, fontWeight:900, color:C.white }}>受注一覧</div>
         <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
           {adjCount>0 && (
@@ -4146,17 +3586,6 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 
       <Legend />
 
-      {checkedIds.length > 0 && (
-        <div style={{ padding:"6px 10px", borderBottom:"1px solid "+C.grayL }}>
-          <button onClick={()=>onDeleteSelected(checkedIds)}
-            style={{ width:"100%", padding:"6px 10px", fontSize:12, fontWeight:700, borderRadius:6,
-              border:"1.5px solid "+C.red, background:"#ffeeee", color:C.red,
-              cursor:"pointer", fontFamily:"inherit" }}>
-            🗑️ 選択した {checkedIds.length}件を削除（論理削除）
-          </button>
-        </div>
-      )}
-
       <div style={{ flex:1, overflowY:"auto" }}>
         {orders.length===0 ? (
           <div style={{ textAlign:"center", padding:"40px 16px", color:C.gray }}>
@@ -4166,9 +3595,7 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
         ) : orders.map(order=>(
           <AdOrderCard key={order.id} order={order}
             isSelected={selected?.id===order.id}
-            isChecked={checkedIds.includes(order.id)}
-            onClick={()=>onSelect(order)}
-            onToggleCheck={onToggleCheck} />
+            onClick={()=>onSelect(order)} />
         ))}
       </div>
     </div>
@@ -4176,44 +3603,13 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete }) {
+function DetailPanel({ order, chats, onAddChat, onStatusChange }) {
   const [tab, setTab]           = useState("detail");
   const [chatInput, setChatInput] = useState("");
-  const [editMode,    setEditMode]    = useState(false);
-  const [editData,    setEditData]    = useState(null);
-  const [saving,      setSaving]      = useState(false);
-  const [lightboxUrl, setLightboxUrl] = useState(null);
   const bottomRef = useRef(null);
   useTimer();
 
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[chats, tab]);
-  useEffect(()=>{ setEditMode(false); setEditData(null); }, [order?.id]);
-
-  const startEdit = () => {
-    setEditData({
-      status: order.status,
-      schedules: order.schedules.map(s => ({ ...s, detailsText: (s.details||[]).join('・') })),
-    });
-    setEditMode(true);
-  };
-  const cancelEdit = () => { setEditMode(false); setEditData(null); };
-  const saveEdit = async () => {
-    setSaving(true);
-    try {
-      const payload = {
-        status: editData.status,
-        schedules: editData.schedules.map(s => ({
-          ...s,
-          details: s.detailsText.split(/[・、,\n]/).map(t=>t.trim()).filter(Boolean),
-        })),
-      };
-      await onEdit(order.id, payload);
-      setEditMode(false);
-      setEditData(null);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   if (!order) return (
     <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
@@ -4320,112 +3716,6 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
         <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
           <div style={{ maxWidth:700, margin:"0 auto" }}>
 
-            {/* 編集ボタン */}
-            {!editMode && (
-              <button onClick={startEdit}
-                style={{ width:"100%", marginBottom:16, padding:"11px", fontSize:14,
-                  fontWeight:800, color:C.blue, background:C.blueL,
-                  border:"2px solid "+C.blue, borderRadius:12, cursor:"pointer",
-                  fontFamily:"inherit" }}>
-                ✏️ 日程・ステータスを編集する
-              </button>
-            )}
-
-            {/* 編集フォーム */}
-            {editMode && editData && (
-              <div style={{ background:C.white, borderRadius:14, border:"2px solid "+C.blue,
-                marginBottom:16, overflow:"hidden" }}>
-                <div style={{ background:`linear-gradient(135deg,${C.blue},#1a5fbf)`,
-                  padding:"12px 18px", fontSize:14, fontWeight:800, color:C.white }}>
-                  ✏️ 編集モード
-                </div>
-                <div style={{ padding:"16px 18px" }}>
-                  <div style={{ marginBottom:18 }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:C.gray, marginBottom:6 }}>ステータス</div>
-                    <select value={editData.status}
-                      onChange={e=>setEditData(d=>({...d,status:e.target.value}))}
-                      style={{ fontSize:14, padding:"10px 12px", borderRadius:8,
-                        border:"2px solid "+C.blue, width:"100%", fontFamily:"inherit",
-                        color:C.navy, fontWeight:700 }}>
-                      {AD_STATUS_LIST.map(s=>(
-                        <option key={s} value={s}>{AD_STATUS[s].icon} {s}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {editData.schedules.map((sch,i)=>(
-                    <div key={i} style={{ border:"1px solid "+C.grayL, borderRadius:10,
-                      padding:"14px", marginBottom:14, background:"#f9fbff" }}>
-                      <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:12 }}>
-                        📅 日程 {i+1}
-                      </div>
-                      <div style={{ marginBottom:10 }}>
-                        <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>日付</div>
-                        <input type="date" value={sch.date}
-                          onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,date:e.target.value}:s)}))}
-                          style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
-                            border:"1px solid "+C.grayL, width:"100%",
-                            fontFamily:"inherit", boxSizing:"border-box" }} />
-                      </div>
-                      <div style={{ display:"flex", gap:12, marginBottom:10 }}>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>開始時間</div>
-                          <input type="time" value={sch.start}
-                            onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,start:e.target.value}:s)}))}
-                            style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
-                              border:"1px solid "+C.grayL, width:"100%",
-                              fontFamily:"inherit", boxSizing:"border-box" }} />
-                        </div>
-                        <div style={{ flex:1 }}>
-                          <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>終了時間</div>
-                          <input type="time" value={sch.end}
-                            onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,end:e.target.value}:s)}))}
-                            style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
-                              border:"1px solid "+C.grayL, width:"100%",
-                              fontFamily:"inherit", boxSizing:"border-box" }} />
-                        </div>
-                      </div>
-                      <div style={{ marginBottom:10 }}>
-                        <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>作業者数</div>
-                        <input type="text" value={sch.workers}
-                          onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,workers:e.target.value}:s)}))}
-                          placeholder="例：3人"
-                          style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
-                            border:"1px solid "+C.grayL, width:"100%",
-                            fontFamily:"inherit", boxSizing:"border-box" }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>作業内容（「・」区切り）</div>
-                        <input type="text" value={sch.detailsText}
-                          onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,detailsText:e.target.value}:s)}))}
-                          placeholder="例：養生・家具移動・荷上げ"
-                          style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
-                            border:"1px solid "+C.grayL, width:"100%",
-                            fontFamily:"inherit", boxSizing:"border-box" }} />
-                      </div>
-                    </div>
-                  ))}
-                  <div style={{ display:"flex", gap:12 }}>
-                    <button onClick={saveEdit} disabled={saving}
-                      style={{ flex:2, padding:"13px", fontSize:15, fontWeight:800,
-                        background:C.blue, color:C.white, border:"none", borderRadius:10,
-                        cursor:saving?"not-allowed":"pointer", opacity:saving?0.7:1,
-                        fontFamily:"inherit" }}>
-                      {saving?"保存中…":"💾 保存する"}
-                    </button>
-                    <button onClick={cancelEdit} disabled={saving}
-                      style={{ flex:1, padding:"13px", fontSize:14, fontWeight:700,
-                        background:C.grayL, color:C.gray, border:"none", borderRadius:10,
-                        cursor:"pointer", fontFamily:"inherit" }}>
-                      キャンセル
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 既存の詳細ビュー */}
-            {!editMode && (<>
-
             {/* 警告バナー */}
             {showBanner && (
               <div style={{ background: timer.level==="over"?"#ffd0d0":"#ffe4e4",
@@ -4486,25 +3776,6 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
               </div>
             ))}
 
-            {order.images && order.images.length > 0 && (
-              <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
-                marginBottom:14, overflow:"hidden" }}>
-                <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
-                  padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
-                  📷 添付画像（{order.images.length}枚）
-                </div>
-                <div style={{ padding:"12px 16px", display:"flex", gap:8, flexWrap:"wrap" }}>
-                  {order.images.map((path, i) => (
-                    <SignedImage key={i} path={path}
-                      onClickUrl={url => setLightboxUrl(url)}
-                      style={{ width:90, height:90, objectFit:"cover", borderRadius:8,
-                        cursor:"pointer", border:"1px solid "+C.grayL,
-                        transition:"opacity 0.2s" }} />
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div style={{ background:"#fffbe6", border:"2px solid #f5c842",
               borderRadius:14, padding:"16px 18px" }}>
               <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:8 }}>
@@ -4512,18 +3783,6 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
               </div>
               <CopyBtn value={prowonText} label="全項目をコピーする" />
             </div>
-
-            {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
-
-            <button onClick={()=>onDelete([order.id])}
-              style={{ width:"100%", marginTop:12, padding:"11px", fontSize:14,
-                fontWeight:800, color:C.red, background:"#fff0f0",
-                border:"2px solid "+C.red, borderRadius:12, cursor:"pointer",
-                fontFamily:"inherit" }}>
-              🗑️ この案件を削除済みに移動する
-            </button>
-
-            </>)}
           </div>
         </div>
       )}
@@ -4595,8 +3854,8 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
             padding:"12px 20px", flexShrink:0 }}>
             <div style={{ maxWidth:700, margin:"0 auto", display:"flex", gap:10, alignItems:"flex-end" }}>
               <textarea value={chatInput} onChange={e=>setChatInput(e.target.value)}
-                onKeyDown={e=>{ if(e.key==="Enter"&&e.shiftKey){ return; } if(e.key==="Enter"){e.preventDefault();} }}
-                placeholder="お客様へのメッセージを入力... (Shift+Enterで改行)" rows={2}
+                onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleSend();} }}
+                placeholder="お客様へのメッセージを入力... (Enterで送信)" rows={2}
                 style={{ flex:1, fontSize:14, padding:"12px 14px", borderRadius:12,
                   border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
                   color:C.navy, resize:"none", lineHeight:1.5, outline:"none" }} />
@@ -4662,8 +3921,6 @@ function CompanyPanel({ onClose }) {
   const [showAdd, setShowAdd]     = useState(false);
   const [form, setForm]           = useState({ name:"", contact:"", phone:"", email:"" });
   const [cpLoading, setCpLoading] = useState(true);
-  const [addError, setAddError]   = useState("");
-  const [addSaving, setAddSaving] = useState(false);
 
   useEffect(() => {
     sb.from('companies').select('*').order('id').then(({ data }) => {
@@ -4680,34 +3937,14 @@ function CompanyPanel({ onClose }) {
 
   const handleAdd = async () => {
     if (!form.name) return;
-    setAddError("");
-    setAddSaving(true);
     const newId = nextId();
-    const { data, error } = await sb.from('companies')
-      .insert({ id:newId, ...form, is_active:true })
+    const since = new Date().toISOString().slice(0, 10);
+    const { data } = await sb.from('companies')
+      .insert({ id:newId, ...form, since })
       .select().single();
-    setAddSaving(false);
-    if (error) {
-      setAddError("登録に失敗しました: " + error.message);
-      return;
-    }
     if (data) setCompanies(c => [...c, data]);
     setForm({ name:"", contact:"", phone:"", email:"" });
     setShowAdd(false);
-  };
-
-  const handleToggle = async (id, currentActive) => {
-    const { data } = await sb.from('companies')
-      .update({ is_active: !currentActive })
-      .eq('id', id)
-      .select().single();
-    if (data) setCompanies(cs => cs.map(c => c.id === id ? { ...c, is_active: !currentActive } : c));
-  };
-
-  const handleDelete = async (id, name) => {
-    if (!window.confirm(`「${name}」（${id}）を削除します。\nこの操作は取り消せません。`)) return;
-    const { error } = await sb.from('companies').delete().eq('id', id);
-    if (!error) setCompanies(cs => cs.filter(c => c.id !== id));
   };
 
   return (
@@ -4756,20 +3993,14 @@ function CompanyPanel({ onClose }) {
                 marginBottom:12, fontSize:13, color:"#1a5c3a" }}>
                 発行される企業ID：<b style={{ fontSize:15 }}>{nextId()}</b>
               </div>
-              {addError && (
-                <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:8,
-                  padding:"10px 14px", marginBottom:12, fontSize:13, color:C.red, fontWeight:600 }}>
-                  ⚠️ {addError}
-                </div>
-              )}
               <div style={{ display:"flex", gap:10 }}>
-                <button onClick={handleAdd} disabled={addSaving}
-                  style={{ background:addSaving?"#b0bec5":`linear-gradient(135deg,${C.blue},${C.navy})`,
+                <button onClick={handleAdd}
+                  style={{ background:`linear-gradient(135deg,${C.blue},${C.navy})`,
                     color:C.white, border:"none", borderRadius:8, padding:"10px 20px",
-                    fontSize:14, fontWeight:800, cursor:addSaving?"not-allowed":"pointer" }}>
-                  {addSaving ? "登録中…" : "✅ 企業IDを発行する"}
+                    fontSize:14, fontWeight:800, cursor:"pointer" }}>
+                  ✅ 企業IDを発行する
                 </button>
-                <button onClick={()=>{ setShowAdd(false); setAddError(""); }}
+                <button onClick={()=>setShowAdd(false)}
                   style={{ background:C.grayPale, color:C.navy, border:"1px solid "+C.grayL,
                     borderRadius:8, padding:"10px 20px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
                   キャンセル
@@ -4780,7 +4011,7 @@ function CompanyPanel({ onClose }) {
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:C.navy }}>
-                {["企業ID","会社名","担当者","電話番号","状態","削除"].map(h=>(
+                {["企業ID","会社名","担当者","電話番号","登録日"].map(h=>(
                   <th key={h} style={{ padding:"10px 14px", fontSize:13, fontWeight:700,
                     color:C.white, textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -4788,9 +4019,9 @@ function CompanyPanel({ onClose }) {
             </thead>
             <tbody>
               {cpLoading ? (
-                <tr><td colSpan={6} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
+                <tr><td colSpan={5} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
               ) : companies.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
+                <tr><td colSpan={5} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
               ) : companies.map((co,i)=>(
                 <tr key={co.id} style={{ background:i%2===0?C.white:C.bg }}>
                   <td style={{ padding:"10px 14px" }}>
@@ -4807,119 +4038,12 @@ function CompanyPanel({ onClose }) {
                       <CopyBtn value={co.phone||''} label="コピー" />
                     </div>
                   </td>
-                  <td style={{ padding:"10px 14px" }}>
-                    <button onClick={()=>handleToggle(co.id, co.is_active)}
-                      style={{ padding:"4px 12px", borderRadius:6, fontSize:12, fontWeight:700,
-                        cursor:"pointer", border:"2px solid",
-                        borderColor:co.is_active?C.green:C.red,
-                        background:co.is_active?"#f0faf5":"#fff0f0",
-                        color:co.is_active?C.green:C.red }}>
-                      {co.is_active?"✅ 有効":"🚫 無効"}
-                    </button>
-                  </td>
-                  <td style={{ padding:"10px 14px" }}>
-                    <button onClick={()=>handleDelete(co.id, co.name)}
-                      style={{ padding:"4px 12px", borderRadius:6, fontSize:12, fontWeight:700,
-                        cursor:"pointer", border:"2px solid "+C.red,
-                        background:"#fff0f0", color:C.red }}>
-                      🗑️ 削除
-                    </button>
-                  </td>
+                  <td style={{ padding:"10px 14px", fontSize:13, color:C.gray }}>{co.since}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ── 削除済みパネル ──────────────────────────────────────
-function DeletedPanel({ onClose, onRestore, onHardDelete }) {
-  const [items,      setItems]      = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [checkedIds, setCheckedIds] = useState([]);
-
-  useEffect(() => {
-    sb.from('orders').select('*, schedules(*)')
-      .not('deleted_at', 'is', null)
-      .order('deleted_at', { ascending: false })
-      .then(({ data }) => { setItems((data||[]).map(mapOrder)); setLoading(false); });
-  }, []);
-
-  const toggle = id => setCheckedIds(prev =>
-    prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
-
-  const removeFromList = ids =>
-    setItems(is => is.filter(o => !ids.includes(o.id)));
-
-  return (
-    <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:C.bg }}>
-      <div style={{ background:"linear-gradient(135deg,#5a3e85,#7b5ea7)",
-        padding:"14px 20px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
-        <button onClick={onClose}
-          style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white",
-            borderRadius:8, padding:"6px 12px", fontSize:13, fontWeight:700,
-            cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
-        <div style={{ fontSize:16, fontWeight:900, color:"white", flex:1 }}>🗑️ 削除済み案件</div>
-        <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)" }}>{items.length}件</div>
-      </div>
-
-      {checkedIds.length > 0 && (
-        <div style={{ padding:"8px 16px", background:C.white,
-          borderBottom:"1px solid "+C.grayL, display:"flex", gap:8 }}>
-          <button onClick={()=>onRestore(checkedIds, ids=>{removeFromList(ids); setCheckedIds([]); })}
-            style={{ flex:1, padding:"8px", fontSize:13, fontWeight:700, borderRadius:8,
-              border:"2px solid "+C.blue, background:C.blueL, color:C.blue,
-              cursor:"pointer", fontFamily:"inherit" }}>
-            ♻️ 選択{checkedIds.length}件を復元
-          </button>
-          <button onClick={()=>onHardDelete(checkedIds, ids=>{removeFromList(ids); setCheckedIds([]); })}
-            style={{ flex:1, padding:"8px", fontSize:13, fontWeight:700, borderRadius:8,
-              border:"2px solid "+C.red, background:"#ffeeee", color:C.red,
-              cursor:"pointer", fontFamily:"inherit" }}>
-            💥 完全削除
-          </button>
-        </div>
-      )}
-
-      <div style={{ flex:1, overflowY:"auto", padding:16 }}>
-        {loading ? (
-          <div style={{ textAlign:"center", padding:40, color:C.gray }}>読み込み中…</div>
-        ) : items.length === 0 ? (
-          <div style={{ textAlign:"center", padding:40, color:C.gray }}>
-            <div style={{ fontSize:32, marginBottom:8 }}>✅</div>
-            <div>削除済み案件はありません</div>
-          </div>
-        ) : items.map(o => (
-          <div key={o.id}
-            onClick={()=>toggle(o.id)}
-            style={{ background:checkedIds.includes(o.id)?"#fff0f8":C.white,
-              border:"1px solid "+(checkedIds.includes(o.id)?C.red:C.grayL),
-              borderRadius:12, padding:"12px 14px", marginBottom:10,
-              display:"flex", gap:10, alignItems:"center", cursor:"pointer" }}>
-            <input type="checkbox" checked={checkedIds.includes(o.id)}
-              onChange={()=>{}}
-              style={{ cursor:"pointer", accentColor:C.red, width:15, height:15, flexShrink:0, pointerEvents:"none" }} />
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:3 }}>
-                {AD_SVC_ICON[o.service]} {o.site}
-              </div>
-              <div style={{ fontSize:12, color:C.gray }}>
-                {o.company}　{o.schedules[0]?.date||""}　{o.id}
-              </div>
-            </div>
-            <ADStatusBadge status={o.status} />
-            <button
-              onClick={e=>{ e.stopPropagation(); onRestore([o.id], ids=>removeFromList(ids)); }}
-              style={{ flexShrink:0, padding:"5px 12px", fontSize:12, fontWeight:700,
-                borderRadius:8, border:"2px solid "+C.blue, background:C.blueL,
-                color:C.blue, cursor:"pointer", whiteSpace:"nowrap" }}>
-              ♻️ 復元
-            </button>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -4931,18 +4055,15 @@ function AdminApp({ onLogout }) {
   const [chats,    setChats]    = useState({});
   const [loading,  setLoading]  = useState(true);
   const [dbError,  setDbError]  = useState(null);
-  const [selected,   setSelected]   = useState(null);
-  const [filter,     setFilter]     = useState("全て");
-  const [search,     setSearch]     = useState("");
-  const [showComp,    setShowComp]    = useState(false);
-  const [showDeleted, setShowDeleted] = useState(false);
-  const [checkedIds,  setCheckedIds]  = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [filter,   setFilter]   = useState("全て");
+  const [search,   setSearch]   = useState("");
+  const [showComp, setShowComp] = useState(false);
 
   const fetchOrders = async () => {
     const { data, error } = await sb
       .from('orders')
-      .select('*, schedules(*), order_images(*)')
-      .is('deleted_at', null)
+      .select('*, schedules(*)')
       .order('created_at', { ascending: false });
     if (error) { setDbError(error.message); setLoading(false); return; }
     setOrders((data || []).map(mapOrder));
@@ -4958,46 +4079,14 @@ function AdminApp({ onLogout }) {
     return () => sb.removeChannel(channel);
   }, []);
 
-  // 選択案件のメッセージを遅延ロード + Realtime購読
+  // 選択案件のメッセージを遅延ロード
   useEffect(() => {
     if (!selected) return;
     const id = selected.id;
-    if (chats[id] === undefined) {
-      sb.from('messages').select('*').eq('order_id', id).order('id').then(({ data }) => {
-        setChats(c => ({ ...c, [id]: (data || []).map(mapChat) }));
-      });
-    }
-    const channel = sb
-      .channel(`admin-chat-${id}`)
-      .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' },
-        (payload) => {
-          if (payload.new.order_id !== id) return;
-          setChats(c => {
-            const existing = c[id] || [];
-            const msg = mapChat(payload.new);
-            if (existing.some(m => m.id === msg.id)) return c;
-            return { ...c, [id]: [...existing, msg] };
-          });
-        })
-      .subscribe((status, err) => {
-        if (err) console.error('[Realtime admin-chat]', status, err);
-      });
-    const pollTimer = setInterval(async () => {
-      const { data } = await sb.from('messages').select('*').eq('order_id', id).order('id');
-      if (data) {
-        setChats(c => {
-          const existing = c[id] || [];
-          const incoming = data.map(mapChat);
-          const merged = [...existing];
-          incoming.forEach(msg => {
-            if (!merged.some(m => m.id === msg.id)) merged.push(msg);
-          });
-          if (merged.length === existing.length) return c;
-          return { ...c, [id]: merged };
-        });
-      }
-    }, 3000);
-    return () => { sb.removeChannel(channel); clearInterval(pollTimer); };
+    if (chats[id] !== undefined) return;
+    sb.from('messages').select('*').eq('order_id', id).order('id').then(({ data }) => {
+      setChats(c => ({ ...c, [id]: (data || []).map(mapChat) }));
+    });
   }, [selected?.id]);
 
   // 自動完了：日程確定 && 終了時刻超過 → 完了に変更
@@ -5024,6 +4113,7 @@ function AdminApp({ onLogout }) {
         if (now > new Date(y, mo - 1, d, h, m)) {
           const nowIso = new Date().toISOString();
           await sb.from('orders').update({ status:"完了", status_changed_at:nowIso }).eq('id', id);
+          await sb.from('messages').insert({ order_id:id, from_role:"staff", text:"工事が完了しました。ありがとうございました✅", is_read:false });
           changed = true;
         }
       }
@@ -5054,77 +4144,26 @@ function AdminApp({ onLogout }) {
     await sb.from('orders').update({ status:newStatus, status_changed_at:nowIso }).eq('id', id);
     setOrders(os => os.map(o => o.id === id ? { ...o, status:newStatus, statusChangedAt:nowMs } : o));
     if (selected?.id === id) setSelected(s => ({ ...s, status:newStatus, statusChangedAt:nowMs }));
-  };
-
-  const handleDelete = async (ids) => {
-    if (!window.confirm(`${ids.length}件を削除済みに移動します。\n削除済みタブから復元できます。`)) return;
-    const deletedAt = new Date().toISOString();
-    await sb.from('orders').update({ deleted_at: deletedAt }).in('id', ids);
-    setOrders(os => os.filter(o => !ids.includes(o.id)));
-    setCheckedIds(prev => prev.filter(id => !ids.includes(id)));
-    if (selected && ids.includes(selected.id)) setSelected(null);
-  };
-
-  const handleRestore = async (ids, onSuccess) => {
-    if (!window.confirm(`${ids.length}件を復元します。`)) return;
-    await sb.from('orders').update({ deleted_at: null }).in('id', ids);
-    const { data } = await sb.from('orders').select('*, schedules(*)')
-      .in('id', ids).is('deleted_at', null);
-    if (data) setOrders(os => [...os, ...data.map(mapOrder)]);
-    onSuccess(ids);
-  };
-
-  const handleHardDelete = async (ids, onSuccess) => {
-    if (!window.confirm(`${ids.length}件を完全削除します。\nこの操作は取り消せません。`)) return;
-    await sb.from('messages').delete().in('order_id', ids);
-    await sb.from('schedules').delete().in('order_id', ids);
-    await sb.from('orders').delete().in('id', ids);
-    onSuccess(ids);
-  };
-
-  const handleEdit = async (id, editData) => {
-    const order = orders.find(o => o.id === id);
-    const statusChanged = order && order.status !== editData.status;
-    const nowMs = Date.now();
-    const orderUpdate = { status: editData.status };
-    if (statusChanged) orderUpdate.status_changed_at = new Date().toISOString();
-    await sb.from('orders').update(orderUpdate).eq('id', id);
-    for (const sch of editData.schedules) {
-      if (sch.id) {
-        await sb.from('schedules').update({
-          work_date:  sch.date,
-          start_time: sch.start,
-          end_time:   sch.end,
-          workers:    sch.workers,
-          details:    sch.details,
-        }).eq('id', sch.id);
-      }
-    }
-    const updatedSchedules = editData.schedules.map(({ id:sid, date, start, end, workers, details }) =>
-      ({ id:sid, date, start, end, workers, details }));
-    setOrders(os => os.map(o => {
-      if (o.id !== id) return o;
-      return { ...o, status:editData.status, schedules:updatedSchedules,
-        statusChangedAt: statusChanged ? nowMs : o.statusChangedAt };
-    }));
-    if (selected?.id === id) {
-      setSelected(s => ({ ...s, status:editData.status, schedules:updatedSchedules,
-        statusChangedAt: statusChanged ? nowMs : s.statusChangedAt }));
+    const autoMsg = {
+      "日程確定":   "日程の調整がつきました。よろしくお願いします📅",
+      "日程相談中": "ごめんなさい、ご希望の日程では予定がつきませんでした💦\nご希望に近い別日程でしたら対応できそうですが、いかがですか？",
+      "完了":       "工事が完了しました。ありがとうございました✅",
+      "キャンセル": "キャンセルを承りました。またのご利用をお待ちしております。",
+    };
+    if (autoMsg[newStatus]) {
+      const { data } = await sb.from('messages').insert({
+        order_id:id, from_role:"staff", text:autoMsg[newStatus], is_read:false,
+      }).select().single();
+      if (data) setChats(c => ({ ...c, [id]: [...(c[id] || []), mapChat(data)] }));
     }
   };
 
   const addChat = async (id, msg) => {
-    const { data: row, error } = await sb.from('messages').insert({
+    const { data } = await sb.from('messages').insert({
       order_id:id, from_role:msg.from, text:msg.text, is_read:false,
     }).select().single();
-    if (!error && row) {
-      setChats(c => {
-        const existing = c[id] || [];
-        const newMsg = mapChat(row);
-        if (existing.some(m => m.id === newMsg.id)) return c;
-        return { ...c, [id]: [...existing, newMsg] };
-      });
-    }
+    const saved = data ? mapChat(data) : { ...msg };
+    setChats(c => ({ ...c, [id]: [...(c[id] || []), saved] }));
   };
 
   const adjCount  = orders.filter(o => o.status === "調整中").length;
@@ -5177,13 +4216,6 @@ function AdminApp({ onLogout }) {
           fontSize:18, cursor:"pointer" }} onClick={()=>setShowComp(true)}>
           🏢
         </div>
-        <div title="削除済み案件"
-          style={{ width:36, height:36,
-            background:showDeleted?"rgba(255,100,100,0.35)":"rgba(255,255,255,0.08)",
-            borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:18, cursor:"pointer" }} onClick={()=>setShowDeleted(d=>!d)}>
-          🗑️
-        </div>
         {(adjCount+soudCount)>0 && (
           <div style={{ background:C.red, color:C.white, borderRadius:"50%",
             width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center",
@@ -5198,20 +4230,11 @@ function AdminApp({ onLogout }) {
         </button>
       </div>
 
-      {showDeleted ? (
-        <DeletedPanel onClose={()=>setShowDeleted(false)}
-          onRestore={handleRestore} onHardDelete={handleHardDelete} />
-      ) : (<>
-        <OrderList orders={sorted} selected={selected} onSelect={setSelected}
-          filter={filter} setFilter={setFilter} search={search} setSearch={setSearch}
-          checkedIds={checkedIds}
-          onToggleCheck={id=>setCheckedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}
-          onDeleteSelected={handleDelete} />
+      <OrderList orders={sorted} selected={selected} onSelect={setSelected}
+        filter={filter} setFilter={setFilter} search={search} setSearch={setSearch} />
 
-        <DetailPanel order={selected} chats={chats}
-          onAddChat={addChat} onStatusChange={handleStatusChange}
-          onEdit={handleEdit} onDelete={handleDelete} />
-      </>)}
+      <DetailPanel order={selected} chats={chats}
+        onAddChat={addChat} onStatusChange={handleStatusChange} />
 
       {showComp && <CompanyPanel onClose={()=>setShowComp(false)} />}
     </div>
