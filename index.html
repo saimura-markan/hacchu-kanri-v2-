@@ -2169,7 +2169,7 @@ function OrderApp({ onDone, onBack }) {
           throw new Error(`画像のアップロードに失敗しました: ${upErr.message}`);
         }
         const { error: dbErr } = await sb.from('order_images')
-          .insert({ order_id:newOrder.id, storage_path:path });
+          .insert({ order_id:newOrder.id, path:path });
         if (dbErr) {
           console.error('[order_images 登録失敗]', dbErr.message);
           throw new Error(`画像情報の保存に失敗しました: ${dbErr.message}`);
@@ -3541,7 +3541,7 @@ function mapOrder(row) {
   }));
   const images = (row.order_images || [])
     .sort((a, b) => (a.created_at||'').localeCompare(b.created_at||''))
-    .map(img => img.storage_path);
+    .map(img => img.path);
   return {
     id:             row.id,
     company:        row.company    || '',
