@@ -18,6 +18,204 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #f0f4f9; }
     ::-webkit-scrollbar-thumb { background: #c0cce0; border-radius: 3px; }
+
+    /* ─────────────────────────────────────────────────
+       アニメーション
+    ───────────────────────────────────────────────── */
+    @keyframes eliFloat {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-10px); }
+    }
+
+    /* ─────────────────────────────────────────────────
+       ログイン画面
+    ───────────────────────────────────────────────── */
+    .login-root {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-color: #050d1a;
+      background-image:
+        linear-gradient(rgba(41,82,200,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(41,82,200,0.07) 1px, transparent 1px);
+      background-size: 48px 48px;
+      font-family: 'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;
+      position: relative;
+    }
+    .login-root::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 80% at 50% 50%, rgba(7,20,40,0) 0%, rgba(5,13,26,0.6) 100%),
+        radial-gradient(ellipse 65% 55% at 15% 65%, rgba(41,82,200,0.18) 0%, transparent 100%),
+        radial-gradient(ellipse 55% 45% at 85% 25%, rgba(41,82,200,0.12) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .login-container {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 32px 28px 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .login-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 36px;
+    }
+    .login-hero-left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+    }
+    .login-service-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 2.5px;
+      margin-bottom: 6px;
+    }
+    .login-logo-img {
+      height: 120px;
+      width: auto;
+      display: block;
+      object-fit: contain;
+      mix-blend-mode: screen;
+      filter: brightness(2) saturate(0.8);
+    }
+    .login-ruby {
+      font-size: 12px;
+      color: rgba(255,255,255,0.38);
+      letter-spacing: 4px;
+      font-weight: 600;
+      margin-top: 4px;
+      margin-bottom: 14px;
+    }
+    .login-catchcopy {
+      font-size: 38px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: -0.5px;
+      line-height: 1.3;
+      text-shadow: 0 2px 12px rgba(41,82,200,0.4);
+    }
+    .login-subcatch {
+      font-size: 15px;
+      color: rgba(255,255,255,0.55);
+      font-weight: 500;
+      line-height: 1.7;
+      margin-top: 6px;
+    }
+    .login-sub {
+      display: none;
+    }
+    .login-libot {
+      height: 300px;
+      width: auto;
+      object-fit: contain;
+      animation: eliFloat 3.5s ease-in-out infinite;
+      filter: drop-shadow(0 8px 24px rgba(41,82,200,0.4));
+    }
+    .login-features {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 32px;
+    }
+    .login-feat-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 18px 12px;
+      transition: background 0.25s, border-color 0.25s, transform 0.25s, box-shadow 0.25s;
+      cursor: default;
+    }
+    .login-feat-item:hover {
+      background: rgba(0,168,255,0.07);
+      border-color: rgba(0,168,255,0.3);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 28px rgba(0,168,255,0.12);
+    }
+    .login-feat-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+    }
+    .login-feat-icon svg {
+      filter: drop-shadow(0 0 4px #00a8ff) drop-shadow(0 0 8px rgba(0,168,255,0.5));
+      transition: filter 0.25s;
+    }
+    .login-feat-item:hover .login-feat-icon svg {
+      filter: drop-shadow(0 0 6px #00a8ff) drop-shadow(0 0 14px rgba(0,168,255,0.75)) drop-shadow(0 0 22px rgba(0,168,255,0.3));
+    }
+    .login-feat-title { font-size: 13px; font-weight: 800; color: #fff; }
+    .login-feat-desc  { font-size: 11px; color: rgba(255,255,255,0.5); text-align: center; }
+    .login-card-outer {
+      display: flex;
+      justify-content: center;
+      padding-bottom: 32px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 760px;
+      background: rgba(255,255,255,0.97);
+      border-radius: 24px;
+      padding: 40px 48px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.06);
+    }
+    .login-footer {
+      position: relative;
+      z-index: 1;
+      background: rgba(0,0,0,0.4);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 18px 24px;
+      text-align: center;
+    }
+    .login-footer-logo {
+      margin-bottom: 6px;
+    }
+    .login-footer-logo img {
+      height: 40px;
+      width: auto;
+      display: block;
+      margin: 0 auto;
+      mix-blend-mode: screen;
+      filter: brightness(1.8);
+    }
+    .login-footer-copy {
+      font-size: 11px;
+      color: rgba(255,255,255,0.38);
+      letter-spacing: 0.5px;
+    }
+    @media (max-width: 768px) {
+      .login-container  { padding: 20px 16px 12px; }
+      .login-header     { margin-bottom: 20px; }
+      .login-libot      { height: 160px; }
+      .login-logo-img   { height: 70px; }
+      .login-catchcopy    { font-size: 20px; }
+      .login-service-label{ font-size: 10px; letter-spacing: 2px; }
+      .login-ruby         { font-size: 11px; letter-spacing: 3px; margin-bottom: 10px; }
+      .login-subcatch     { font-size: 12px; }
+      .login-features   { grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 20px; }
+      .login-feat-item  { padding: 12px 8px; }
+      .login-feat-icon  { font-size: 22px; }
+      .login-feat-title { font-size: 12px; }
+      .login-card       { max-width: 92vw; padding: 28px 20px; }
+    }
   </style>
 </head>
 <body>
@@ -68,8 +266,9 @@
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // ── 画像パス ────────────────────────────────────────────
-    const ELI_IMG  = "./eli_img.png";
-    const LOGO_IMG = "./logo_img.png";
+    const ELI_IMG    = "./eli_img.png";
+    const LOGO_IMG   = "./logo_img.png";
+    const MARKAN_IMG = "./markan_logo.png";
 
     // ── 共有カラーパレット ──────────────────────────────────
     const C = {
@@ -285,65 +484,115 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
     onLogin(email, role);
   };
 
+  const FEATS = [
+    {
+      icon: (
+        <svg viewBox="0 0 24 24" width="32" height="32">
+          <path fill="#00a8ff" d="M16 2L7 13h5L9 22l10-11h-5z"/>
+        </svg>
+      ),
+      title: "スピーディー", desc: "即日対応・迅速発注"
+    },
+    {
+      icon: (
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#00a8ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L3 6v5.5C3 16.9 7 21.5 12 23c5-1.5 9-6.1 9-11.5V6L12 2z"/>
+          <path d="M9 12.5l2 2 4-4"/>
+        </svg>
+      ),
+      title: "セキュア", desc: "SSL暗号化通信"
+    },
+    {
+      icon: (
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#00a8ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M5 17A5 5 0 0 1 5 7A8 8 0 0 0 19 7A5 5 0 0 1 19 17H5z"/>
+          <path d="M7 20l3 2.5 5-5"/>
+        </svg>
+      ),
+      title: "クラウド管理", desc: "いつでも確認・管理"
+    },
+    {
+      icon: (
+        <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="#00a8ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 7v5l3.5 3.5"/>
+        </svg>
+      ),
+      title: "24/365", desc: "年中無休サービス"
+    },
+  ];
+
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
-      <Header title="ログイン" />
+    <div className="login-root">
+      <div className="login-container">
 
-      <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 16px 40px" }}>
-        <div style={{ background: C.white, borderRadius: 20, padding: "32px 28px",
-          boxShadow: "0 4px 24px rgba(10,31,92,0.08)", border: `1px solid ${C.grayL}` }}>
-
-          {/* タイトル */}
-          <div style={{ textAlign: "center", marginBottom: 28 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.navy, marginBottom: 4 }}>ログイン</div>
-            <div style={{ fontSize: 14, color: C.gray }}>メールアドレスとパスワードを入力してください</div>
+        {/* ── ヘッダー行：ロゴ左 / LiBot右 ── */}
+        <div className="login-header">
+          <div className="login-hero-left">
+            <div className="login-service-label">工事 受発注システム</div>
+            <img src={LOGO_IMG} className="login-logo-img" alt="E-Li" />
+            <div className="login-ruby">イーライ</div>
+            <div className="login-catchcopy">発注を、もっとスマートに。</div>
+            <div className="login-subcatch">現場を支える、次世代の受発注システム。</div>
           </div>
+          <img src={ELI_IMG} className="login-libot" alt="LiBot" />
+        </div>
 
-          <FieldWrap label="📧 メールアドレス" error={errors.email}>
-            <TextInput type="email" value={email} placeholder="例：tanaka@example.com" error={errors.email}
-              onChange={e => { setEmail(e.target.value); setErrors(er => ({ ...er, email: "" })); }} />
-          </FieldWrap>
-
-          <FieldWrap label="🔑 パスワード" error={errors.password}>
-            <PwInput value={password} error={errors.password}
-              onChange={e => { setPassword(e.target.value); setErrors(er => ({ ...er, password: "" })); }} />
-          </FieldWrap>
-
-          <div style={{ textAlign: "right", marginBottom: 24, marginTop: -8 }}>
-            <TextLink onClick={onForgot}>パスワードをわすれた方はこちら</TextLink>
-          </div>
-
-          <PrimaryBtn onClick={handleLogin} disabled={loading}>{loading ? "ログイン中…" : "ログイン →"}</PrimaryBtn>
-
-          <div style={{ textAlign: "center", marginTop: 24 }}>
-            <div style={{ fontSize: 14, color: C.gray, marginBottom: 10 }}>
-              はじめてご利用の方は
+        {/* ── 特徴アイコン 4つ ── */}
+        <div className="login-features">
+          {FEATS.map(f => (
+            <div key={f.title} className="login-feat-item">
+              <span className="login-feat-icon">{f.icon}</span>
+              <span className="login-feat-title">{f.title}</span>
+              <span className="login-feat-desc">{f.desc}</span>
             </div>
-            <TextLink onClick={onRegister}>新規アカウントを作成する</TextLink>
+          ))}
+        </div>
+
+        {/* ── ログインカード ── */}
+        <div className="login-card-outer">
+          <div className="login-card">
+            <div style={{ textAlign: "center", marginBottom: 28 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.navy }}>ログイン</div>
+              <div style={{ fontSize: 14, color: C.gray, marginTop: 6 }}>
+                メールアドレスとパスワードを入力してください
+              </div>
+            </div>
+
+            <FieldWrap label="📧 メールアドレス" error={errors.email}>
+              <TextInput type="email" value={email} placeholder="例：tanaka@example.com" error={errors.email}
+                onChange={e => { setEmail(e.target.value); setErrors(er => ({ ...er, email: "" })); }} />
+            </FieldWrap>
+
+            <FieldWrap label="🔑 パスワード" error={errors.password}>
+              <PwInput value={password} error={errors.password}
+                onChange={e => { setPassword(e.target.value); setErrors(er => ({ ...er, password: "" })); }} />
+            </FieldWrap>
+
+            <div style={{ textAlign: "right", marginBottom: 24, marginTop: -8 }}>
+              <TextLink onClick={onForgot}>パスワードをわすれた方はこちら</TextLink>
+            </div>
+
+            <PrimaryBtn onClick={handleLogin} disabled={loading}>
+              {loading ? "ログイン中…" : "ログイン →"}
+            </PrimaryBtn>
+
+            <div style={{ textAlign: "center", marginTop: 24 }}>
+              <div style={{ fontSize: 14, color: C.gray, marginBottom: 10 }}>はじめてご利用の方は</div>
+              <TextLink onClick={onRegister}>新規アカウントを作成する</TextLink>
+            </div>
           </div>
         </div>
 
-        {/* フッター */}
-        <div style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: C.gray,
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-          🔒 SSL暗号化通信で保護されています
-        </div>
-
-        <div style={{ marginTop: 20, background: `linear-gradient(135deg,${C.navy},${C.navyMid})`,
-          borderRadius: 16, padding: "16px 20px",
-          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>LiBot Service Desk</div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: C.white }}>06-6392-3882</div>
-            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>平日 9:00〜18:00</div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-            <div style={{ background: C.yellow, borderRadius: 8, padding: "5px 12px",
-              fontSize: 12, fontWeight: 800, color: C.navy }}>LINE・Web対応</div>
-            <EliSVG size={40} />
-          </div>
-        </div>
       </div>
+
+      {/* ── フッター ── */}
+      <footer className="login-footer">
+        <div className="login-footer-logo">
+          <img src={MARKAN_IMG} alt="OSAKA MARUKEN" />
+        </div>
+        <div className="login-footer-copy">建設現場の受発注を、デジタルで革新する</div>
+      </footer>
     </div>
   );
 }
@@ -354,15 +603,13 @@ function ForgotScreen({ onBack }) {
   const [sent, setSent]   = useState(false);
 
   return (
-    <div style={{ background: C.bg, minHeight: "100vh", fontFamily: "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
-      <Header title="パスワードのリセット" />
-      <div style={{ maxWidth: 480, margin: "0 auto", padding: "32px 16px 40px" }}>
-        <div style={{ background: C.white, borderRadius: 20, padding: "32px 28px",
-          boxShadow: "0 4px 24px rgba(10,31,92,0.08)", border: `1px solid ${C.grayL}` }}>
+    <div className="login-root" style={{ justifyContent: "center" }}>
+      <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", padding: "40px 20px", position: "relative", zIndex: 1 }}>
+        <div className="login-card">
           {!sent ? (
             <>
               <div style={{ textAlign: "center", marginBottom: 24 }}>
-                <div style={{ fontSize: 44, marginBottom: 10 }}>📧</div>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>📧</div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: C.navy, marginBottom: 6 }}>パスワードのリセット</div>
                 <div style={{ fontSize: 14, color: C.gray, lineHeight: 1.8 }}>
                   登録済みのメールアドレスに<br />リセット用リンクを送ります
