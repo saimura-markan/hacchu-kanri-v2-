@@ -2130,7 +2130,7 @@ function OrderApp({ onDone, onBack }) {
     setPhase("confirm");
   };
 
-  const saveToSupabase = async (ordersList) => {
+  const saveToSupabase = async (ordersList, images) => {
     const ids = [];
     for (const order of ordersList) {
       const svc = SERVICES.find(s => s.id === order.serviceId);
@@ -2158,15 +2158,22 @@ function OrderApp({ onDone, onBack }) {
           }))
         );
       }
-      for (let i = 0; i < attachedImages.length; i++) {
-        const img  = attachedImages[i];
-        const path = `${newOrder.id}/${i}_${img.name}`;
+      for (let i = 0; i < images.length; i++) {
+        const img  = images[i];
+        // 特殊文字・日本語を含むファイル名はアップロード失敗の原因になるため連番JPEGに統一
+        const path = `${newOrder.id}/${i}.jpg`;
         const { error: upErr } = await sb.storage.from('order-images')
           .upload(path, img.blob, { contentType:'image/jpeg', upsert:true });
-        if (upErr) { console.error('[画像アップロード失敗]', upErr.message); continue; }
+        if (upErr) {
+          console.error('[画像アップロード失敗]', upErr.message);
+          throw new Error(`画像のアップロードに失敗しました: ${upErr.message}`);
+        }
         const { error: dbErr } = await sb.from('order_images')
           .insert({ order_id:newOrder.id, storage_path:path });
-        if (dbErr) console.error('[order_images 登録失敗]', dbErr.message);
+        if (dbErr) {
+          console.error('[order_images 登録失敗]', dbErr.message);
+          throw new Error(`画像情報の保存に失敗しました: ${dbErr.message}`);
+        }
       }
       await sb.from('messages').insert({
         order_id:  newOrder.id,
@@ -2180,12 +2187,14 @@ function OrderApp({ onDone, onBack }) {
 
   const handleActualSubmit = async (ordersList) => {
     setSubmitting(true);
+    // 呼び出し時点のimagesを引数として渡してstaleクローズャ問題を回避
+    const images = attachedImages;
     try {
-      const ids = await saveToSupabase(ordersList);
+      const ids = await saveToSupabase(ordersList, images);
       setSavedIds(ids);
       setPhase("done");
     } catch(e) {
-      alert('送信エラーが発生しました。もう一度お試しください。');
+      alert('送信エラーが発生しました。\n\n' + e.message);
       console.error(e);
     } finally {
       setSubmitting(false);
