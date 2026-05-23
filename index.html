@@ -2066,6 +2066,31 @@ function ImageLightbox({ url, onClose }) {
   );
 }
 
+// Storageの署名付きURLで画像を表示（Public/Privateバケット両対応）
+function SignedImage({ path, onClickUrl, style }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    sb.storage.from('order-images').createSignedUrl(path, 3600)
+      .then(({ data, error }) => {
+        if (error) { console.error('[SignedImage]', path, error.message); return; }
+        if (data?.signedUrl) setUrl(data.signedUrl);
+      });
+  }, [path]);
+  if (!url) return (
+    <div style={{ ...style, background:C.grayL, display:"flex",
+      alignItems:"center", justifyContent:"center", fontSize:11, color:C.gray, flexShrink:0 }}>
+      読込中
+    </div>
+  );
+  return (
+    <img src={url} alt=""
+      onClick={() => onClickUrl && onClickUrl(url)}
+      style={style}
+      onMouseEnter={e => { e.currentTarget.style.opacity = "0.8"; }}
+      onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }} />
+  );
+}
+
 function OrderApp({ onDone, onBack }) {
   const [phase,        setPhase]        = useState("service");
   const [currentSvc,   setCurrentSvc]   = useState(null);
@@ -2138,7 +2163,10 @@ function OrderApp({ onDone, onBack }) {
         const path = `${newOrder.id}/${i}_${img.name}`;
         const { error: upErr } = await sb.storage.from('order-images')
           .upload(path, img.blob, { contentType:'image/jpeg', upsert:true });
-        if (!upErr) await sb.from('order_images').insert({ order_id:newOrder.id, storage_path:path });
+        if (upErr) { console.error('[画像アップロード失敗]', upErr.message); continue; }
+        const { error: dbErr } = await sb.from('order_images')
+          .insert({ order_id:newOrder.id, storage_path:path });
+        if (dbErr) console.error('[order_images 登録失敗]', dbErr.message);
       }
       await sb.from('messages').insert({
         order_id:  newOrder.id,
@@ -2687,15 +2715,12 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
             <div style={{ fontSize:15, fontWeight:800, color:C.navy,
               borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📷 添付画像</div>
             <div style={{ padding:"14px 18px", display:"flex", gap:10, flexWrap:"wrap" }}>
-              {order.images.map((path, i) => {
-                const url = sb.storage.from('order-images').getPublicUrl(path).data.publicUrl;
-                return (
-                  <img key={i} src={url} alt=""
-                    onClick={() => setLightboxUrl(url)}
-                    style={{ width:90, height:90, objectFit:"cover", borderRadius:10,
-                      cursor:"pointer", border:"1px solid "+C.grayL }} />
-                );
-              })}
+              {order.images.map((path, i) => (
+                <SignedImage key={i} path={path}
+                  onClickUrl={url => setLightboxUrl(url)}
+                  style={{ width:90, height:90, objectFit:"cover", borderRadius:10,
+                    cursor:"pointer", border:"1px solid "+C.grayL }} />
+              ))}
             </div>
           </div>
         )}
@@ -4173,17 +4198,13 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
                   📷 添付画像（{order.images.length}枚）
                 </div>
                 <div style={{ padding:"12px 16px", display:"flex", gap:8, flexWrap:"wrap" }}>
-                  {order.images.map((path, i) => {
-                    const url = sb.storage.from('order-images').getPublicUrl(path).data.publicUrl;
-                    return (
-                      <img key={i} src={url} alt="" onClick={() => setLightboxUrl(url)}
-                        style={{ width:90, height:90, objectFit:"cover", borderRadius:8,
-                          cursor:"pointer", border:"1px solid "+C.grayL,
-                          transition:"opacity 0.2s" }}
-                        onMouseEnter={e=>e.target.style.opacity="0.8"}
-                        onMouseLeave={e=>e.target.style.opacity="1"} />
-                    );
-                  })}
+                  {order.images.map((path, i) => (
+                    <SignedImage key={i} path={path}
+                      onClickUrl={url => setLightboxUrl(url)}
+                      style={{ width:90, height:90, objectFit:"cover", borderRadius:8,
+                        cursor:"pointer", border:"1px solid "+C.grayL,
+                        transition:"opacity 0.2s" }} />
+                  ))}
                 </div>
               </div>
             )}
