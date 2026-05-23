@@ -195,4 +195,77 @@ handleStatusChange(id, newStatus)
 - クレーム報告機能（ユーザーから管理者へのクレーム送信）
 - 見積依頼機能（発注前の見積もり依頼フロー）
 - 電話受注入力（管理者が電話受注を手動登録）
-- バックエンド連携（実際のDB・API・認証）
+- ForgotScreen → `sb.auth.resetPasswordForEmail` への接続（現在はUI表示のみ）
+
+---
+
+## 次のタスク
+
+1. **eli_img.png（LiBotキャラ）差し替え** — 新しいキャラ画像ファイルを置いて差し替え（logo_img.pngは2026-05-23済み）
+2. **ログイン画面デザイン改善** — UI刷新
+3. **アリリ隊キャラUI展開** — キャラクターを活用したUI演出
+
+---
+
+## 変更履歴
+
+### 2026-05-23 — 画像・削除・復元・ロゴ対応
+
+**コミット**: `63d2e5d`, `cf41348`, `11e660b`
+
+#### 変更内容
+
+**① 画像アップロード修正**
+- Storage パスをシンプルな `${orderId}/${i}.jpg` に変更（日本語/スペース含むファイル名は Supabase Storage でサイレント失敗するため）
+- `order_images` テーブルの insert カラム名を `storage_path` → `path` に修正（テーブル定義と一致させる）
+- `saveToSupabase` に `images` を引数として明示渡し（stale closure 対策）
+- `mapOrder` の画像マッピングも `img.path` に統一
+
+**② お客様画面（HistoryApp）deleted_at フィルター**
+- `fetchOrders` クエリに `.is('deleted_at', null)` を追加
+- 論理削除済み案件がお客様側に表示されなくなった
+
+**③ 削除済み案件パネル — 復元ボタン追加・複数選択修正**
+- `DeletedPanel` の各行に「♻️ 復元」ボタンを追加（行ごとの単体復元）
+- チェックボックスの複数選択バグ修正: `onChange` 方式 → カード全体 `onClick` + `e.stopPropagation()` パターンに変更（`AdOrderCard` と同じ実装に統一）
+
+**④ E-Li ロゴ画像差し替え**
+- `logo_img.png` を新デザイン（黒背景・青ロゴ）に差し替え
+- `eli_img.png`（LiBotキャラ）は次回差し替え予定
+
+---
+
+### 2026-05-21 — チャットリアルタイム受信修正
+
+**コミット**: `36b7c05`
+
+#### 変更内容
+- ChatScreen（ユーザー側）に3秒ポーリングを追加（Realtimeフォールバック）
+- AdminApp の選択案件メッセージ useEffect にも同様の3秒ポーリングを追加
+- Realtime `postgres_changes` は引き続き購読（即時性のため）
+- ポーリングは重複防止 `id` チェック付き（同メッセージが二重表示されない）
+
+#### 背景
+Supabase Realtime の `postgres_changes` は RLS に `EXISTS` サブクエリや JWT メタデータを使うポリシーと組み合わせると、無音で失敗する場合がある。ポーリングを併用することで確実にメッセージを受信できる。
+
+---
+
+### 2026-05-21 — Supabase本物認証への切り替え
+
+**コミット**: `0848d80`  
+**リモート**: `https://github.com/saimura-markan/hacchu-kanri-v2-.git`（push済み）
+
+#### 変更内容
+- `TEST_USERS` ダミーアカウント配列を削除
+- `LoginScreen.handleLogin` を `sb.auth.signInWithPassword` による非同期認証に変更
+- ロールは `data.user.user_metadata.role` から取得（未設定時は `"user"` にフォールバック）
+- ログイン中のローディング状態（`loading` state）を追加、ボタンを無効化して「ログイン中…」表示
+
+#### Supabase ロール設定について
+管理者ユーザーには Supabase ダッシュボード（Authentication → Users → Edit）で  
+`user_metadata` に `{ "role": "admin" }` を設定する必要がある。  
+一般ユーザーは設定不要（デフォルト `"user"`）。
+
+#### Git push について
+HTTPS push には GitHub PAT（Personal Access Token）が必要。  
+scope: `repo` のトークンを `github.com/settings/tokens` で発行して使用。
