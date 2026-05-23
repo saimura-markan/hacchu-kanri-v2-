@@ -2422,6 +2422,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
   const [reschedDate, setReschedDate] = useState("");
   const [reschedTime, setReschedTime] = useState("");
   const [reschedErr,  setReschedErr]  = useState("");
+  const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const st = HI_STATUS[order.status] || HI_STATUS["調整中"];
   const noReqStatuses = ["完了", "キャンセル", "キャンセル相談中"];
@@ -2679,6 +2680,26 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           </div>
         ))}
 
+        {/* 添付画像 */}
+        {order.images && order.images.length > 0 && (
+          <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
+            boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
+            <div style={{ fontSize:15, fontWeight:800, color:C.navy,
+              borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📷 添付画像</div>
+            <div style={{ padding:"14px 18px", display:"flex", gap:10, flexWrap:"wrap" }}>
+              {order.images.map((path, i) => {
+                const url = sb.storage.from('order-images').getPublicUrl(path).data.publicUrl;
+                return (
+                  <img key={i} src={url} alt=""
+                    onClick={() => setLightboxUrl(url)}
+                    style={{ width:90, height:90, objectFit:"cover", borderRadius:10,
+                      cursor:"pointer", border:"1px solid "+C.grayL }} />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <button onClick={onBack}
           style={{ display:"block", width:"100%", background:C.white, color:C.navy,
             border:"2px solid "+C.grayL, borderRadius:14, fontSize:16, fontWeight:700,
@@ -2686,6 +2707,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           ← 一覧にもどる
         </button>
       </div>
+      {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
     </div>
   );
 }
@@ -2855,7 +2877,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
     if (!user) { setLoading(false); return; }
     const { data, error } = await sb
       .from('orders')
-      .select('*, schedules(*)')
+      .select('*, schedules(*), order_images(*)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     if (error) { setDbError(error.message); setLoading(false); return; }
