@@ -4608,13 +4608,14 @@ function DeletedPanel({ onClose, onRestore, onHardDelete }) {
           </div>
         ) : items.map(o => (
           <div key={o.id}
+            onClick={()=>toggle(o.id)}
             style={{ background:checkedIds.includes(o.id)?"#fff0f8":C.white,
               border:"1px solid "+(checkedIds.includes(o.id)?C.red:C.grayL),
               borderRadius:12, padding:"12px 14px", marginBottom:10,
-              display:"flex", gap:10, alignItems:"center" }}>
+              display:"flex", gap:10, alignItems:"center", cursor:"pointer" }}>
             <input type="checkbox" checked={checkedIds.includes(o.id)}
-              onChange={()=>toggle(o.id)}
-              style={{ cursor:"pointer", accentColor:C.red, width:15, height:15, flexShrink:0 }} />
+              onChange={()=>{}}
+              style={{ cursor:"pointer", accentColor:C.red, width:15, height:15, flexShrink:0, pointerEvents:"none" }} />
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:3 }}>
                 {AD_SVC_ICON[o.service]} {o.site}
@@ -4625,7 +4626,7 @@ function DeletedPanel({ onClose, onRestore, onHardDelete }) {
             </div>
             <ADStatusBadge status={o.status} />
             <button
-              onClick={()=>onRestore([o.id], ids=>removeFromList(ids))}
+              onClick={e=>{ e.stopPropagation(); onRestore([o.id], ids=>removeFromList(ids)); }}
               style={{ flexShrink:0, padding:"5px 12px", fontSize:12, fontWeight:700,
                 borderRadius:8, border:"2px solid "+C.blue, background:C.blueL,
                 color:C.blue, cursor:"pointer", whiteSpace:"nowrap" }}>
