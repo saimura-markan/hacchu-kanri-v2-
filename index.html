@@ -4357,6 +4357,12 @@ function CompanyPanel({ onClose }) {
     if (data) setCompanies(cs => cs.map(c => c.id === id ? { ...c, is_active: !currentActive } : c));
   };
 
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(`「${name}」（${id}）を削除します。\nこの操作は取り消せません。`)) return;
+    const { error } = await sb.from('companies').delete().eq('id', id);
+    if (!error) setCompanies(cs => cs.filter(c => c.id !== id));
+  };
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.5)",
       display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 }}
@@ -4421,7 +4427,7 @@ function CompanyPanel({ onClose }) {
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:C.navy }}>
-                {["企業ID","会社名","担当者","電話番号","登録日","状態"].map(h=>(
+                {["企業ID","会社名","担当者","電話番号","登録日","状態","削除"].map(h=>(
                   <th key={h} style={{ padding:"10px 14px", fontSize:13, fontWeight:700,
                     color:C.white, textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -4429,9 +4435,9 @@ function CompanyPanel({ onClose }) {
             </thead>
             <tbody>
               {cpLoading ? (
-                <tr><td colSpan={6} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
+                <tr><td colSpan={7} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
               ) : companies.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
+                <tr><td colSpan={7} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
               ) : companies.map((co,i)=>(
                 <tr key={co.id} style={{ background:i%2===0?C.white:C.bg }}>
                   <td style={{ padding:"10px 14px" }}>
@@ -4457,6 +4463,14 @@ function CompanyPanel({ onClose }) {
                         background:co.is_active?"#f0faf5":"#fff0f0",
                         color:co.is_active?C.green:C.red }}>
                       {co.is_active?"✅ 有効":"🚫 無効"}
+                    </button>
+                  </td>
+                  <td style={{ padding:"10px 14px" }}>
+                    <button onClick={()=>handleDelete(co.id, co.name)}
+                      style={{ padding:"4px 12px", borderRadius:6, fontSize:12, fontWeight:700,
+                        cursor:"pointer", border:"2px solid "+C.red,
+                        background:"#fff0f0", color:C.red }}>
+                      🗑️ 削除
                     </button>
                   </td>
                 </tr>
