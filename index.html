@@ -1569,7 +1569,7 @@ function SoujiDetail({ details, detail, onChange }) {
     kanyi_yousei:"",kanyi_heavy:"",kanyi_workers:"",
     house_size:"",house_furniture:"",house_water:"",house_corner:false,house_vacancy:"",
     ac_normal:0,ac_smart:0,ac_tencase:0,ac_tentsu:0,
-    ac_normal_model:"",ac_smart_model:"",
+    ac_normal_model:"",ac_smart_model:"",ac_model_input:"",
     other_types:[],
   };
   const u=p=>onChange({...v,...p});
@@ -1636,23 +1636,38 @@ function SoujiDetail({ details, detail, onChange }) {
           {(v.ac_normal>0||v.ac_smart>0)&&(
             <div style={{ background:C.white, borderRadius:10, padding:"12px 14px",
               border:"1px solid "+C.grayL, marginTop:10 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:6 }}>📷 品番・写真について</div>
-              <div style={{ fontSize:13, color:C.gray, lineHeight:1.8, marginBottom:8 }}>
-                ノーマル・お掃除機能付きは<b style={{color:C.red}}>品番が必要</b>です。<br />
-                エアコン本体下部の写真・引きの写真を担当者にお送りください。
+              <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:6 }}>📋 品番の入力方法</div>
+              <div style={{ fontSize:13, color:C.gray, marginBottom:10 }}>
+                ノーマル・お掃除機能付きは<b style={{color:C.red}}>品番が必要</b>です。
               </div>
-              {v.ac_normal>0&&(
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:4 }}>ノーマルエアコン 品番（任意）</div>
-                  <OrTxtInput value={v.ac_normal_model||""} placeholder="例：CS-401DY2-W"
-                    onChange={e=>u({ac_normal_model:e.target.value})} />
+              <RadioGroup
+                options={["直接入力","写真で添付"]}
+                value={v.ac_model_input||""}
+                onChange={val=>u({ac_model_input:val})} />
+              {v.ac_model_input==="直接入力"&&(
+                <div style={{ marginTop:12 }}>
+                  {v.ac_normal>0&&(
+                    <div style={{ marginBottom:8 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:4 }}>ノーマルエアコン 品番</div>
+                      <OrTxtInput value={v.ac_normal_model||""} placeholder="例：CS-401DY2-W"
+                        onChange={e=>u({ac_normal_model:e.target.value})} />
+                    </div>
+                  )}
+                  {v.ac_smart>0&&(
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:4 }}>お掃除機能付き 品番</div>
+                      <OrTxtInput value={v.ac_smart_model||""} placeholder="例：CS-X401D2-W"
+                        onChange={e=>u({ac_smart_model:e.target.value})} />
+                    </div>
+                  )}
                 </div>
               )}
-              {v.ac_smart>0&&(
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:4 }}>お掃除機能付き 品番（任意）</div>
-                  <OrTxtInput value={v.ac_smart_model||""} placeholder="例：CS-X401D2-W"
-                    onChange={e=>u({ac_smart_model:e.target.value})} />
+              {v.ac_model_input==="写真で添付"&&(
+                <div style={{ marginTop:12, background:"#eef3ff", borderRadius:10,
+                  padding:"12px 14px", border:"1px solid "+C.blue }}>
+                  <div style={{ fontSize:14, color:C.blue, fontWeight:700 }}>
+                    📷 次のページで写真添付をお願いします
+                  </div>
                 </div>
               )}
             </div>
@@ -1861,7 +1876,11 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
   const svc=SERVICES.find(s=>s.id===serviceId);
   const init=savedData||{};
   const [siteName,  setSiteName]  = useState(init.siteName||"");
+  const [zipCode,   setZipCode]   = useState("");
+  const [zipLoading,setZipLoading]= useState(false);
   const [address,   setAddress]   = useState(init.address||"");
+  const [addrNum,   setAddrNum]   = useState(init.addrNum||"");
+  const [addrBldg,  setAddrBldg]  = useState(init.addrBldg||"");
   const [addrOk,    setAddrOk]   = useState(init.addrOk||false);
   const [keyInfo,   setKeyInfo]   = useState(init.keyInfo||{noKey:false,key:"",parking:""});
   const [schedules, setSchedules] = useState(init.schedules||[{date:"",startTime:"",endTime:"",details:[],workers:"",memo:"",serviceDetail:null}]);
@@ -1871,6 +1890,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
 
   const refSiteName =useRef(null);
   const refAddress  =useRef(null);
+  const refAddrNum  =useRef(null);
   const refAddrOk   =useRef(null);
   const refSchedule0=useRef(null);
 
@@ -1882,6 +1902,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     const errs=[];
     if (!isAdditional&&!siteName)    errs.push("現場名を入力してください");
     if (!isAdditional&&!address)     errs.push("住所を入力してください");
+    if (!isAdditional&&!addrNum)     errs.push("番地を入力してください");
     if (!isAdditional&&!addrOk)      errs.push("住所に間違いがないことを確認してチェックしてください");
     if (!schedules[0].date)          errs.push("日程1の日付を選択してください");
     if (!schedules[0].startTime)     errs.push("日程1の開始時間を選択してください");
@@ -1898,9 +1919,26 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     if (!isAdditional) {
       if (!siteName&&refSiteName.current)  { refSiteName.current.scrollIntoView({behavior:"smooth",block:"center"}); return; }
       if (!address&&refAddress.current)    { refAddress.current.scrollIntoView({behavior:"smooth",block:"center"}); return; }
+      if (!addrNum&&refAddrNum.current)    { refAddrNum.current.scrollIntoView({behavior:"smooth",block:"center"}); return; }
       if (!addrOk&&refAddrOk.current)     { refAddrOk.current.scrollIntoView({behavior:"smooth",block:"center"}); return; }
     }
     if (refSchedule0.current) refSchedule0.current.scrollIntoView({behavior:"smooth",block:"center"});
+  };
+
+  const fetchAddressByZip = async (zip) => {
+    const clean = zip.replace(/[-ー−]/g, "");
+    if (clean.length !== 7) return;
+    setZipLoading(true);
+    try {
+      const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${clean}`);
+      const json = await res.json();
+      if (json.results && json.results[0]) {
+        const r = json.results[0];
+        setAddress(r.address1 + r.address2 + r.address3);
+        setErrors([]);
+      }
+    } catch(e) {}
+    setZipLoading(false);
   };
 
   const handleNext=()=>{
@@ -1908,7 +1946,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     setErrors(errs);
     setShowErrors(true);
     if (errs.length>0) { setTimeout(scrollToFirst,100); return; }
-    onSubmit({siteName,address,addrOk,keyInfo,schedules,note});
+    onSubmit({siteName,address,addrNum,addrBldg,addrOk,keyInfo,schedules,note});
   };
 
   return (
@@ -1959,6 +1997,28 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
                 💡 過去に登録した現場名が候補に表示されます
               </div>
             </div>
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:15, fontWeight:700, color:C.navy, marginBottom:8 }}>
+                郵便番号
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <input value={zipCode}
+                  onChange={e=>{
+                    const v=e.target.value;
+                    setZipCode(v);
+                    fetchAddressByZip(v);
+                  }}
+                  placeholder="例：5900001（ハイフンなし可）"
+                  maxLength={8}
+                  style={{ flex:1, fontSize:16, padding:"13px 16px", borderRadius:12,
+                    border:"2px solid "+C.grayL, boxSizing:"border-box",
+                    fontFamily:"inherit", outline:"none", color:C.navy, background:C.white }} />
+                {zipLoading&&<span style={{ fontSize:13, color:C.gray }}>検索中…</span>}
+              </div>
+              <div style={{ fontSize:12, color:C.gray, marginTop:5 }}>
+                💡 7桁入力で住所を自動入力します
+              </div>
+            </div>
             <div ref={refAddress} style={{ marginBottom:14 }}>
               <div style={{ fontSize:15, fontWeight:700,
                 color:showErrors&&!address?C.red:C.navy, marginBottom:8 }}>
@@ -1966,7 +2026,23 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
                 {showErrors&&!address&&<span style={{ fontSize:13, marginLeft:6 }}>⚠️</span>}
               </div>
               <OrTxtInput value={address} onChange={e=>{ setAddress(e.target.value); setErrors([]); }}
-                placeholder="例：大阪府堺市北区〇〇町1-2-3" hasError={showErrors&&!address} />
+                placeholder="例：大阪府堺市北区〇〇町" hasError={showErrors&&!address} />
+            </div>
+            <div ref={refAddrNum} style={{ marginBottom:14 }}>
+              <div style={{ fontSize:15, fontWeight:700,
+                color:showErrors&&!addrNum?C.red:C.navy, marginBottom:8 }}>
+                番地 <span style={{ color:C.red, fontSize:13 }}>※必須</span>
+                {showErrors&&!addrNum&&<span style={{ fontSize:13, marginLeft:6 }}>⚠️</span>}
+              </div>
+              <OrTxtInput value={addrNum} onChange={e=>{ setAddrNum(e.target.value); setErrors([]); }}
+                placeholder="例：3-5-10" hasError={showErrors&&!addrNum} />
+            </div>
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:15, fontWeight:700, color:C.navy, marginBottom:8 }}>
+                建物名・部屋番号 <span style={{ fontSize:13, color:C.gray, fontWeight:400 }}>任意</span>
+              </div>
+              <OrTxtInput value={addrBldg} onChange={e=>setAddrBldg(e.target.value)}
+                placeholder="例：〇〇マンション301号室" hasError={false} />
             </div>
             <div ref={refAddrOk}
               style={{ background:addrOk?"#f0faf5":showErrors&&!addrOk?"#fff0f0":C.yellowL,
@@ -2006,17 +2082,23 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
                 <span style={{ fontSize:14, color:C.navy, fontWeight:600 }}>在宅のため鍵なし</span>
               </label>
               {!keyInfo.noKey&&(
-                <input value={keyInfo.key} onChange={e=>setKeyInfo(k=>({...k,key:e.target.value}))}
-                  placeholder="鍵の情報（例：管理室で受取・暗証番号1234）"
+                <div style={{ marginBottom:10 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:C.gray, marginBottom:5 }}>🔑 鍵の情報</div>
+                  <input value={keyInfo.key} onChange={e=>setKeyInfo(k=>({...k,key:e.target.value}))}
+                    placeholder="例：管理室で受取・暗証番号1234"
+                    style={{ width:"100%", fontSize:15, padding:"12px 14px", borderRadius:10,
+                      border:"2px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit",
+                      outline:"none", color:C.navy }} />
+                </div>
+              )}
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color:C.gray, marginBottom:5 }}>🚗 駐車場情報</div>
+                <input value={keyInfo.parking} onChange={e=>setKeyInfo(k=>({...k,parking:e.target.value}))}
+                  placeholder="例：建物前2台分"
                   style={{ width:"100%", fontSize:15, padding:"12px 14px", borderRadius:10,
                     border:"2px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit",
-                    outline:"none", color:C.navy, marginBottom:10 }} />
-              )}
-              <input value={keyInfo.parking} onChange={e=>setKeyInfo(k=>({...k,parking:e.target.value}))}
-                placeholder="駐車場情報（例：建物前2台分）"
-                style={{ width:"100%", fontSize:15, padding:"12px 14px", borderRadius:10,
-                  border:"2px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit",
-                  outline:"none", color:C.navy }} />
+                    outline:"none", color:C.navy }} />
+              </div>
             </div>
           </div>
         </Card>
