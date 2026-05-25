@@ -512,7 +512,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
     const { data, error } = await sb.auth.signInWithPassword({ email: email.toLowerCase(), password });
     if (error) { setLoading(false); setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
     const role = data.user?.user_metadata?.role ?? "user";
-    if (role !== "admin") {
+    if (role !== "admin" && role !== "staff") {
       const { data: profile } = await sb.from('profiles').select('company_id').eq('id', data.user.id).single();
       if (profile?.company_id) {
         const { data: company } = await sb.from('companies').select('is_active').eq('id', profile.company_id).single();
@@ -4165,7 +4165,7 @@ function Legend() {
 }
 
 // ── 受注カード ───────────────────────────────────────────
-function AdOrderCard({ order, isSelected, isChecked, onClick, onToggleCheck }) {
+function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onToggleCheck }) {
   useTimer();
   const timer = getOrderTimer(order);
 
@@ -4179,11 +4179,13 @@ function AdOrderCard({ order, isSelected, isChecked, onClick, onToggleCheck }) {
         animation: timer.pulse && !isSelected ? "urgentPulse 1.5s ease-in-out infinite" : "none",
         display:"flex", alignItems:"flex-start", gap:8 }}>
 
-      <div onClick={e=>{ e.stopPropagation(); onToggleCheck(order.id); }}
-        style={{ paddingTop:3, flexShrink:0 }}>
-        <input type="checkbox" checked={!!isChecked} onChange={()=>{}}
-          style={{ cursor:"pointer", width:14, height:14, accentColor:C.red }} />
-      </div>
+      {showCheckbox !== false && (
+        <div onClick={e=>{ e.stopPropagation(); onToggleCheck(order.id); }}
+          style={{ paddingTop:3, flexShrink:0 }}>
+          <input type="checkbox" checked={!!isChecked} onChange={()=>{}}
+            style={{ cursor:"pointer", width:14, height:14, accentColor:C.red }} />
+        </div>
+      )}
 
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", justifyContent:"space-between",
@@ -4212,7 +4214,7 @@ function AdOrderCard({ order, isSelected, isChecked, onClick, onToggleCheck }) {
 }
 
 // ── 受注一覧パネル ───────────────────────────────────────
-function OrderList({ orders, selected, onSelect, filter, setFilter, search, setSearch,
+function OrderList({ role, orders, selected, onSelect, filter, setFilter, search, setSearch,
                       checkedIds, onToggleCheck, onDeleteSelected }) {
   useTimer();
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
@@ -4285,7 +4287,7 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 
       <Legend />
 
-      {checkedIds.length > 0 && (
+      {role !== "staff" && checkedIds.length > 0 && (
         <div style={{ padding:"6px 10px", borderBottom:"1px solid "+C.grayL }}>
           <button onClick={()=>onDeleteSelected(checkedIds)}
             style={{ width:"100%", padding:"6px 10px", fontSize:12, fontWeight:700, borderRadius:6,
@@ -4305,7 +4307,8 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
         ) : orders.map(order=>(
           <AdOrderCard key={order.id} order={order}
             isSelected={selected?.id===order.id}
-            isChecked={checkedIds.includes(order.id)}
+            isChecked={role !== "staff" && checkedIds.includes(order.id)}
+            showCheckbox={role !== "staff"}
             onClick={()=>onSelect(order)}
             onToggleCheck={onToggleCheck} />
         ))}
@@ -4315,7 +4318,7 @@ function OrderList({ orders, selected, onSelect, filter, setFilter, search, setS
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete }) {
+function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete }) {
   const [tab, setTab]           = useState("detail");
   const [chatInput, setChatInput] = useState("");
   const [editMode,    setEditMode]    = useState(false);
@@ -4654,13 +4657,15 @@ function DetailPanel({ order, chats, onAddChat, onStatusChange, onEdit, onDelete
 
             {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
 
-            <button onClick={()=>onDelete([order.id])}
-              style={{ width:"100%", marginTop:12, padding:"11px", fontSize:14,
-                fontWeight:800, color:C.red, background:"#fff0f0",
-                border:"2px solid "+C.red, borderRadius:12, cursor:"pointer",
-                fontFamily:"inherit" }}>
-              🗑️ この案件を削除済みに移動する
-            </button>
+            {role !== "staff" && (
+              <button onClick={()=>onDelete([order.id])}
+                style={{ width:"100%", marginTop:12, padding:"11px", fontSize:14,
+                  fontWeight:800, color:C.red, background:"#fff0f0",
+                  border:"2px solid "+C.red, borderRadius:12, cursor:"pointer",
+                  fontFamily:"inherit" }}>
+                🗑️ この案件を削除済みに移動する
+              </button>
+            )}
 
             </>)}
           </div>
@@ -5065,7 +5070,7 @@ function DeletedPanel({ onClose, onRestore, onHardDelete }) {
 }
 
 // ── メイン ───────────────────────────────────────────────
-function AdminApp({ onLogout }) {
+function AdminApp({ role, onLogout }) {
   const [orders,   setOrders]   = useState([]);
   const [chats,    setChats]    = useState({});
   const [loading,  setLoading]  = useState(true);
@@ -5093,7 +5098,7 @@ function AdminApp({ onLogout }) {
     let channel;
     const init = async () => {
       const { data: { session } } = await sb.auth.getSession();
-      if (!session || session.user.user_metadata?.role !== "admin") { onLogout(); return; }
+      if (!session || !["admin","staff"].includes(session.user.user_metadata?.role)) { onLogout(); return; }
       await fetchOrders();
       channel = sb.channel('admin-orders')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
@@ -5320,11 +5325,13 @@ function AdminApp({ onLogout }) {
           borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>
           📋
         </div>
-        <div style={{ width:36, height:36, background:"rgba(255,255,255,0.08)",
-          borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:18, cursor:"pointer" }} onClick={()=>setShowComp(true)}>
-          🏢
-        </div>
+        {role === "admin" && (
+          <div style={{ width:36, height:36, background:"rgba(255,255,255,0.08)",
+            borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:18, cursor:"pointer" }} onClick={()=>setShowComp(true)}>
+            🏢
+          </div>
+        )}
         <div title="削除済み案件"
           style={{ width:36, height:36,
             background:showDeleted?"rgba(255,100,100,0.35)":"rgba(255,255,255,0.08)",
@@ -5350,13 +5357,13 @@ function AdminApp({ onLogout }) {
         <DeletedPanel onClose={()=>setShowDeleted(false)}
           onRestore={handleRestore} onHardDelete={handleHardDelete} />
       ) : (<>
-        <OrderList orders={sorted} selected={selected} onSelect={setSelected}
+        <OrderList role={role} orders={sorted} selected={selected} onSelect={setSelected}
           filter={filter} setFilter={setFilter} search={search} setSearch={setSearch}
           checkedIds={checkedIds}
           onToggleCheck={id=>setCheckedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}
           onDeleteSelected={handleDelete} />
 
-        <DetailPanel order={selected} chats={chats}
+        <DetailPanel role={role} order={selected} chats={chats}
           onAddChat={addChat} onStatusChange={handleStatusChange}
           onEdit={handleEdit} onDelete={handleDelete} />
       </>)}
@@ -5383,7 +5390,7 @@ function AdminApp({ onLogout }) {
             // 初期ロードまたはログイン画面のときだけ遷移（操作中の画面は維持）
             setScreen(prev =>
               (prev === null || prev === "login")
-                ? (role === "admin" ? "admin" : "history")
+                ? ((role === "admin" || role === "staff") ? "admin" : "history")
                 : prev
             );
           }
@@ -5393,7 +5400,7 @@ function AdminApp({ onLogout }) {
 
       const handleLogin = (role) => {
         setUserRole(role);
-        setScreen(role === "admin" ? "admin" : "history");
+        setScreen((role === "admin" || role === "staff") ? "admin" : "history");
       };
 
       if (screen === null) return (
@@ -5409,7 +5416,7 @@ function AdminApp({ onLogout }) {
       if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => setScreen("mypage")} onLogout={() => setScreen("login")} />;
       if (screen === "order")    return <OrderApp onDone={() => setScreen("history")} onBack={() => setScreen("history")} />;
       if (screen === "mypage")   return <MyPageApp onBack={() => setScreen("history")} onLogout={() => setScreen("login")} />;
-      if (screen === "admin")    return <AdminApp onLogout={() => setScreen("login")} />;
+      if (screen === "admin")    return <AdminApp role={userRole} onLogout={() => setScreen("login")} />;
       return null;
     }
 
