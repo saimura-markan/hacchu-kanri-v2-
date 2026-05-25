@@ -5092,11 +5092,20 @@ function AdminApp({ onLogout }) {
   };
 
   useEffect(() => {
-    fetchOrders();
-    const channel = sb.channel('admin-orders')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
-      .subscribe();
-    return () => sb.removeChannel(channel);
+    let channel;
+    const init = async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session || session.user.user_metadata?.role !== "admin") { onLogout(); return; }
+      await fetchOrders();
+      channel = sb.channel('admin-orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
+        .subscribe();
+    };
+    init();
+    const { data: { subscription } } = sb.auth.onAuthStateChange((_event, session) => {
+      if (!session) onLogout();
+    });
+    return () => { if (channel) sb.removeChannel(channel); subscription.unsubscribe(); };
   }, []);
 
   // 選択案件のメッセージを遅延ロード + Realtime購読
