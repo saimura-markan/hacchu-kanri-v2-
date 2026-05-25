@@ -1167,26 +1167,14 @@ const SERVICES = [
 const TIME_OPTIONS = ['08:00', '08:15', '08:30', '08:45', '09:00', '09:15', '09:30', '09:45', '10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30', '11:45', '12:00', '12:15', '12:30', '12:45', '13:00', '13:15', '13:30', '13:45', '14:00', '14:15', '14:30', '14:45', '15:00', '15:15', '15:30', '15:45', '16:00', '16:15', '16:30', '16:45', '17:00', '17:15', '17:30', '17:45', '18:00', '18:15', '18:30', '18:45', '19:00', '19:15', '19:30', '19:45', '20:00', '20:15', '20:30', '20:45', '21:00', '21:15', '21:30', '21:45', '22:00'];
 const ASBESTOS_TYPES = ["キッチン","浴室","クッションフロア","その他"];
 
-// モック：過去の現場名リスト（本番はFirebaseから取得）
-const PAST_SITES = [
-  "〇〇マンション101号室",
-  "〇〇マンション202号室",
-  "△△ビル3F",
-  "□□邸リフォーム現場",
-  "◇◇新築工事現場",
-  "〇〇団地A棟",
-  "△△ホテル改装工事",
-  "□□医院内装工事",
-];
-
-// ── 現場名サジェスト入力 ─────────────────────────────────
-function SiteNameInput({ value, onChange, hasError }) {
+// ── 現場名サジェスト入力（Supabase sites テーブル連携） ──────
+function SiteNameInput({ value, onChange, hasError, sites, onSelect }) {
   const [focused,  setFocused]  = useState(false);
   const [showList, setShowList] = useState(false);
   const wrapRef = useRef(null);
 
-  const suggestions = value.length>0
-    ? PAST_SITES.filter(s=>s.includes(value) && s!==value)
+  const suggestions = value.length > 0
+    ? (sites||[]).filter(s => s.site_name.includes(value) && s.site_name !== value)
     : [];
 
   useEffect(()=>{
@@ -1198,7 +1186,8 @@ function SiteNameInput({ value, onChange, hasError }) {
   },[]);
 
   const handleSelect = site => {
-    onChange(site);
+    onChange(site.site_name);
+    if (onSelect) onSelect(site);
     setShowList(false);
   };
 
@@ -1233,7 +1222,7 @@ function SiteNameInput({ value, onChange, hasError }) {
                 fontFamily:"inherit", fontWeight:500 }}
               onMouseEnter={e=>{ e.currentTarget.style.background="#f0f5ff"; }}
               onMouseLeave={e=>{ e.currentTarget.style.background="none"; }}>
-              🏢 {s}
+              🏢 {s.site_name}
             </button>
           ))}
         </div>
@@ -1567,7 +1556,7 @@ function SanpaiDetail({ details, detail, onChange }) {
 function SoujiDetail({ details, detail, onChange }) {
   const v=detail||{
     kanyi_yousei:"",kanyi_heavy:"",kanyi_workers:"",
-    house_size:"",house_furniture:"",house_water:"",house_corner:false,house_vacancy:"",
+    house_size:"",house_furniture:"",house_water:"",house_corner:false,house_vacancy:"",house_plan:"",
     ac_normal:0,ac_smart:0,ac_tencase:0,ac_tentsu:0,
     ac_normal_model:"",ac_smart_model:"",ac_model_input:"",
     other_types:[],
@@ -1624,6 +1613,17 @@ function SoujiDetail({ details, detail, onChange }) {
               <span style={{ fontSize:15, color:C.navy, fontWeight:600 }}>角部屋</span>
             </label>
             <RadioGroup options={["空家","在宅"]} value={v.house_vacancy||""} onChange={val=>u({house_vacancy:val})} />
+          </SubSection>
+          <SubSection title="📄 図面">
+            <RadioGroup options={["図面なし","図面あり"]} value={v.house_plan||""} onChange={val=>u({house_plan:val})} />
+            {v.house_plan==="図面あり"&&(
+              <div style={{ marginTop:10, background:"#eef3ff", borderRadius:10,
+                padding:"12px 14px", border:"1px solid "+C.blue }}>
+                <div style={{ fontSize:14, color:C.blue, fontWeight:700 }}>
+                  📷 次のページで図面の写真添付をお願いします
+                </div>
+              </div>
+            )}
           </SubSection>
         </>
       )}
@@ -1872,7 +1872,7 @@ function StepService({ onSelect, doneServices, onBack }) {
 }
 
 // ── STEP 2: 詳細入力 ────────────────────────────────────
-function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData, personName }) {
+function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData, personName, sitesCache }) {
   const svc=SERVICES.find(s=>s.id===serviceId);
   const init=savedData||{};
   const [siteName,  setSiteName]  = useState(init.siteName||"");
@@ -1893,6 +1893,13 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
   const refAddrNum  =useRef(null);
   const refAddrOk   =useRef(null);
   const refSchedule0=useRef(null);
+
+  const handleSiteSelect = site => {
+    setAddress(site.address    || "");
+    setAddrNum(site.address_num  || "");
+    setAddrBldg(site.address_bldg || "");
+    setErrors([]);
+  };
 
   const addSchedule=()=>setSchedules(s=>[...s,{date:"",startTime:"",endTime:"",details:[],workers:"",memo:"",serviceDetail:null}]);
   const rmSchedule =i=>setSchedules(s=>s.filter((_,idx)=>idx!==i));
@@ -1992,7 +1999,9 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
               {/* サジェスト付き現場名入力 */}
               <SiteNameInput value={siteName}
                 onChange={v=>{ setSiteName(v); setErrors([]); }}
-                hasError={showErrors&&!siteName} />
+                hasError={showErrors&&!siteName}
+                sites={sitesCache||[]}
+                onSelect={handleSiteSelect} />
               <div style={{ fontSize:12, color:C.gray, marginTop:5 }}>
                 💡 過去に登録した現場名が候補に表示されます
               </div>
@@ -2470,12 +2479,24 @@ function OrderApp({ onDone, onBack }) {
   const [savedIds,        setSavedIds]        = useState([]);
   const [personName,      setPersonName]      = useState("");
   const [attachedImages,  setAttachedImages]  = useState([]);
+  const [companyId,       setCompanyId]       = useState(null);
+  const [sitesCache,      setSitesCache]      = useState([]);
 
   useEffect(() => {
     sb.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      sb.from('profiles').select('name').eq('id', user.id).single()
-        .then(({ data }) => { if (data?.name) setPersonName(data.name); });
+      sb.from('profiles').select('name, company_id').eq('id', user.id).single()
+        .then(({ data }) => {
+          if (data?.name) setPersonName(data.name);
+          if (data?.company_id) {
+            setCompanyId(data.company_id);
+            sb.from('sites')
+              .select('site_name, address, address_num, address_bldg')
+              .eq('company_id', data.company_id)
+              .order('site_name')
+              .then(({ data: sites }) => { if (sites) setSitesCache(sites); });
+          }
+        });
     });
   }, []);
 
@@ -2550,6 +2571,27 @@ function OrderApp({ onDone, onBack }) {
       });
       ids.push(newOrder.id);
     }
+    // 現場情報を sites テーブルに upsert（同企業・同現場名なら更新）
+    if (ordersList[0] && companyId) {
+      const d = ordersList[0].data;
+      if (d.siteName) {
+        await sb.from('sites').upsert({
+          company_id:   companyId,
+          site_name:    d.siteName,
+          address:      d.address    || '',
+          address_num:  d.addrNum    || '',
+          address_bldg: d.addrBldg   || '',
+        }, { onConflict: 'company_id,site_name' });
+        // ローカルキャッシュも更新
+        setSitesCache(prev => {
+          const exists = prev.some(s => s.site_name === d.siteName);
+          if (exists) return prev.map(s => s.site_name === d.siteName
+            ? {...s, address:d.address, address_num:d.addrNum, address_bldg:d.addrBldg}
+            : s);
+          return [...prev, {site_name:d.siteName, address:d.address||'', address_num:d.addrNum||'', address_bldg:d.addrBldg||''}];
+        });
+      }
+    }
     return ids;
   };
 
@@ -2600,6 +2642,7 @@ function OrderApp({ onDone, onBack }) {
             isAdditional={doneServices.length>0&&!doneServices.includes(currentSvc)}
             firstSiteData={firstSiteData}
             personName={personName}
+            sitesCache={sitesCache}
             onSubmit={handleFormSubmit}
             onBack={()=>setPhase(doneServices.includes(currentSvc)?"confirm":"service")} />
         )}
