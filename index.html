@@ -2886,37 +2886,126 @@ function HiOrderCard({ role, order, unreadCount, onClick, onChat }) {
   );
 }
 
-// ── メモセクション（localStorage保存） ───────────────────
-function MemoSection({ orderId }) {
-  const KEY = 'hi_memo_' + orderId;
-  const [memo,  setMemo]  = useState(() => localStorage.getItem(KEY) || "");
-  const [saved, setSaved] = useState(false);
+// ── 現場メモ・写真（sites テーブル保存、現場単位で共有） ──
+function MemoSection({ order }) {
+  const [memo,      setMemo]      = useState("");
+  const [images,    setImages]    = useState([]); // Storage paths
+  const [imgUrls,   setImgUrls]   = useState({}); // path → signedUrl
+  const [saving,    setSaving]    = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [saved,     setSaved]     = useState(false);
+  const fileRef = useRef(null);
 
-  const handleSave = () => {
-    localStorage.setItem(KEY, memo);
+  const cid  = order.companyId;
+  const site = order.site;
+
+  useEffect(() => {
+    if (!cid || !site) return;
+    sb.from('sites').select('memo, images')
+      .eq('company_id', cid).eq('site_name', site)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        setMemo(data.memo || "");
+        setImages(data.images || []);
+      });
+  }, [cid, site]);
+
+  useEffect(() => {
+    images.forEach(path => {
+      if (imgUrls[path]) return;
+      sb.storage.from('site-images').createSignedUrl(path, 3600)
+        .then(({ data }) => {
+          if (data?.signedUrl)
+            setImgUrls(prev => ({ ...prev, [path]: data.signedUrl }));
+        });
+    });
+  }, [images]);
+
+  const handleSaveMemo = async () => {
+    if (!cid || !site) return;
+    setSaving(true);
+    await sb.from('sites').update({ memo })
+      .eq('company_id', cid).eq('site_name', site);
+    setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
+
+  const handleUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length || !cid || !site) return;
+    setUploading(true);
+    const newPaths = [];
+    for (const file of files) {
+      const ext  = file.name.split('.').pop() || 'jpg';
+      const path = `${cid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await sb.storage.from('site-images')
+        .upload(path, file, { contentType: file.type });
+      if (!error) newPaths.push(path);
+    }
+    if (newPaths.length) {
+      const updated = [...images, ...newPaths];
+      await sb.from('sites').update({ images: updated })
+        .eq('company_id', cid).eq('site_name', site);
+      setImages(updated);
+    }
+    setUploading(false);
+    e.target.value = '';
+  };
+
+  if (!cid || !site) return null;
 
   return (
     <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
       boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
       <div style={{ fontSize:15, fontWeight:800, color:C.navy,
-        borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📝 メモ・注意事項</div>
+        borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📝 現場メモ・写真</div>
       <div style={{ padding:"14px 18px" }}>
+        <div style={{ fontSize:12, color:C.gray, marginBottom:8 }}>
+          ※ 同じ現場の全案件で共有されます
+        </div>
         <textarea value={memo} onChange={e=>{ setMemo(e.target.value); setSaved(false); }}
           placeholder="現場の注意事項・鍵の場所・連絡事項など..."
           style={{ width:"100%", minHeight:80, padding:"10px 12px", borderRadius:10,
             border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
             resize:"vertical", outline:"none", color:C.navy, boxSizing:"border-box",
             lineHeight:1.7 }} />
-        <button onClick={handleSave}
+        <button onClick={handleSaveMemo} disabled={saving}
           style={{ marginTop:8, padding:"9px 22px",
-            background:saved ? C.green : C.blue,
-            color:C.white, border:"none", borderRadius:10, fontSize:13, fontWeight:700,
-            cursor:"pointer", fontFamily:"inherit", transition:"background 0.2s" }}>
-          {saved ? "✓ 保存しました" : "💾 保存する"}
+            background:saved ? C.green : C.blue, color:C.white, border:"none",
+            borderRadius:10, fontSize:13, fontWeight:700,
+            cursor:saving?"default":"pointer", fontFamily:"inherit",
+            transition:"background 0.2s", opacity:saving?0.7:1 }}>
+          {saved ? "✓ 保存しました" : saving ? "保存中..." : "💾 保存する"}
         </button>
+
+        {images.length > 0 && (
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:14 }}>
+            {images.map((path, i) => (
+              imgUrls[path]
+                ? <img key={i} src={imgUrls[path]}
+                    style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
+                      border:"1px solid "+C.grayL, cursor:"pointer" }}
+                    onClick={()=>window.open(imgUrls[path], '_blank')} />
+                : <div key={i} style={{ width:80, height:80, background:C.grayL,
+                    borderRadius:8, display:"flex", alignItems:"center",
+                    justifyContent:"center", fontSize:10, color:C.gray }}>読込中</div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop:12 }}>
+          <input ref={fileRef} type="file" accept="image/*" multiple
+            style={{ display:"none" }} onChange={handleUpload} />
+          <button onClick={()=>fileRef.current?.click()} disabled={uploading}
+            style={{ padding:"9px 18px", background:C.white, color:C.navy,
+              border:"2px solid "+C.grayL, borderRadius:10, fontSize:13, fontWeight:700,
+              cursor:uploading?"default":"pointer", fontFamily:"inherit",
+              opacity:uploading?0.6:1 }}>
+            {uploading ? "アップロード中..." : "📷 写真を追加"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -3204,7 +3293,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
         )}
 
         {/* メモ・注意事項 */}
-        <MemoSection orderId={order.id} />
+        <MemoSection order={order} />
 
         <button onClick={onBack}
           style={{ display:"block", width:"100%", background:C.white, color:C.navy,
