@@ -5371,14 +5371,41 @@ function AdminApp({ onLogout }) {
 
     // ── メインルーター ──────────────────────────────────────
     function App() {
-      const [screen, setScreen] = React.useState("login");
+      const [screen, setScreen] = React.useState(null); // null = セッション確認中
       const [userRole, setUserRole] = React.useState(null);
+
+      React.useEffect(() => {
+        const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
+          if (!session) {
+            setUserRole(null);
+            setScreen("login");
+          } else {
+            const role = session.user.user_metadata?.role ?? "user";
+            setUserRole(role);
+            // 初期ロードまたはログイン画面のときだけ遷移（操作中の画面は維持）
+            setScreen(prev =>
+              (prev === null || prev === "login")
+                ? (role === "admin" ? "admin" : "history")
+                : prev
+            );
+          }
+        });
+        return () => subscription.unsubscribe();
+      }, []);
 
       const handleLogin = (role) => {
         setUserRole(role);
         setScreen(role === "admin" ? "admin" : "history");
       };
 
+      if (screen === null) return (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
+          height:"100vh", background:C.bg, flexDirection:"column", gap:16,
+          fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+          <div style={{ fontSize:36 }}>🔐</div>
+          <div style={{ fontSize:16, fontWeight:700, color:C.navy }}>認証確認中...</div>
+        </div>
+      );
       if (screen === "login")    return <LoginApp onLogin={handleLogin} onRegister={() => setScreen("register")} />;
       if (screen === "register") return <RegisterApp onDone={() => setScreen("login")} onBack={() => setScreen("login")} />;
       if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => setScreen("mypage")} onLogout={() => setScreen("login")} />;
