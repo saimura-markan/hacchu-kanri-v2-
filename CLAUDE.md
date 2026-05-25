@@ -286,3 +286,19 @@ scope: `repo` のトークンを `github.com/settings/tokens` で発行して使
 1. saveToSupabaseにzip_code保存追加
 2. デバッグ用console.log削除
 3. 本番動作確認（Vercel）
+
+## 2026-05-25 追加作業
+### セキュリティ対応（完了）
+- パスワードポリシー強化（8文字以上・英数字必須）
+- 管理者画面保護（未ログインはログイン画面へリダイレクト）
+- 環境変数確認（service_roleキーなし・問題なし）
+- 日程ピッカー誤クローズ修正
+
+### Googleフォーム（オーダーメモRPA対応版）
+- GASのonFormSubmit関数にsortDescending()を追加
+- 新しいフォーム送信が常に2行目（一番上）に来るように修正済み
+
+### 次の作業
+1. saveToSupabaseにzip_code保存追加
+2. デバッグ用console.log削除
+3. 本番動作確認（Vercel）

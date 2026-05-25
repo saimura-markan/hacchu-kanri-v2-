@@ -2588,26 +2588,24 @@ function OrderApp({ onDone, onBack }) {
       ids.push(newOrder.id);
     }
     // 現場情報を sites テーブルに upsert（同企業・同現場名なら更新）
-    console.log('[sites upsert] 条件チェック', { companyId, siteName: ordersList[0]?.data?.siteName });
     if (ordersList[0] && companyId) {
       const d = ordersList[0].data;
       if (d.siteName) {
-        console.log('[sites upsert] 実行開始', { companyId, siteName: d.siteName, address: d.address, address_num: d.addrNum, address_bldg: d.addrBldg });
-        const { data: upsertData, error: upsertError } = await sb.from('sites').upsert({
+        const { error: upsertError } = await sb.from('sites').upsert({
           company_id:   companyId,
           site_name:    d.siteName,
           address:      d.address    || '',
           address_num:  d.addrNum    || '',
           address_bldg: d.addrBldg   || '',
+          zip_code:     zipCode      || '',
         }, { onConflict: ['company_id', 'site_name'] });
-        console.log('[sites upsert] 結果', { data: upsertData, error: upsertError });
         // ローカルキャッシュも更新
         setSitesCache(prev => {
           const exists = prev.some(s => s.site_name === d.siteName);
           if (exists) return prev.map(s => s.site_name === d.siteName
-            ? {...s, address:d.address, address_num:d.addrNum, address_bldg:d.addrBldg}
+            ? {...s, address:d.address, address_num:d.addrNum, address_bldg:d.addrBldg, zip_code:zipCode}
             : s);
-          return [...prev, {site_name:d.siteName, address:d.address||'', address_num:d.addrNum||'', address_bldg:d.addrBldg||''}];
+          return [...prev, {site_name:d.siteName, address:d.address||'', address_num:d.addrNum||'', address_bldg:d.addrBldg||'', zip_code:zipCode||''}];
         });
       }
     }
