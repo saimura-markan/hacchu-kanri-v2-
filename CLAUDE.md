@@ -269,3 +269,20 @@ Supabase Realtime の `postgres_changes` は RLS に `EXISTS` サブクエリや
 #### Git push について
 HTTPS push には GitHub PAT（Personal Access Token）が必要。  
 scope: `repo` のトークンを `github.com/settings/tokens` で発行して使用。
+
+## 2026-05-25 作業記録
+### 本日完了
+- 郵便番号→住所自動入力
+- 番地・建物名欄追加
+- 鍵🔑・駐車場🚗アイコン追加
+- エアコン品番：直接入力/写真選択
+- ハウスクリーニング図面あり/なし
+- 現場名予測変換+顧客コード紐付け
+- sitesテーブルにzip_codeカラム追加（Supabase）
+- handleSiteSelect修正（zipCode+addrOk自動セット）
+- git push → Vercelデプロイ完了（コミットf6d2c6d）
+
+### 次の作業
+1. saveToSupabaseにzip_code保存追加
+2. デバッグ用console.log削除
+3. 本番動作確認（Vercel）

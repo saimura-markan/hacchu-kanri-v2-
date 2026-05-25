@@ -498,7 +498,15 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
   const handleLogin = async () => {
     const errs = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "正しいメールアドレスを入力してください";
-    if (!password) errs.password = "パスワードを入力してください";
+    if (!password) {
+      errs.password = "パスワードを入力してください";
+    } else if (password.length < 8) {
+      errs.password = "パスワードは8文字以上で入力してください";
+    } else if (!/[a-zA-Z]/.test(password)) {
+      errs.password = "パスワードに英字（大文字または小文字）を1文字以上含めてください";
+    } else if (!/[0-9]/.test(password)) {
+      errs.password = "パスワードに数字を1文字以上含めてください";
+    }
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
     const { data, error } = await sb.auth.signInWithPassword({ email: email.toLowerCase(), password });
@@ -952,7 +960,13 @@ function Step2({ data, setData, companyId, companyName, onNext, onBack }) {
       e.phone = "正しい電話番号を入力してください";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))
       e.email = "正しいメールアドレスを入力してください";
-    if (pw.length < 8) e.password = "8文字以上で入力してください";
+    if (pw.length < 8) {
+      e.password = "パスワードは8文字以上で入力してください";
+    } else if (!/[a-zA-Z]/.test(pw)) {
+      e.password = "パスワードに英字（大文字または小文字）を1文字以上含めてください";
+    } else if (!/[0-9]/.test(pw)) {
+      e.password = "パスワードに数字を1文字以上含めてください";
+    }
     if (data.confirmPw !== pw) e.confirmPw = "パスワードが一致しません";
     setErrors(e);
     return !Object.keys(e).length;
@@ -992,7 +1006,7 @@ function Step2({ data, setData, companyId, companyName, onNext, onBack }) {
       <div style={{ background:"#f4f7ff", borderRadius:10, padding:"10px 14px",
         marginBottom:14, fontSize:12, color:"#444", lineHeight:1.9,
         border:"1px solid "+C.grayL }}>
-        🔑 パスワードの条件：8文字以上・英大文字・数字を含む
+        🔑 パスワードの条件：8文字以上・英字（大文字/小文字）を含む・数字を含む
       </div>
 
       <RgField label="🔑 パスワード" error={errors.password}>
@@ -2133,7 +2147,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
           </div>
           {schedules.map((sch,i)=>(
             <ScheduleCard key={i} sch={sch} idx={i} serviceId={serviceId}
-              onChange={v=>{ updateSch(i,v); setErrors([]); }}
+              onChange={v=>updateSch(i,v)}
               onRemove={()=>rmSchedule(i)}
               canRemove={schedules.length>1}
               showErrors={showErrors&&i===0} />
