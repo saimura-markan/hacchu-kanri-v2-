@@ -2800,25 +2800,21 @@ function EliMessage({ orders, chats }) {
 }
 
 // ── 注文カード ───────────────────────────────────────────
-function HiOrderCard({ role, order, unreadCount, onClick }) {
+function HiOrderCard({ role, order, unreadCount, onClick, onChat }) {
   const st    = HI_STATUS[order.status] || HI_STATUS["調整中"];
   const sch   = order.schedules[0];
   const timer = role === "admin" ? hiGetTimer(order, Date.now()) : null;
   const borderColor = timer ? timer.bg : st.border;
 
   return (
-    <button onClick={onClick}
-      style={{ width:"100%", background:C.white, borderRadius:18,
-        border:"1px solid "+(timer ? timer.bg : C.grayL),
-        borderLeft:"6px solid "+borderColor,
-        padding:0, textAlign:"left", cursor:"pointer", overflow:"hidden",
-        boxShadow: timer && timer.blink
-          ? "0 0 0 2px "+timer.bg+", 0 4px 16px rgba(10,31,92,0.12)"
-          : "0 2px 12px rgba(10,31,92,0.07)",
-        marginBottom:12, transition:"box-shadow 0.15s, transform 0.15s",
-        position:"relative" }}
-      onMouseEnter={e=>{ e.currentTarget.style.transform="translateY(-1px)"; }}
-      onMouseLeave={e=>{ e.currentTarget.style.transform="translateY(0)"; }}>
+    <div style={{ width:"100%", background:C.white, borderRadius:18,
+      border:"1px solid "+(timer ? timer.bg : C.grayL),
+      borderLeft:"6px solid "+borderColor,
+      overflow:"hidden",
+      boxShadow: timer && timer.blink
+        ? "0 0 0 2px "+timer.bg+", 0 4px 16px rgba(10,31,92,0.12)"
+        : "0 2px 12px rgba(10,31,92,0.07)",
+      marginBottom:12, position:"relative" }}>
 
       {unreadCount>0 && (
         <div style={{ position:"absolute", top:-8, right:-8,
@@ -2845,8 +2841,10 @@ function HiOrderCard({ role, order, unreadCount, onClick }) {
         </div>
       )}
 
-      {/* カード本体 */}
-      <div style={{ padding:"14px 16px" }}>
+      {/* カード本体（タップ→詳細） */}
+      <button onClick={onClick}
+        style={{ width:"100%", padding:"14px 16px 10px", textAlign:"left", cursor:"pointer",
+          background:"transparent", border:"none", display:"block", fontFamily:"inherit" }}>
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10, gap:8 }}>
           <div style={{ minWidth:0 }}>
             <div style={{ fontSize:18, fontWeight:800, color:C.navy,
@@ -2857,27 +2855,70 @@ function HiOrderCard({ role, order, unreadCount, onClick }) {
           </div>
           <div style={{ flexShrink:0 }}><HiStatusBadge status={order.status} /></div>
         </div>
-
         <div style={{ fontSize:14, color:"#444", lineHeight:2.0 }}>
           <div>📍 {order.site}</div>
           <div>📅 {sch.date}　{sch.start}〜{sch.end}</div>
         </div>
+      </button>
 
-        <div style={{ marginTop:10, display:"flex", alignItems:"center", gap:10 }}>
-          <span style={{ color:C.blue, fontSize:13, fontWeight:700 }}>🔍 詳細を見る</span>
-          <span style={{ color:C.gray }}>|</span>
-          <span style={{ color:C.green, fontSize:13, fontWeight:700 }}>
-            💬 チャット
-            {unreadCount>0 && (
-              <span style={{ background:C.red, color:C.white, borderRadius:99,
-                padding:"1px 8px", fontSize:11, fontWeight:800, marginLeft:6 }}>
-                {unreadCount}件未読
-              </span>
-            )}
-          </span>
-        </div>
+      {/* ボタン行 */}
+      <div style={{ display:"flex", borderTop:"1px solid "+C.grayL }}>
+        <button onClick={onClick}
+          style={{ flex:1, padding:"10px 0", background:"transparent", border:"none",
+            color:C.blue, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
+          🔍 詳細を見る
+        </button>
+        <div style={{ width:1, background:C.grayL }} />
+        <button onClick={e=>{ e.stopPropagation(); onChat && onChat(); }}
+          style={{ flex:1, padding:"10px 0", background:"transparent", border:"none",
+            color:C.green, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
+            display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>
+          💬 チャット
+          {unreadCount>0 && (
+            <span style={{ background:C.red, color:C.white, borderRadius:99,
+              padding:"1px 7px", fontSize:11, fontWeight:800 }}>
+              {unreadCount}
+            </span>
+          )}
+        </button>
       </div>
-    </button>
+    </div>
+  );
+}
+
+// ── メモセクション（localStorage保存） ───────────────────
+function MemoSection({ orderId }) {
+  const KEY = 'hi_memo_' + orderId;
+  const [memo,  setMemo]  = useState(() => localStorage.getItem(KEY) || "");
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    localStorage.setItem(KEY, memo);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  return (
+    <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
+      boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
+      <div style={{ fontSize:15, fontWeight:800, color:C.navy,
+        borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📝 メモ・注意事項</div>
+      <div style={{ padding:"14px 18px" }}>
+        <textarea value={memo} onChange={e=>{ setMemo(e.target.value); setSaved(false); }}
+          placeholder="現場の注意事項・鍵の場所・連絡事項など..."
+          style={{ width:"100%", minHeight:80, padding:"10px 12px", borderRadius:10,
+            border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
+            resize:"vertical", outline:"none", color:C.navy, boxSizing:"border-box",
+            lineHeight:1.7 }} />
+        <button onClick={handleSave}
+          style={{ marginTop:8, padding:"9px 22px",
+            background:saved ? C.green : C.blue,
+            color:C.white, border:"none", borderRadius:10, fontSize:13, fontWeight:700,
+            cursor:"pointer", fontFamily:"inherit", transition:"background 0.2s" }}>
+          {saved ? "✓ 保存しました" : "💾 保存する"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -3162,6 +3203,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           </div>
         )}
 
+        {/* メモ・注意事項 */}
+        <MemoSection orderId={order.id} />
+
         <button onClick={onBack}
           style={{ display:"block", width:"100%", background:C.white, color:C.navy,
             border:"2px solid "+C.grayL, borderRadius:14, fontSize:16, fontWeight:700,
@@ -3321,14 +3365,15 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
 
 // ── メイン ───────────────────────────────────────────────
 function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
-  const [orders,    setOrders]    = useState([]);
-  const [chats,     setChats]     = useState({});
-  const [filter,    setFilter]    = useState("全て");
-  const [screen,    setScreen]    = useState("list");
-  const [currentId, setCurrentId] = useState(null);
-  const [, setTick]               = useState(0);
-  const [loading,   setLoading]   = useState(true);
-  const [dbError,   setDbError]   = useState(null);
+  const [orders,     setOrders]    = useState([]);
+  const [chats,      setChats]     = useState({});
+  const [filter,     setFilter]    = useState("全て");
+  const [screen,     setScreen]    = useState("list");
+  const [currentId,  setCurrentId] = useState(null);
+  const [, setTick]                = useState(0);
+  const [loading,    setLoading]   = useState(true);
+  const [dbError,    setDbError]   = useState(null);
+  const [showPicker, setShowPicker] = useState(false);
 
   const current = orders.find(o => o.id === currentId) || null;
 
@@ -3482,12 +3527,77 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
 
         <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
 
+        {orders.length > 0 && (
+          <button onClick={()=>setShowPicker(true)}
+            style={{ width:"100%", background:C.white, border:"2px solid "+C.blue,
+              borderRadius:14, padding:"13px 16px", marginBottom:14, cursor:"pointer",
+              fontFamily:"inherit", display:"flex", alignItems:"center", gap:10,
+              boxShadow:"0 2px 8px rgba(10,31,92,0.07)" }}>
+            <span style={{ fontSize:20 }}>📋</span>
+            <div style={{ textAlign:"left" }}>
+              <div style={{ fontSize:14, fontWeight:800, color:C.blue }}>案件詳細を確認・メモを追加する</div>
+              <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>案件一覧から選んで詳細へ</div>
+            </div>
+            <span style={{ marginLeft:"auto", fontSize:18, color:C.blue }}>›</span>
+          </button>
+        )}
+
         {/* 一覧 */}
         {filtered.map(order=>(
           <HiOrderCard key={order.id} role={role} order={order}
             unreadCount={getUnread(order.id)}
-            onClick={()=>{ setCurrentId(order.id); setScreen("detail"); }} />
+            onClick={()=>{ setCurrentId(order.id); setScreen("detail"); }}
+            onChat={()=>openChat(order)} />
         ))}
+
+        {/* 案件ピッカーシート */}
+        {showPicker && (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+            display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:200 }}
+            onClick={e=>{ if(e.target===e.currentTarget) setShowPicker(false); }}>
+            <div style={{ background:C.white, borderRadius:"24px 24px 0 0",
+              width:"100%", maxWidth:480, maxHeight:"70vh", display:"flex", flexDirection:"column",
+              animation:"msgIn 0.22s ease" }}>
+              <div style={{ padding:"16px 20px 10px", borderBottom:"1px solid "+C.grayL,
+                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>📋 案件を選択</div>
+                <button onClick={()=>setShowPicker(false)}
+                  style={{ background:C.grayPale, border:"none", borderRadius:8,
+                    padding:"6px 12px", fontSize:13, fontWeight:700, cursor:"pointer", color:C.navy, fontFamily:"inherit" }}>
+                  とじる
+                </button>
+              </div>
+              <div style={{ overflowY:"auto", padding:"10px 16px 24px" }}>
+                {orders.map(order=>{
+                  const sch = order.schedules[0];
+                  const st  = HI_STATUS[order.status] || HI_STATUS["調整中"];
+                  return (
+                    <button key={order.id}
+                      onClick={()=>{ setCurrentId(order.id); setScreen("detail"); setShowPicker(false); }}
+                      style={{ width:"100%", padding:"12px 14px", marginBottom:8, borderRadius:12,
+                        border:"1px solid "+C.grayL, background:C.white, textAlign:"left",
+                        cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:12 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:14, fontWeight:700, color:C.navy,
+                          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {order.site || order.service}
+                        </div>
+                        <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>
+                          {sch ? sch.date : "—"}　{order.id}
+                        </div>
+                      </div>
+                      <span style={{ background:st.bg, color:st.text, borderRadius:99,
+                        padding:"3px 10px", fontSize:11, fontWeight:700, flexShrink:0,
+                        border:"1px solid "+st.border }}>
+                        {order.status}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* フッター */}
         <div style={{ background:C.white, borderRadius:16, marginTop:16,
