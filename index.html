@@ -3151,20 +3151,25 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
-        setSiteData({
+        // 画像配列はDBパスを優先しつつ、ローカルのみのパス（アップロード中など）を保持する
+        const mergeImgs = (dbImgs, prevImgs) => {
+          const dbSet = new Set(dbImgs);
+          return [...dbImgs, ...(prevImgs || []).filter(p => !dbSet.has(p))];
+        };
+        setSiteData(prev => ({
           key_info:       data.key_info       || '',
-          key_images:     data.key_images     || [],
+          key_images:     mergeImgs(data.key_images     || [], prev.key_images),
           parking_info:   data.parking_info   || '',
-          parking_images: data.parking_images || [],
+          parking_images: mergeImgs(data.parking_images || [], prev.parking_images),
           contact_name:   data.contact_name   || '',
           contact_phone:  data.contact_phone  || '',
           memo:           data.memo           || '',
-          images:         data.images         || [],
+          images:         mergeImgs(data.images         || [], prev.images),
           entry_info:     data.entry_info     || '',
-          entry_images:   data.entry_images   || [],
+          entry_images:   mergeImgs(data.entry_images   || [], prev.entry_images),
           yosei_info:     data.yosei_info     || '',
-          yosei_images:   data.yosei_images   || [],
-        });
+          yosei_images:   mergeImgs(data.yosei_images   || [], prev.yosei_images),
+        }));
       });
   };
 
@@ -3286,8 +3291,6 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         yosei_info:     siteData.yosei_info,
         yosei_images:   siteData.yosei_images,
       }, { onConflict: 'company_id,site_name' });
-      // 保存後にDBから再取得して閲覧モードでも最新データを表示
-      fetchSiteData(cid);
       setSavedMsg(true);
       setTimeout(() => setSavedMsg(false), 2000);
     } finally {
