@@ -5348,6 +5348,22 @@ function CompanyPanel({ onClose }) {
   };
 
   const handleDelete = async (id, name) => {
+    // 削除前に関連レコードの存在チェック
+    const [{ count: orderCount }, { count: profileCount }, { count: siteCount }] = await Promise.all([
+      sb.from('orders').select('id', { count: 'exact', head: true }).eq('company_id', id),
+      sb.from('profiles').select('id', { count: 'exact', head: true }).eq('company_id', id),
+      sb.from('sites').select('company_id', { count: 'exact', head: true }).eq('company_id', id),
+    ]);
+    const used = (orderCount || 0) + (profileCount || 0) + (siteCount || 0);
+    if (used > 0) {
+      const detail = [
+        orderCount  ? `案件 ${orderCount}件` : null,
+        profileCount? `ユーザー ${profileCount}件` : null,
+        siteCount   ? `現場情報 ${siteCount}件` : null,
+      ].filter(Boolean).join('・');
+      alert(`「${name}」（${id}）は使用中のため削除できません。\n関連データ：${detail}\n\n先に関連データを削除または移行してください。`);
+      return;
+    }
     if (!window.confirm(`「${name}」（${id}）を削除します。\nこの操作は取り消せません。`)) return;
     const { error } = await sb.from('companies').delete().eq('id', id);
     if (error) {
