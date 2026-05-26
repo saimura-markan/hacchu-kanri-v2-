@@ -877,8 +877,8 @@ function Step1({ companyId, setCompanyId, setCompanyName, onNext }) {
 
   const handleCheck = async () => {
     if (!companyId.trim()) { setError("企業IDを入力してください"); return; }
-    if (!/^ELI-\d{4}$/.test(companyId.toUpperCase())) {
-      setError("企業IDの形式が正しくありません（例：ELI-1001）"); return;
+    if (!/^MK-[A-Z0-9]{4}$/.test(companyId.toUpperCase())) {
+      setError("企業IDの形式が正しくありません（例：MK-A3X9）"); return;
     }
     setChecking(true);
     const { data } = await sb.from('companies')
@@ -905,17 +905,17 @@ function Step1({ companyId, setCompanyId, setCompanyName, onNext }) {
         </div>
         <div style={{ fontSize:13, color:"#444", lineHeight:1.9 }}>
           担当者より発行された<b>企業ID</b>を入力してください。<br />
-          企業IDは <b style={{color:C.blue}}>ELI-XXXX</b> の形式です。
+          企業IDは <b style={{color:C.blue}}>MK-XXXX</b> の形式です。
         </div>
       </div>
 
       <RgField label="🏢 企業ID" error={error}
-        hint="例：ELI-1001　（担当者より発行されたIDを入力）">
+        hint="例：MK-A3X9　（担当者より発行されたIDを入力）">
         <div style={{ display:"flex", gap:8 }}>
           <div style={{ flex:1 }}>
             <RgTextInput value={companyId}
               onChange={e=>{ setCompanyId(e.target.value.toUpperCase()); setError(""); setVerified(false); }}
-              placeholder="ELI-1001" maxLength={8} error={error} />
+              placeholder="MK-A3X9" maxLength={7} error={error} />
           </div>
           <button onClick={handleCheck} style={{
             background: verified?C.green:C.blue, color:C.white, border:"none",
@@ -5311,17 +5311,21 @@ function CompanyPanel({ onClose }) {
     });
   }, []);
 
-  const nextId = () => {
-    if (companies.length === 0) return "ELI-1001";
-    const nums = companies.map(c => parseInt((c.id || "ELI-0").replace("ELI-", "")) || 0);
-    return "ELI-" + String(Math.max(...nums) + 1).padStart(4, "0");
+  const genId = () => {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 紛らわしい文字(I,O,1,0)を除外
+    const existing = new Set(companies.map(c => c.id));
+    let id;
+    do {
+      id = "MK-" + Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    } while (existing.has(id));
+    return id;
   };
 
   const handleAdd = async () => {
     if (!form.name) return;
     setAddError("");
     setAddSaving(true);
-    const newId = nextId();
+    const newId = genId();
     const { data, error } = await sb.from('companies')
       .insert({ id:newId, ...form, is_active:true })
       .select().single();
@@ -5393,7 +5397,7 @@ function CompanyPanel({ onClose }) {
               </div>
               <div style={{ background:"#f0faf5", borderRadius:10, padding:"10px 14px",
                 marginBottom:12, fontSize:13, color:"#1a5c3a" }}>
-                発行される企業ID：<b style={{ fontSize:15 }}>{nextId()}</b>
+                発行される企業ID：<b style={{ fontSize:15 }}>{genId()}</b>
               </div>
               {addError && (
                 <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:8,
