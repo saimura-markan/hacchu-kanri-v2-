@@ -3114,6 +3114,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   });
   const [signedUrls,     setSignedUrls]     = useState({});
   const [saving,         setSaving]         = useState(false);
+  const [manualSaving,   setManualSaving]   = useState(false);
   const [savedMsg,       setSavedMsg]       = useState(false);
   const [uploadingField, setUploadingField] = useState(null);
   const saveTimer = useRef(null);
@@ -3216,20 +3217,23 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   };
 
   const handleSave = async () => {
-    if (!cid || !siteName) return;
-    setSaving(true);
-    await sb.from('sites').update({
-      key_info:      siteData.key_info,
-      parking_info:  siteData.parking_info,
-      contact_name:  siteData.contact_name,
-      contact_phone: siteData.contact_phone,
-      memo:          siteData.memo,
-      entry_info:    siteData.entry_info,
-      yosei_info:    siteData.yosei_info,
-    }).eq('company_id', cid).eq('site_name', siteName);
-    setSaving(false);
-    setSavedMsg(true);
-    setTimeout(() => setSavedMsg(false), 2000);
+    if (!cid || !siteName || manualSaving) return;
+    setManualSaving(true);
+    try {
+      await sb.from('sites').update({
+        key_info:      siteData.key_info,
+        parking_info:  siteData.parking_info,
+        contact_name:  siteData.contact_name,
+        contact_phone: siteData.contact_phone,
+        memo:          siteData.memo,
+        entry_info:    siteData.entry_info,
+        yosei_info:    siteData.yosei_info,
+      }).eq('company_id', cid).eq('site_name', siteName);
+      setSavedMsg(true);
+      setTimeout(() => setSavedMsg(false), 2000);
+    } finally {
+      setManualSaving(false);
+    }
   };
 
   const nowStr = () => {
@@ -3500,26 +3504,16 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} />
             </SiteInfoCard>
 
-            <button onClick={handleSave} disabled={saving}
+            <button onClick={handleSave} disabled={manualSaving}
               style={{ display:"block", width:"100%",
                 background: savedMsg ? "linear-gradient(135deg,#2eaa72,#1a7a50)" : "linear-gradient(135deg,#2952c8,#0a1f5c)",
                 color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
-                padding:"16px 0", cursor:saving?"default":"pointer",
+                padding:"16px 0", cursor:manualSaving?"default":"pointer",
                 fontFamily:"inherit", marginBottom:8, transition:"background 0.3s",
-                opacity: saving ? 0.7 : 1 }}>
-              {savedMsg ? "保存しました ✓" : saving ? "保存中..." : "💾 保存する"}
+                opacity: manualSaving ? 0.7 : 1 }}>
+              {savedMsg ? "保存しました ✓" : manualSaving ? "保存中..." : "💾 保存する"}
             </button>
           </>
-        )}
-
-        {!viewOnly && (
-          <button onClick={()=>setViewOnly(false)}
-            style={{ display:"block", width:"100%",
-              background:"linear-gradient(135deg,#2952c8,#0a1f5c)", color:C.white,
-              border:"none", borderRadius:14, fontSize:16, fontWeight:800,
-              padding:"16px 0", cursor:"pointer", fontFamily:"inherit", marginBottom:12 }}>
-            ＋ 詳細を追記する
-          </button>
         )}
 
         <button onClick={onBack}
