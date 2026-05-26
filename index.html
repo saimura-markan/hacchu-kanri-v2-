@@ -3209,55 +3209,59 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
   const handleUpload = async (imgField, e) => {
     const files = Array.from(e.target.files);
-    if (!files.length || !cid || !siteName) return;
+    if (!files.length || !siteName) return;
+    const activeCid = cid;
+    const preExistingPaths = siteData[imgField] || []; // 関数呼び出し時点の既存パス
+
     setUploadingField(imgField);
-    const newPaths = [];
-    const blobUrlMap = {};
+    const savedPaths = []; // Storage アップロード成功パス
+
     for (const file of files) {
       const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
-      const path = `${cid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-      // PDF以外はblob URLを即時生成（Storage権限に依存しない即時表示）
-      if (!/\.pdf$/i.test(path)) {
+      const path = activeCid
+        ? `${activeCid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+        : `local/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+
+      // ── アップロード前にサムネイルを即時表示 ──────────────────
+      if (!/\.pdf$/i.test(ext)) {
         const blobUrl = URL.createObjectURL(file);
-        blobUrlMap[path] = blobUrl;
         blobUrlsRef.current[path] = blobUrl;
+        setSignedUrls(prev => ({ ...prev, [path]: blobUrl }));
       }
+      setSiteData(prev => ({ ...prev, [imgField]: [...(prev[imgField] || []), path] }));
+      // ──────────────────────────────────────────────────────────
+
+      if (!activeCid) { savedPaths.push(path); continue; }
+
       const { error } = await sb.storage.from('site-images')
         .upload(path, file, { contentType: file.type });
-      if (!error) newPaths.push(path);
-    }
-    if (newPaths.length) {
-      const updated = [...(siteData[imgField] || []), ...newPaths];
-      await sb.from('sites').upsert({
-        company_id: cid,
-        site_name:  siteName,
-        [imgField]: updated,
-      }, { onConflict: 'company_id,site_name' });
-      setSiteData(prev => ({ ...prev, [imgField]: updated }));
-      // blob URLで即時サムネイル表示
-      if (Object.keys(blobUrlMap).length) {
-        setSignedUrls(prev => ({ ...prev, ...blobUrlMap }));
+
+      if (error) {
+        // アップロード失敗 → 表示から除去
+        setSiteData(prev => ({ ...prev, [imgField]: (prev[imgField] || []).filter(p => p !== path) }));
+        setSignedUrls(prev => { const n = { ...prev }; delete n[path]; return n; });
+        if (blobUrlsRef.current[path]) { URL.revokeObjectURL(blobUrlsRef.current[path]); delete blobUrlsRef.current[path]; }
+      } else {
+        savedPaths.push(path);
+        // 署名付きURLを非同期で取得してblob URLを置換
+        sb.storage.from('site-images').createSignedUrl(path, 3600).then(({ data }) => {
+          if (!data?.signedUrl) return;
+          setSignedUrls(prev => ({ ...prev, [path]: data.signedUrl }));
+          if (blobUrlsRef.current[path]) { URL.revokeObjectURL(blobUrlsRef.current[path]); delete blobUrlsRef.current[path]; }
+        });
       }
-      // 署名付きURLを非同期取得して置換（Storage RLSが正しく設定されていれば差し替わる）
-      Promise.all(
-        newPaths.map(async p => {
-          const { data } = await sb.storage.from('site-images').createSignedUrl(p, 3600);
-          return data?.signedUrl ? [p, data.signedUrl] : null;
-        })
-      ).then(entries => {
-        const urlMap = Object.fromEntries(entries.filter(Boolean));
-        if (Object.keys(urlMap).length) {
-          setSignedUrls(prev => ({ ...prev, ...urlMap }));
-          // blob URLをrevokeして置換
-          Object.keys(urlMap).forEach(p => {
-            if (blobUrlsRef.current[p]) {
-              URL.revokeObjectURL(blobUrlsRef.current[p]);
-              delete blobUrlsRef.current[p];
-            }
-          });
-        }
-      });
     }
+
+    // 成功したパスのみDBに保存
+    if (activeCid && savedPaths.length) {
+      const dbPaths = [...preExistingPaths, ...savedPaths];
+      sb.from('sites').upsert({
+        company_id: activeCid,
+        site_name:  siteName,
+        [imgField]: dbPaths,
+      }, { onConflict: 'company_id,site_name' }).catch(() => {});
+    }
+
     setUploadingField(null);
     e.target.value = '';
   };
