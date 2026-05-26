@@ -5350,7 +5350,11 @@ function CompanyPanel({ onClose }) {
   const handleDelete = async (id, name) => {
     if (!window.confirm(`「${name}」（${id}）を削除します。\nこの操作は取り消せません。`)) return;
     const { error } = await sb.from('companies').delete().eq('id', id);
-    if (!error) setCompanies(cs => cs.filter(c => c.id !== id));
+    if (error) {
+      alert(`削除に失敗しました: ${error.message}`);
+      return;
+    }
+    setCompanies(cs => cs.filter(c => c.id !== id));
   };
 
   return (

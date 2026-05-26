@@ -29,3 +29,8 @@ CREATE POLICY "admins_insert_companies"
 CREATE POLICY "admins_update_companies"
   ON companies FOR UPDATE
   USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+
+-- 7. 管理者: 企業レコード DELETE（このポリシーがないと削除が無音で失敗する）
+CREATE POLICY "admins_delete_companies"
+  ON companies FOR DELETE
+  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
