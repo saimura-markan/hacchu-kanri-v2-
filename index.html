@@ -3454,6 +3454,69 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>{order.address || '—'}</div>
         </SiteInfoCard>
 
+        {viewOnly && (siteData.key_info || siteData.key_images.length > 0 ||
+          siteData.parking_info || siteData.parking_images.length > 0 ||
+          siteData.contact_name || siteData.contact_phone ||
+          siteData.memo || siteData.images.length > 0 ||
+          siteData.entry_info || siteData.entry_images.length > 0 ||
+          siteData.yosei_info || siteData.yosei_images.length > 0) && (
+          <>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16,
+              borderTop:"2px solid "+C.grayL, paddingTop:20, marginTop:8 }}>
+              <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>🏗️ 現場情報</div>
+            </div>
+
+            {(siteData.key_info || siteData.key_images.length > 0) && (
+              <SiteInfoCard icon="🔑" label="鍵の情報">
+                {siteData.key_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.key_info}</div>}
+                <SiteAttachments paths={siteData.key_images} signedUrls={signedUrls} />
+              </SiteInfoCard>
+            )}
+
+            {(siteData.parking_info || siteData.parking_images.length > 0) && (
+              <SiteInfoCard icon="🚗" label="駐車場情報">
+                {siteData.parking_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.parking_info}</div>}
+                <SiteAttachments paths={siteData.parking_images} signedUrls={signedUrls} />
+              </SiteInfoCard>
+            )}
+
+            {(siteData.contact_name || siteData.contact_phone) && (
+              <SiteInfoCard icon="👤" label="担当者様">
+                {siteData.contact_name && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>{siteData.contact_name}</div>}
+                {siteData.contact_phone && (
+                  <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>
+                    <a href={"tel:"+siteData.contact_phone}
+                      style={{ color:C.blue, textDecoration:"none", fontWeight:700 }}>
+                      📞 {siteData.contact_phone}
+                    </a>
+                  </div>
+                )}
+              </SiteInfoCard>
+            )}
+
+            {(siteData.memo || siteData.images.length > 0) && (
+              <SiteInfoCard icon="⚠️" label="現場注意事項">
+                {siteData.memo && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.memo}</div>}
+                <SiteAttachments paths={siteData.images} signedUrls={signedUrls} />
+              </SiteInfoCard>
+            )}
+
+            {(siteData.entry_info || siteData.entry_images.length > 0) && (
+              <SiteInfoCard icon="🚪" label="入館情報">
+                {siteData.entry_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.entry_info}</div>}
+                <SiteAttachments paths={siteData.entry_images} signedUrls={signedUrls} />
+              </SiteInfoCard>
+            )}
+
+            {(siteData.yosei_info || siteData.yosei_images.length > 0) && (
+              <SiteInfoCard icon="📦" label="養生範囲">
+                {siteData.yosei_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.yosei_info}</div>}
+                <SiteAttachments paths={siteData.yosei_images} signedUrls={signedUrls} />
+              </SiteInfoCard>
+            )}
+          </>
+        )}
+
         {!viewOnly && (
           <>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
