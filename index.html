@@ -3084,6 +3084,18 @@ function SiteAttachBtn({ imgField, isUploading, onUpload }) {
   );
 }
 
+function BottomSheet({ children }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
+      display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:1000 }}>
+      <div style={{ background:C.white, borderRadius:"24px 24px 0 0",
+        padding:"28px 24px 48px", width:"100%", maxWidth:480, animation:"msgIn 0.25s ease" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ── 詳細画面（現場情報管理） ─────────────────────────────────
 function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat, viewOnly: initViewOnly = false }) {
   const [viewOnly,    setViewOnly]    = useState(initViewOnly);
@@ -3219,22 +3231,13 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     setModal(null); setReschedDate(""); setReschedTime(""); setReschedErr("");
   };
 
-  const Sheet = ({ children }) => (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
-      display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:1000 }}>
-      <div style={{ background:C.white, borderRadius:"24px 24px 0 0",
-        padding:"28px 24px 48px", width:"100%", maxWidth:480, animation:"msgIn 0.25s ease" }}>
-        {children}
-      </div>
-    </div>
-  );
 
   return (
     <div style={{ background:C.bg, minHeight:"100vh", fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
       <style>{HI_CSS}</style>
 
       {modal === "cancel" && (
-        <Sheet>
+        <BottomSheet>
           <div style={{ textAlign:"center", marginBottom:24 }}>
             <div style={{ fontSize:40, marginBottom:10 }}>🚫</div>
             <div style={{ fontSize:18, fontWeight:800, color:C.navy, marginBottom:8 }}>キャンセルを依頼しますか？</div>
@@ -3250,11 +3253,11 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             background:C.grayPale, color:C.navy, border:"2px solid "+C.grayL,
             borderRadius:14, fontSize:15, fontWeight:700, padding:"14px 0",
             cursor:"pointer", fontFamily:"inherit" }}>もどる</button>
-        </Sheet>
+        </BottomSheet>
       )}
 
       {modal === "reschedule" && (
-        <Sheet>
+        <BottomSheet>
           <div style={{ marginBottom:20 }}>
             <div style={{ fontSize:18, fontWeight:800, color:C.navy, marginBottom:4 }}>📆 日程変更を相談する</div>
             <div style={{ fontSize:14, color:C.gray }}>ご希望の日時を入力してください</div>
@@ -3284,7 +3287,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             background:C.grayPale, color:C.navy, border:"2px solid "+C.grayL,
             borderRadius:14, fontSize:15, fontWeight:700, padding:"14px 0",
             cursor:"pointer", fontFamily:"inherit" }}>もどる</button>
-        </Sheet>
+        </BottomSheet>
       )}
 
       <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
@@ -3658,7 +3661,8 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
   const [, setTick]                = useState(0);
   const [loading,    setLoading]   = useState(true);
   const [dbError,    setDbError]   = useState(null);
-  const [showPicker, setShowPicker] = useState(false);
+  const [showPicker,   setShowPicker]   = useState(false);
+  const [pickerSearch, setPickerSearch] = useState("");
 
   const fetchOrders = async () => {
     const { data: { user } } = await sb.auth.getUser();
@@ -3774,7 +3778,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
             <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
           </div>
           <div style={{ flex:1 }}>
-            <HiBigBtn color="blue" onClick={()=>setShowPicker(true)}>＋ 案件詳細を追記する</HiBigBtn>
+            <HiBigBtn color="blue" onClick={()=>{ setPickerSearch(""); setShowPicker(true); }}>＋ 案件詳細を追記する</HiBigBtn>
           </div>
         </div>
 
@@ -3790,13 +3794,13 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         {/* 案件ピッカーシート */}
         {showPicker && (
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
-            display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:200 }}
+            display:"flex", alignItems:"center", justifyContent:"center", zIndex:200, padding:"16px" }}
             onClick={e=>{ if(e.target===e.currentTarget) setShowPicker(false); }}>
-            <div style={{ background:C.white, borderRadius:"24px 24px 0 0",
-              width:"100%", maxWidth:480, maxHeight:"70vh", display:"flex", flexDirection:"column",
-              animation:"msgIn 0.22s ease" }}>
-              <div style={{ padding:"16px 20px 10px", borderBottom:"1px solid "+C.grayL,
-                display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div style={{ background:C.white, borderRadius:20,
+              width:"100%", maxWidth:480, maxHeight:"80vh", display:"flex", flexDirection:"column",
+              animation:"msgIn 0.22s ease", boxShadow:"0 8px 40px rgba(0,0,0,0.25)" }}>
+              <div style={{ padding:"16px 20px 12px", borderBottom:"1px solid "+C.grayL,
+                display:"flex", justifyContent:"space-between", alignItems:"center", flexShrink:0 }}>
                 <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>📋 案件を選択</div>
                 <button onClick={()=>setShowPicker(false)}
                   style={{ background:C.grayPale, border:"none", borderRadius:8,
@@ -3804,13 +3808,31 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
                   とじる
                 </button>
               </div>
-              <div style={{ overflowY:"auto", padding:"10px 16px 24px" }}>
-                {orders.map(order=>{
+              <div style={{ padding:"10px 16px 8px", borderBottom:"1px solid "+C.grayL, flexShrink:0 }}>
+                <input
+                  autoFocus
+                  type="text"
+                  value={pickerSearch}
+                  onChange={e=>setPickerSearch(e.target.value)}
+                  placeholder="現場名・受付番号で検索..."
+                  style={{ width:"100%", padding:"10px 14px", borderRadius:10,
+                    border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
+                    outline:"none", color:C.navy, boxSizing:"border-box",
+                    background:"#f7f9ff" }} />
+              </div>
+              <div style={{ overflowY:"auto", padding:"10px 16px 16px", maxHeight:"60vh" }}>
+                {orders.filter(o=>{
+                  const q = pickerSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  return (o.site||"").toLowerCase().includes(q) ||
+                         (o.id||"").toLowerCase().includes(q) ||
+                         (o.address||"").toLowerCase().includes(q);
+                }).map(order=>{
                   const sch = order.schedules[0];
                   const st  = HI_STATUS[order.status] || HI_STATUS["調整中"];
                   return (
                     <button key={order.id}
-                      onClick={()=>{ setShowPicker(false); onGoDetail(order); }}
+                      onClick={()=>{ setShowPicker(false); setPickerSearch(""); onGoDetail(order); }}
                       style={{ width:"100%", padding:"12px 14px", marginBottom:8, borderRadius:12,
                         border:"1px solid "+C.grayL, background:C.white, textAlign:"left",
                         cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:12 }}>
