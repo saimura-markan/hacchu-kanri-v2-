@@ -3352,59 +3352,63 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           </div>
         )}
 
-        <button onClick={onOpenChat}
-          style={{ width:"100%", background:"linear-gradient(135deg,#2eaa72,#1a7a50)",
-            border:"none", borderRadius:16, padding:"16px 20px", cursor:"pointer",
-            display:"flex", alignItems:"center", gap:14, marginBottom:12,
-            boxShadow:"0 4px 16px rgba(46,170,114,0.35)", textAlign:"left" }}>
-          <div style={{ width:44, height:44, background:"rgba(255,255,255,0.2)",
-            borderRadius:"50%", display:"flex", alignItems:"center",
-            justifyContent:"center", fontSize:24, flexShrink:0 }}>💬</div>
-          <div>
-            <div style={{ fontSize:16, fontWeight:900, color:C.white }}>LiBotとチャット</div>
-            <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", marginTop:2 }}>担当者への連絡・日程相談はこちら</div>
-          </div>
-        </button>
+        {viewOnly && (
+          <>
+            <button onClick={onOpenChat}
+              style={{ width:"100%", background:"linear-gradient(135deg,#2eaa72,#1a7a50)",
+                border:"none", borderRadius:16, padding:"16px 20px", cursor:"pointer",
+                display:"flex", alignItems:"center", gap:14, marginBottom:12,
+                boxShadow:"0 4px 16px rgba(46,170,114,0.35)", textAlign:"left" }}>
+              <div style={{ width:44, height:44, background:"rgba(255,255,255,0.2)",
+                borderRadius:"50%", display:"flex", alignItems:"center",
+                justifyContent:"center", fontSize:24, flexShrink:0 }}>💬</div>
+              <div>
+                <div style={{ fontSize:16, fontWeight:900, color:C.white }}>LiBotとチャット</div>
+                <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", marginTop:2 }}>担当者への連絡・日程相談はこちら</div>
+              </div>
+            </button>
 
-        {(canCancel || canReschedule) && (
-          <div style={{ display:"flex", gap:10, marginBottom:16 }}>
-            {canReschedule && (
-              <button onClick={()=>setModal("reschedule")}
-                style={{ flex:1, background:C.white, color:"#6930c3",
-                  border:"2px solid #b090e8", borderRadius:14, fontSize:14, fontWeight:700,
-                  padding:"14px 8px", cursor:"pointer", fontFamily:"inherit" }}>
-                📆 日程変更を相談
-              </button>
+            {(canCancel || canReschedule) && (
+              <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+                {canReschedule && (
+                  <button onClick={()=>setModal("reschedule")}
+                    style={{ flex:1, background:C.white, color:"#6930c3",
+                      border:"2px solid #b090e8", borderRadius:14, fontSize:14, fontWeight:700,
+                      padding:"14px 8px", cursor:"pointer", fontFamily:"inherit" }}>
+                    📆 日程変更を相談
+                  </button>
+                )}
+                {canCancel && (
+                  <button onClick={()=>setModal("cancel")}
+                    style={{ flex:1, background:C.white, color:C.red,
+                      border:"2px solid "+C.red, borderRadius:14, fontSize:14, fontWeight:700,
+                      padding:"14px 8px", cursor:"pointer", fontFamily:"inherit" }}>
+                    🚫 キャンセル依頼
+                  </button>
+                )}
+              </div>
             )}
-            {canCancel && (
-              <button onClick={()=>setModal("cancel")}
-                style={{ flex:1, background:C.white, color:C.red,
-                  border:"2px solid "+C.red, borderRadius:14, fontSize:14, fontWeight:700,
-                  padding:"14px 8px", cursor:"pointer", fontFamily:"inherit" }}>
-                🚫 キャンセル依頼
-              </button>
-            )}
-          </div>
+
+            {order.schedules.map((sch, i) => (
+              <div key={i} style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
+                boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
+                <div style={{ fontSize:15, fontWeight:800, color:C.navy,
+                  borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📅 日程 {i+1}</div>
+                <div style={{ padding:"14px 18px" }}>
+                  {[['日付',sch.date],['時間',sch.start+"〜"+sch.end],
+                    ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers]].map(([label,value])=>
+                    !value ? null : (
+                      <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
+                        <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
+                        <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            ))}
+          </>
         )}
-
-        {order.schedules.map((sch, i) => (
-          <div key={i} style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
-            boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
-            <div style={{ fontSize:15, fontWeight:800, color:C.navy,
-              borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📅 日程 {i+1}</div>
-            <div style={{ padding:"14px 18px" }}>
-              {[['日付',sch.date],['時間',sch.start+"〜"+sch.end],
-                ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers]].map(([label,value])=>
-                !value ? null : (
-                  <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
-                    <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
-                    <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
-                  </div>
-                )
-              )}
-            </div>
-          </div>
-        ))}
 
         <div style={{ display:"flex", alignItems:"center", gap:8,
           borderTop:"2px solid "+C.grayL, paddingTop:20, marginTop:8, marginBottom:16 }}>
@@ -3471,23 +3475,22 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           </>
         )}
 
-        <button onClick={onBack}
-          style={{ display:"block", width:"100%", background:C.white, color:C.navy,
-            border:"2px solid "+C.grayL, borderRadius:14, fontSize:16, fontWeight:700,
-            padding:"15px 0", cursor:"pointer", fontFamily:"inherit",
-            marginBottom: viewOnly ? 12 : 0 }}>
-          ← 一覧にもどる
-        </button>
-
-        {viewOnly && (
+        {!viewOnly && (
           <button onClick={()=>setViewOnly(false)}
             style={{ display:"block", width:"100%",
               background:"linear-gradient(135deg,#2952c8,#0a1f5c)", color:C.white,
               border:"none", borderRadius:14, fontSize:16, fontWeight:800,
-              padding:"16px 0", cursor:"pointer", fontFamily:"inherit" }}>
+              padding:"16px 0", cursor:"pointer", fontFamily:"inherit", marginBottom:12 }}>
             ＋ 詳細を追記する
           </button>
         )}
+
+        <button onClick={onBack}
+          style={{ display:"block", width:"100%", background:C.white, color:C.navy,
+            border:"2px solid "+C.grayL, borderRadius:14, fontSize:16, fontWeight:700,
+            padding:"15px 0", cursor:"pointer", fontFamily:"inherit" }}>
+          ← 一覧にもどる
+        </button>
       </div>
     </div>
   );
