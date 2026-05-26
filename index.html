@@ -3017,7 +3017,7 @@ function SiteAttachments({ paths, blobUrls }) {
   return (
     <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
       {paths.map((path, i) => {
-        // アップロード直後はblob URL、リロード後はpublic URL（site-imagesはpublicバケット前提）
+        // 新規アップロード直後はblob URL、既存DBパスはpublic URL（site-imagesはpublicバケット）
         const url   = blobUrls[path] || sb.storage.from('site-images').getPublicUrl(path).data.publicUrl;
         const isPdf = /\.pdf$/i.test(path);
         if (isPdf) return (
