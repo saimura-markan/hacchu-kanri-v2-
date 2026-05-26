@@ -3172,7 +3172,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     saveTimer.current = setTimeout(() => {
       if (!cid || !siteName) return;
       setSaving(true);
-      sb.from('sites').update({
+      sb.from('sites').upsert({
+        company_id:    cid,
+        site_name:     siteName,
         key_info:      next.key_info,
         parking_info:  next.parking_info,
         contact_name:  next.contact_name,
@@ -3180,8 +3182,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         memo:          next.memo,
         entry_info:    next.entry_info,
         yosei_info:    next.yosei_info,
-      }).eq('company_id', cid).eq('site_name', siteName)
-        .then(() => setSaving(false));
+      }, { onConflict: 'company_id,site_name' })
+        .then(() => setSaving(false))
+        .catch(() => setSaving(false));
     }, 1000);
   };
 
@@ -3217,10 +3220,12 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   };
 
   const handleSave = async () => {
-    if (!cid || !siteName || manualSaving) return;
+    if (manualSaving) return;
     setManualSaving(true);
     try {
-      await sb.from('sites').update({
+      await sb.from('sites').upsert({
+        company_id:    cid,
+        site_name:     siteName,
         key_info:      siteData.key_info,
         parking_info:  siteData.parking_info,
         contact_name:  siteData.contact_name,
@@ -3228,7 +3233,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         memo:          siteData.memo,
         entry_info:    siteData.entry_info,
         yosei_info:    siteData.yosei_info,
-      }).eq('company_id', cid).eq('site_name', siteName);
+      }, { onConflict: 'company_id,site_name' });
       setSavedMsg(true);
       setTimeout(() => setSavedMsg(false), 2000);
     } finally {
