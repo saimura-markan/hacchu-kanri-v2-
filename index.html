@@ -2541,6 +2541,7 @@ function OrderApp({ onDone, onBack }) {
       const svc = SERVICES.find(s => s.id === order.serviceId);
       const d   = order.data;
       const { data: newOrder, error } = await sb.from('orders').insert({
+        company_id:     companyId   || null,
         service:        svc.label,
         site:           d.siteName  || '',
         address:        d.address   || '',
@@ -5349,17 +5350,27 @@ function CompanyPanel({ onClose }) {
 
   const handleDelete = async (id, name) => {
     // 削除前に関連レコードの存在チェック
-    const [{ count: orderCount }, { count: profileCount }, { count: siteCount }] = await Promise.all([
+    // ※ RLSでSELECT拒否時はcountがnullになるため、nullは「取得失敗」として安全側（削除不可）に倒す
+    const [resOrders, resProfiles, resSites] = await Promise.all([
       sb.from('orders').select('id', { count: 'exact', head: true }).eq('company_id', id),
       sb.from('profiles').select('id', { count: 'exact', head: true }).eq('company_id', id),
       sb.from('sites').select('company_id', { count: 'exact', head: true }).eq('company_id', id),
     ]);
-    const used = (orderCount || 0) + (profileCount || 0) + (siteCount || 0);
-    if (used > 0) {
+    // countがnull（取得失敗）の場合も使用中扱いにして安全側に倒す
+    const orderCount   = resOrders.count   ?? -1;
+    const profileCount = resProfiles.count ?? -1;
+    const siteCount    = resSites.count    ?? -1;
+    const fetchFailed  = orderCount < 0 || profileCount < 0 || siteCount < 0;
+    const used         = orderCount + profileCount + siteCount;
+    if (fetchFailed || used > 0) {
+      if (fetchFailed) {
+        alert(`関連データの確認に失敗しました。\nRLSポリシーを確認してください。`);
+        return;
+      }
       const detail = [
-        orderCount  ? `案件 ${orderCount}件` : null,
-        profileCount? `ユーザー ${profileCount}件` : null,
-        siteCount   ? `現場情報 ${siteCount}件` : null,
+        orderCount   > 0 ? `案件 ${orderCount}件`     : null,
+        profileCount > 0 ? `ユーザー ${profileCount}件` : null,
+        siteCount    > 0 ? `現場情報 ${siteCount}件`   : null,
       ].filter(Boolean).join('・');
       alert(`「${name}」（${id}）は使用中のため削除できません。\n関連データ：${detail}\n\n先に関連データを削除または移行してください。`);
       return;
