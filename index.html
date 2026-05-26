@@ -3228,11 +3228,16 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     // 成功したパスのみDBに保存
     if (activeCid && savedPaths.length) {
       const dbPaths = [...preExistingPaths, ...savedPaths];
-      sb.from('sites').upsert({
-        company_id: activeCid,
-        site_name:  siteName,
-        [imgField]: dbPaths,
-      }, { onConflict: 'company_id,site_name' }).catch(() => {});
+      try {
+        const { error: dbErr } = await sb.from('sites').upsert({
+          company_id: activeCid,
+          site_name:  siteName,
+          [imgField]: dbPaths,
+        }, { onConflict: 'company_id,site_name' });
+        if (dbErr) console.error('[sites upsert 失敗]', dbErr.message);
+      } catch (e) {
+        console.error('[sites upsert 失敗]', e.message);
+      }
     }
 
     setUploadingField(null);
