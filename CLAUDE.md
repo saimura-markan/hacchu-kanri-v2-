@@ -302,3 +302,17 @@ scope: `repo` のトークンを `github.com/settings/tokens` で発行して使
 1. saveToSupabaseにzip_code保存追加
 2. デバッグ用console.log削除
 3. 本番動作確認（Vercel）
+
+## 2026-05-26 作業記録
+### 本日完了
+- zip_code保存追加（sitesテーブル）
+- console.log削除
+- Vercel本番動作確認
+- staffロール追加（削除ボタン非表示・admin画面アクセス可）
+- 案件ページ・詳細表示追加
+- メモ・注意事項追記（sitesテーブルに現場単位で保存）
+- 写真・PDF添付（site-imagesバケット作成・RLS設定済み）
+
+### 残タスク
+- 動作確認（メモ入力・写真アップロード）
+- お客様取説作成（PDF + HTML）

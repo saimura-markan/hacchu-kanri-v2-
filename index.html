@@ -2800,7 +2800,7 @@ function EliMessage({ orders, chats }) {
 }
 
 // ── 注文カード ───────────────────────────────────────────
-function HiOrderCard({ role, order, unreadCount, onClick, onChat }) {
+function HiOrderCard({ role, order, unreadCount, onClick, onDetail, onChat }) {
   const st    = HI_STATUS[order.status] || HI_STATUS["調整中"];
   const sch   = order.schedules[0];
   const timer = role === "admin" ? hiGetTimer(order, Date.now()) : null;
@@ -2863,10 +2863,10 @@ function HiOrderCard({ role, order, unreadCount, onClick, onChat }) {
 
       {/* ボタン行 */}
       <div style={{ display:"flex", borderTop:"1px solid "+C.grayL }}>
-        <button onClick={onClick}
+        <button onClick={e=>{ e.stopPropagation(); onDetail && onDetail(); }}
           style={{ flex:1, padding:"10px 0", background:"transparent", border:"none",
             color:C.blue, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>
-          🔍 詳細を見る
+          🔍 詳細を追記する
         </button>
         <div style={{ width:1, background:C.grayL }} />
         <button onClick={e=>{ e.stopPropagation(); onChat && onChat(); }}
@@ -3011,25 +3011,187 @@ function MemoSection({ order }) {
   );
 }
 
-// ── 詳細画面 ─────────────────────────────────────────────
-function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat }) {
-  const [modal, setModal] = useState(null);
+// ── 現場情報管理 ヘルパーコンポーネント ──────────────────────
+function SiteInfoCard({ icon, label, children }) {
+  return (
+    <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
+      boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
+      <div style={{ fontSize:15, fontWeight:800, color:C.navy,
+        borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>
+        {icon} {label}
+      </div>
+      <div style={{ padding:"14px 18px" }}>{children}</div>
+    </div>
+  );
+}
+
+function SiteAttachments({ paths, signedUrls }) {
+  if (!paths || !paths.length) return null;
+  return (
+    <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
+      {paths.map((path, i) => {
+        const url   = signedUrls[path];
+        const isPdf = /\.pdf$/i.test(path);
+        if (isPdf) return (
+          <a key={i} href={url||'#'} target="_blank" rel="noopener"
+            style={{ width:80, height:80, border:"2px solid #f0c0c0", borderRadius:8,
+              display:"flex", flexDirection:"column", alignItems:"center",
+              justifyContent:"center", gap:3, textDecoration:"none",
+              background:"#fff5f5", color:C.red, fontSize:9, fontWeight:700 }}>
+            <span style={{ fontSize:24 }}>📄</span>PDF
+          </a>
+        );
+        return url ? (
+          <img key={i} src={url}
+            style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
+              border:"1px solid "+C.grayL, cursor:"pointer" }}
+            onClick={()=>window.open(url,'_blank')} />
+        ) : (
+          <div key={i} style={{ width:80, height:80, background:C.grayL, borderRadius:8,
+            display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:10, color:C.gray }}>読込中</div>
+        );
+      })}
+    </div>
+  );
+}
+
+function SiteTArea({ value, onChange, placeholder }) {
+  return (
+    <textarea value={value} onChange={e=>onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{ width:"100%", minHeight:72, padding:"10px 12px", borderRadius:10,
+        border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
+        resize:"vertical", outline:"none", color:C.navy,
+        boxSizing:"border-box", lineHeight:1.7 }} />
+  );
+}
+
+function SiteAttachBtn({ imgField, isUploading, onUpload }) {
+  const ref = useRef(null);
+  return (
+    <>
+      <input ref={ref} type="file" accept="image/*,application/pdf" multiple
+        style={{ display:"none" }} onChange={onUpload} />
+      <button onClick={()=>ref.current?.click()} disabled={isUploading}
+        style={{ marginTop:10, padding:"8px 16px", background:C.white, color:C.navy,
+          border:"2px solid "+C.grayL, borderRadius:10, fontSize:13, fontWeight:700,
+          cursor:isUploading?"default":"pointer", fontFamily:"inherit",
+          opacity:isUploading?0.6:1 }}>
+        {isUploading ? "📤 アップロード中..." : "📎 写真/PDFを追加"}
+      </button>
+    </>
+  );
+}
+
+// ── 詳細画面（現場情報管理） ─────────────────────────────────
+function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat, viewOnly: initViewOnly = false }) {
+  const [viewOnly,    setViewOnly]    = useState(initViewOnly);
+  const [modal,       setModal]       = useState(null);
   const [reschedDate, setReschedDate] = useState("");
   const [reschedTime, setReschedTime] = useState("");
   const [reschedErr,  setReschedErr]  = useState("");
-  const [lightboxUrl, setLightboxUrl] = useState(null);
 
-  const st = HI_STATUS[order.status] || HI_STATUS["調整中"];
-  const noReqStatuses = ["完了", "キャンセル", "キャンセル相談中"];
-  const canCancel    = role !== "admin" && !noReqStatuses.includes(order.status);
-  const canReschedule= role !== "admin" && !noReqStatuses.includes(order.status) && order.status !== "日程変更相談中";
+  const [siteData, setSiteData] = useState({
+    key_info:'', key_images:[],
+    parking_info:'', parking_images:[],
+    contact_name:'', contact_phone:'',
+    memo:'', images:[],
+    entry_info:'', entry_images:[],
+    yosei_info:'', yosei_images:[],
+  });
+  const [signedUrls,     setSignedUrls]     = useState({});
+  const [saving,         setSaving]         = useState(false);
+  const [uploadingField, setUploadingField] = useState(null);
+  const saveTimer = useRef(null);
 
-  const ConfRow = ({label,value}) => !value ? null : (
-    <div style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
-      <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
-      <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
-    </div>
-  );
+  const cid      = order.companyId;
+  const siteName = order.site;
+  const st       = HI_STATUS[order.status] || HI_STATUS["調整中"];
+  const noReq    = ["完了","キャンセル","キャンセル相談中"];
+  const canCancel     = role !== "admin" && !noReq.includes(order.status);
+  const canReschedule = role !== "admin" && !noReq.includes(order.status) && order.status !== "日程変更相談中";
+
+  useEffect(() => {
+    if (!cid || !siteName) return;
+    sb.from('sites')
+      .select('key_info,key_images,parking_info,parking_images,contact_name,contact_phone,memo,images,entry_info,entry_images,yosei_info,yosei_images')
+      .eq('company_id', cid).eq('site_name', siteName)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!data) return;
+        setSiteData({
+          key_info:       data.key_info       || '',
+          key_images:     data.key_images     || [],
+          parking_info:   data.parking_info   || '',
+          parking_images: data.parking_images || [],
+          contact_name:   data.contact_name   || '',
+          contact_phone:  data.contact_phone  || '',
+          memo:           data.memo           || '',
+          images:         data.images         || [],
+          entry_info:     data.entry_info     || '',
+          entry_images:   data.entry_images   || [],
+          yosei_info:     data.yosei_info     || '',
+          yosei_images:   data.yosei_images   || [],
+        });
+      });
+  }, [cid, siteName]);
+
+  useEffect(() => {
+    const all = [
+      ...siteData.key_images, ...siteData.parking_images,
+      ...siteData.images, ...siteData.entry_images, ...siteData.yosei_images,
+    ];
+    all.forEach(path => {
+      if (signedUrls[path]) return;
+      sb.storage.from('site-images').createSignedUrl(path, 3600)
+        .then(({ data }) => {
+          if (data?.signedUrl) setSignedUrls(prev => ({ ...prev, [path]: data.signedUrl }));
+        });
+    });
+  }, [siteData.key_images, siteData.parking_images, siteData.images, siteData.entry_images, siteData.yosei_images]);
+
+  const handleText = (field, value) => {
+    const next = { ...siteData, [field]: value };
+    setSiteData(next);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      if (!cid || !siteName) return;
+      setSaving(true);
+      sb.from('sites').update({
+        key_info:      next.key_info,
+        parking_info:  next.parking_info,
+        contact_name:  next.contact_name,
+        contact_phone: next.contact_phone,
+        memo:          next.memo,
+        entry_info:    next.entry_info,
+        yosei_info:    next.yosei_info,
+      }).eq('company_id', cid).eq('site_name', siteName)
+        .then(() => setSaving(false));
+    }, 1000);
+  };
+
+  const handleUpload = async (imgField, e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length || !cid || !siteName) return;
+    setUploadingField(imgField);
+    const newPaths = [];
+    for (const file of files) {
+      const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
+      const path = `${cid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await sb.storage.from('site-images')
+        .upload(path, file, { contentType: file.type });
+      if (!error) newPaths.push(path);
+    }
+    if (newPaths.length) {
+      const updated = [...(siteData[imgField] || []), ...newPaths];
+      await sb.from('sites').update({ [imgField]: updated })
+        .eq('company_id', cid).eq('site_name', siteName);
+      setSiteData(prev => ({ ...prev, [imgField]: updated }));
+    }
+    setUploadingField(null);
+    e.target.value = '';
+  };
 
   const nowStr = () => {
     const t = new Date();
@@ -3038,11 +3200,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
 
   const handleCancel = () => {
     onStatusChange && onStatusChange(order.id, "キャンセル相談中");
-    onChat && onChat(order.id, {
-      id: Date.now(), from: "user",
-      text: "キャンセルをお願いしたいです。\n担当者のご確認をよろしくお願いいたします。",
-      time: nowStr(), read: true
-    });
+    onChat && onChat(order.id, { id:Date.now(), from:"user",
+      text:"キャンセルをお願いしたいです。\n担当者のご確認をよろしくお願いいたします。",
+      time:nowStr(), read:true });
     setModal(null);
   };
 
@@ -3053,21 +3213,17 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
     const [hh, mm] = reschedTime.split(":");
     const timeLabel = mm === "00" ? `${hh}時頃` : `${hh}時${mm}分頃`;
     onStatusChange && onStatusChange(order.id, "日程変更相談中");
-    onChat && onChat(order.id, {
-      id: Date.now(), from: "user",
-      text: `${m}月${d}日 ${timeLabel}への日程変更を希望します。\nご調整のほどよろしくお願いいたします。`,
-      time: nowStr(), read: true
-    });
-    setModal(null);
-    setReschedDate(""); setReschedTime(""); setReschedErr("");
+    onChat && onChat(order.id, { id:Date.now(), from:"user",
+      text:`${m}月${d}日 ${timeLabel}への日程変更を希望します。\nご調整のほどよろしくお願いいたします。`,
+      time:nowStr(), read:true });
+    setModal(null); setReschedDate(""); setReschedTime(""); setReschedErr("");
   };
 
   const Sheet = ({ children }) => (
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
       display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:1000 }}>
       <div style={{ background:C.white, borderRadius:"24px 24px 0 0",
-        padding:"28px 24px 48px", width:"100%", maxWidth:480,
-        animation:"msgIn 0.25s ease" }}>
+        padding:"28px 24px 48px", width:"100%", maxWidth:480, animation:"msgIn 0.25s ease" }}>
         {children}
       </div>
     </div>
@@ -3077,35 +3233,26 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
     <div style={{ background:C.bg, minHeight:"100vh", fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
       <style>{HI_CSS}</style>
 
-      {/* キャンセル確認シート */}
       {modal === "cancel" && (
         <Sheet>
           <div style={{ textAlign:"center", marginBottom:24 }}>
             <div style={{ fontSize:40, marginBottom:10 }}>🚫</div>
-            <div style={{ fontSize:18, fontWeight:800, color:C.navy, marginBottom:8 }}>
-              キャンセルを依頼しますか？
-            </div>
-            <div style={{ fontSize:14, color:C.gray, lineHeight:1.9 }}>
-              担当者へキャンセルの相談メッセージが<br />自動で送られます。
-            </div>
+            <div style={{ fontSize:18, fontWeight:800, color:C.navy, marginBottom:8 }}>キャンセルを依頼しますか？</div>
+            <div style={{ fontSize:14, color:C.gray, lineHeight:1.9 }}>担当者へキャンセルの相談メッセージが<br/>自動で送られます。</div>
           </div>
-          <button onClick={handleCancel}
-            style={{ display:"block", width:"100%",
-              background:"linear-gradient(135deg,#e63946,#b01020)",
-              color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
-              padding:"16px 0", cursor:"pointer", fontFamily:"inherit", marginBottom:10 }}>
+          <button onClick={handleCancel} style={{ display:"block", width:"100%",
+            background:"linear-gradient(135deg,#e63946,#b01020)", color:C.white, border:"none",
+            borderRadius:14, fontSize:16, fontWeight:800, padding:"16px 0", cursor:"pointer",
+            fontFamily:"inherit", marginBottom:10 }}>
             🚫 はい、キャンセルを依頼する
           </button>
-          <button onClick={()=>setModal(null)}
-            style={{ display:"block", width:"100%", background:C.grayPale, color:C.navy,
-              border:"2px solid "+C.grayL, borderRadius:14, fontSize:15, fontWeight:700,
-              padding:"14px 0", cursor:"pointer", fontFamily:"inherit" }}>
-            もどる
-          </button>
+          <button onClick={()=>setModal(null)} style={{ display:"block", width:"100%",
+            background:C.grayPale, color:C.navy, border:"2px solid "+C.grayL,
+            borderRadius:14, fontSize:15, fontWeight:700, padding:"14px 0",
+            cursor:"pointer", fontFamily:"inherit" }}>もどる</button>
         </Sheet>
       )}
 
-      {/* 日程変更フォームシート */}
       {modal === "reschedule" && (
         <Sheet>
           <div style={{ marginBottom:20 }}>
@@ -3114,41 +3261,32 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           </div>
           <div style={{ marginBottom:14 }}>
             <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>変更希望日</div>
-            <input type="date" value={reschedDate}
-              min={new Date().toISOString().split("T")[0]}
+            <input type="date" value={reschedDate} min={new Date().toISOString().split("T")[0]}
               onChange={e=>{ setReschedDate(e.target.value); setReschedErr(""); }}
               style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:10,
-                border:"2px solid "+(reschedErr&&!reschedDate ? C.red : C.grayL),
+                border:"2px solid "+(reschedErr&&!reschedDate?C.red:C.grayL),
                 fontFamily:"inherit", outline:"none", color:C.navy, boxSizing:"border-box" }} />
           </div>
-          <div style={{ marginBottom:reschedErr ? 8 : 20 }}>
+          <div style={{ marginBottom:reschedErr?8:20 }}>
             <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>変更希望時間</div>
             <input type="time" value={reschedTime}
               onChange={e=>{ setReschedTime(e.target.value); setReschedErr(""); }}
               style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:10,
-                border:"2px solid "+(reschedErr&&!reschedTime ? C.red : C.grayL),
+                border:"2px solid "+(reschedErr&&!reschedTime?C.red:C.grayL),
                 fontFamily:"inherit", outline:"none", color:C.navy, boxSizing:"border-box" }} />
           </div>
-          {reschedErr && (
-            <div style={{ color:C.red, fontSize:13, marginBottom:12 }}>⚠️ {reschedErr}</div>
-          )}
-          <button onClick={handleReschedule}
-            style={{ display:"block", width:"100%",
-              background:"linear-gradient(135deg,#6930c3,#4a1f9e)",
-              color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
-              padding:"16px 0", cursor:"pointer", fontFamily:"inherit", marginBottom:10 }}>
-            📆 変更を相談する
-          </button>
-          <button onClick={()=>{ setModal(null); setReschedErr(""); }}
-            style={{ display:"block", width:"100%", background:C.grayPale, color:C.navy,
-              border:"2px solid "+C.grayL, borderRadius:14, fontSize:15, fontWeight:700,
-              padding:"14px 0", cursor:"pointer", fontFamily:"inherit" }}>
-            もどる
-          </button>
+          {reschedErr && <div style={{ color:C.red, fontSize:13, marginBottom:12 }}>⚠️ {reschedErr}</div>}
+          <button onClick={handleReschedule} style={{ display:"block", width:"100%",
+            background:"linear-gradient(135deg,#6930c3,#4a1f9e)", color:C.white, border:"none",
+            borderRadius:14, fontSize:16, fontWeight:800, padding:"16px 0", cursor:"pointer",
+            fontFamily:"inherit", marginBottom:10 }}>📆 変更を相談する</button>
+          <button onClick={()=>{ setModal(null); setReschedErr(""); }} style={{ display:"block", width:"100%",
+            background:C.grayPale, color:C.navy, border:"2px solid "+C.grayL,
+            borderRadius:14, fontSize:15, fontWeight:700, padding:"14px 0",
+            cursor:"pointer", fontFamily:"inherit" }}>もどる</button>
         </Sheet>
       )}
 
-      {/* ヘッダー */}
       <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
         padding:"14px 20px", display:"flex", alignItems:"center", gap:12,
         boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
@@ -3156,11 +3294,18 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           borderRadius:10, padding:"8px 14px", fontSize:14, fontWeight:700,
           color:C.navy, cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
         <img src={LOGO_IMG} style={{ height:54, objectFit:"contain" }} />
-        <div style={{ flex:1, textAlign:"right", fontSize:14, fontWeight:800, color:C.navy }}>詳細</div>
+        <div style={{ flex:1, textAlign:"right" }}>
+          {viewOnly
+            ? <span style={{ fontSize:14, fontWeight:800, color:C.navy }}>案件詳細</span>
+            : saving
+              ? <span style={{ fontSize:12, color:C.gray }}>💾 保存中...</span>
+              : <span style={{ fontSize:14, fontWeight:800, color:C.navy }}>現場情報</span>
+          }
+        </div>
       </div>
 
       <div className="hi-main-content">
-        {/* ステータスバー */}
+
         <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
           borderRadius:18, padding:"18px 20px", marginBottom:16 }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
@@ -3182,7 +3327,6 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           ) : null; })()}
         </div>
 
-        {/* ステータス変更（admin のみ） */}
         {role === "admin" && (
           <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
             boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:16, padding:"14px 18px" }}>
@@ -3192,12 +3336,11 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
                 const active = order.status === key;
                 return (
                   <button key={key}
-                    onClick={() => !active && onStatusChange && onStatusChange(order.id, key)}
+                    onClick={()=>!active && onStatusChange && onStatusChange(order.id, key)}
                     style={{ padding:"7px 14px", borderRadius:99, fontSize:13, fontWeight:700,
-                      border:"2px solid "+(active ? s.border : C.grayL),
-                      background: active ? s.bg : C.white,
-                      color: active ? s.text : C.gray,
-                      cursor: active ? "default" : "pointer", transition:"all 0.15s" }}>
+                      border:"2px solid "+(active?s.border:C.grayL),
+                      background:active?s.bg:C.white, color:active?s.text:C.gray,
+                      cursor:active?"default":"pointer", transition:"all 0.15s" }}>
                     {s.icon} {key}
                   </button>
                 );
@@ -3206,24 +3349,20 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           </div>
         )}
 
-        {/* チャットボタン */}
         <button onClick={onOpenChat}
           style={{ width:"100%", background:"linear-gradient(135deg,#2eaa72,#1a7a50)",
             border:"none", borderRadius:16, padding:"16px 20px", cursor:"pointer",
             display:"flex", alignItems:"center", gap:14, marginBottom:12,
             boxShadow:"0 4px 16px rgba(46,170,114,0.35)", textAlign:"left" }}>
           <div style={{ width:44, height:44, background:"rgba(255,255,255,0.2)",
-            borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:24, flexShrink:0 }}>💬</div>
+            borderRadius:"50%", display:"flex", alignItems:"center",
+            justifyContent:"center", fontSize:24, flexShrink:0 }}>💬</div>
           <div>
             <div style={{ fontSize:16, fontWeight:900, color:C.white }}>LiBotとチャット</div>
-            <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", marginTop:2 }}>
-              担当者への連絡・日程相談はこちら
-            </div>
+            <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", marginTop:2 }}>担当者への連絡・日程相談はこちら</div>
           </div>
         </button>
 
-        {/* キャンセル・日程変更ボタン（一般ユーザーのみ） */}
         {(canCancel || canReschedule) && (
           <div style={{ display:"flex", gap:10, marginBottom:16 }}>
             {canReschedule && (
@@ -3245,75 +3384,127 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat 
           </div>
         )}
 
-        {/* 基本情報 */}
-        <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
-          boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
-          <div style={{ fontSize:15, fontWeight:800, color:C.navy,
-            borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📋 基本情報</div>
-          <div style={{ padding:"14px 18px" }}>
-            <ConfRow label="作業区分" value={HI_SVC_ICON[order.service]+" "+order.service} />
-            <ConfRow label="現場名"   value={order.site} />
-            <ConfRow label="住所"     value={order.address} />
-            <ConfRow label="鍵"       value={order.key} />
-            <ConfRow label="駐車場"   value={order.parking} />
-            <ConfRow label="備考"     value={order.note} />
-          </div>
-        </div>
-
-        {/* 日程 */}
-        {order.schedules.map((sch,i)=>(
+        {order.schedules.map((sch, i) => (
           <div key={i} style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
             boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
             <div style={{ fontSize:15, fontWeight:800, color:C.navy,
               borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📅 日程 {i+1}</div>
             <div style={{ padding:"14px 18px" }}>
-              <ConfRow label="日付"     value={sch.date} />
-              <ConfRow label="時間"     value={sch.start+"〜"+sch.end} />
-              <ConfRow label="作業内容" value={(sch.details||[]).join("・")} />
-              <ConfRow label="作業者数" value={sch.workers} />
+              {[['日付',sch.date],['時間',sch.start+"〜"+sch.end],
+                ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers]].map(([label,value])=>
+                !value ? null : (
+                  <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
+                    <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
+                    <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
+                  </div>
+                )
+              )}
             </div>
           </div>
         ))}
 
-        {/* 添付画像 */}
-        {order.images && order.images.length > 0 && (
-          <div style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
-            boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
-            <div style={{ fontSize:15, fontWeight:800, color:C.navy,
-              borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📷 添付画像</div>
-            <div style={{ padding:"14px 18px", display:"flex", gap:10, flexWrap:"wrap" }}>
-              {order.images.map((path, i) => (
-                <SignedImage key={i} path={path}
-                  onClickUrl={url => setLightboxUrl(url)}
-                  style={{ width:90, height:90, objectFit:"cover", borderRadius:10,
-                    cursor:"pointer", border:"1px solid "+C.grayL }} />
-              ))}
-            </div>
-          </div>
-        )}
+        <div style={{ display:"flex", alignItems:"center", gap:8,
+          borderTop:"2px solid "+C.grayL, paddingTop:20, marginTop:8, marginBottom:16 }}>
+          <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>🏗️ 基本情報</div>
+        </div>
 
-        {/* メモ・注意事項 */}
-        <MemoSection order={order} />
+        <SiteInfoCard icon="🏠" label="現場名">
+          <div style={{ fontSize:17, fontWeight:800, color:C.navy }}>{siteName || '—'}</div>
+        </SiteInfoCard>
+
+        <SiteInfoCard icon="📍" label="住所">
+          <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>{order.address || '—'}</div>
+        </SiteInfoCard>
+
+        {!viewOnly && (
+          <>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+              <div style={{ fontSize:16, fontWeight:900, color:C.navy }}>🏗️ 現場情報</div>
+              <div style={{ fontSize:12, color:C.gray }}>入力は自動保存されます</div>
+            </div>
+
+            <SiteInfoCard icon="🔑" label="鍵の情報">
+              <SiteTArea value={siteData.key_info} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
+              <SiteAttachments paths={siteData.key_images} signedUrls={signedUrls} />
+              <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} />
+            </SiteInfoCard>
+
+            <SiteInfoCard icon="🚗" label="駐車場情報">
+              <SiteTArea value={siteData.parking_info} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
+              <SiteAttachments paths={siteData.parking_images} signedUrls={signedUrls} />
+              <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} />
+            </SiteInfoCard>
+
+            <SiteInfoCard icon="👤" label="担当者様">
+              <input value={siteData.contact_name} onChange={e=>handleText('contact_name',e.target.value)}
+                placeholder="担当者名"
+                style={{ width:"100%", padding:"10px 12px", borderRadius:10,
+                  border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
+                  outline:"none", color:C.navy, boxSizing:"border-box", marginBottom:10 }} />
+              <input value={siteData.contact_phone} onChange={e=>handleText('contact_phone',e.target.value)}
+                placeholder="電話番号" type="tel"
+                style={{ width:"100%", padding:"10px 12px", borderRadius:10,
+                  border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
+                  outline:"none", color:C.navy, boxSizing:"border-box" }} />
+            </SiteInfoCard>
+
+            <SiteInfoCard icon="⚠️" label="現場注意事項">
+              <SiteTArea value={siteData.memo} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
+              <SiteAttachments paths={siteData.images} signedUrls={signedUrls} />
+              <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} />
+            </SiteInfoCard>
+
+            <SiteInfoCard icon="🚪" label="入館情報">
+              <SiteTArea value={siteData.entry_info} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
+              <SiteAttachments paths={siteData.entry_images} signedUrls={signedUrls} />
+              <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} />
+            </SiteInfoCard>
+
+            <SiteInfoCard icon="📦" label="養生範囲">
+              <SiteTArea value={siteData.yosei_info} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
+              <SiteAttachments paths={siteData.yosei_images} signedUrls={signedUrls} />
+              <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} />
+            </SiteInfoCard>
+          </>
+        )}
 
         <button onClick={onBack}
           style={{ display:"block", width:"100%", background:C.white, color:C.navy,
             border:"2px solid "+C.grayL, borderRadius:14, fontSize:16, fontWeight:700,
-            padding:"15px 0", cursor:"pointer", fontFamily:"inherit" }}>
+            padding:"15px 0", cursor:"pointer", fontFamily:"inherit",
+            marginBottom: viewOnly ? 12 : 0 }}>
           ← 一覧にもどる
         </button>
+
+        {viewOnly && (
+          <button onClick={()=>setViewOnly(false)}
+            style={{ display:"block", width:"100%",
+              background:"linear-gradient(135deg,#2952c8,#0a1f5c)", color:C.white,
+              border:"none", borderRadius:14, fontSize:16, fontWeight:800,
+              padding:"16px 0", cursor:"pointer", fontFamily:"inherit" }}>
+            ＋ 詳細を追記する
+          </button>
+        )}
       </div>
-      {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
     </div>
   );
 }
 
+
 // ── チャット画面 ─────────────────────────────────────────
 // LOGO_IMG は共有定数を使用
 
-function ChatScreen({ role, order, messages, onSend, onBack }) {
+function ChatScreen({ role, order, onBack }) {
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const bottomRef = useRef(null);
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
+
+  // 初回メッセージ読み込み
+  useEffect(() => {
+    sb.from('messages').select('*').eq('order_id', order.id).order('id')
+      .then(({ data }) => { if (data) setMessages(data.map(mapChat)); });
+  }, [order.id]);
 
   // Realtime subscription（即時反映）
   useEffect(() => {
@@ -3322,7 +3513,10 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
       .channel(`chat-${oid}`)
       .on('postgres_changes', { event:'INSERT', schema:'public', table:'messages' },
         (payload) => {
-          if (payload.new.order_id === oid) onSend(oid, mapChat(payload.new));
+          if (payload.new.order_id === oid) {
+            const msg = mapChat(payload.new);
+            setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+          }
         })
       .subscribe((status, err) => {
         if (err) console.error('[Realtime chat]', status, err);
@@ -3335,7 +3529,11 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
     const oid = order.id;
     const poll = async () => {
       const { data } = await sb.from('messages').select('*').eq('order_id', oid).order('id');
-      if (data) data.forEach(row => onSend(oid, mapChat(row)));
+      if (data) setMessages(prev => {
+        const rows = data.map(mapChat);
+        const newOnes = rows.filter(r => !prev.some(p => p.id === r.id));
+        return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+      });
     };
     const timer = setInterval(poll, 3000);
     return () => clearInterval(timer);
@@ -3355,7 +3553,8 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
       setInput(text);
       return;
     }
-    onSend(order.id, mapChat(row));
+    const msg = mapChat(row);
+    setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
   };
 
   return (
@@ -3453,18 +3652,13 @@ function ChatScreen({ role, order, messages, onSend, onBack }) {
 }
 
 // ── メイン ───────────────────────────────────────────────
-function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
+function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDetailView, onGoChat }) {
   const [orders,     setOrders]    = useState([]);
-  const [chats,      setChats]     = useState({});
   const [filter,     setFilter]    = useState("全て");
-  const [screen,     setScreen]    = useState("list");
-  const [currentId,  setCurrentId] = useState(null);
   const [, setTick]                = useState(0);
   const [loading,    setLoading]   = useState(true);
   const [dbError,    setDbError]   = useState(null);
   const [showPicker, setShowPicker] = useState(false);
-
-  const current = orders.find(o => o.id === currentId) || null;
 
   const fetchOrders = async () => {
     const { data: { user } } = await sb.auth.getUser();
@@ -3504,32 +3698,6 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
     return () => clearInterval(id);
   }, []);
 
-  const handleStatusChange = (id, newStatus) => {
-    const nowMs = Date.now();
-    setOrders(os => os.map(o => o.id === id
-      ? { ...o, status: newStatus, statusChangedAt: nowMs } : o));
-  };
-
-  const getUnread = id => (chats[id]||[]).filter(m=>m.from==="staff"&&!m.read).length;
-
-  const openChat = async (order) => {
-    if (chats[order.id] === undefined) {
-      const { data } = await sb.from('messages').select('*').eq('order_id', order.id).order('id');
-      setChats(c => ({ ...c, [order.id]: (data || []).map(mapChat) }));
-    } else {
-      setChats(c => ({ ...c, [order.id]: (c[order.id] || []).map(m => ({ ...m, read: true })) }));
-    }
-    setCurrentId(order.id);
-    setScreen("chat");
-  };
-
-  const addMessage = (orderId, msg) => {
-    setChats(c => {
-      const existing = c[orderId] || [];
-      if (existing.some(m => m.id === msg.id)) return c;
-      return { ...c, [orderId]: [...existing, msg] };
-    });
-  };
 
   const counts = {
     全て:       orders.length,
@@ -3562,19 +3730,6 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
     </div>
   );
 
-  if (screen==="chat" && current) return (
-    <ChatScreen role={role} order={current} messages={chats[current.id]||[]}
-      onSend={addMessage} onBack={()=>setScreen("detail")} />
-  );
-
-  if (screen==="detail" && current) return (
-    <DetailScreen role={role} order={current}
-      onBack={()=>setScreen("list")}
-      onOpenChat={()=>openChat(current)}
-      onStatusChange={handleStatusChange}
-      onChat={addMessage} />
-  );
-
   return (
     <div style={{ background:C.bg, minHeight:"100vh",
       fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
@@ -3594,7 +3749,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
       <div className="hi-main-content">
 
         {/* LiBotのメッセージ */}
-        <EliMessage orders={orders} chats={chats} />
+        <EliMessage orders={orders} chats={{}} />
 
         {/* フィルター */}
         <div style={{ display:"flex", gap:8, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
@@ -3614,29 +3769,22 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
           })}
         </div>
 
-        <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
-
-        {orders.length > 0 && (
-          <button onClick={()=>setShowPicker(true)}
-            style={{ width:"100%", background:C.white, border:"2px solid "+C.blue,
-              borderRadius:14, padding:"13px 16px", marginBottom:14, cursor:"pointer",
-              fontFamily:"inherit", display:"flex", alignItems:"center", gap:10,
-              boxShadow:"0 2px 8px rgba(10,31,92,0.07)" }}>
-            <span style={{ fontSize:20 }}>📋</span>
-            <div style={{ textAlign:"left" }}>
-              <div style={{ fontSize:14, fontWeight:800, color:C.blue }}>案件詳細を確認・メモを追加する</div>
-              <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>案件一覧から選んで詳細へ</div>
-            </div>
-            <span style={{ marginLeft:"auto", fontSize:18, color:C.blue }}>›</span>
-          </button>
-        )}
+        <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+          <div style={{ flex:1 }}>
+            <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
+          </div>
+          <div style={{ flex:1 }}>
+            <HiBigBtn color="blue" onClick={()=>setShowPicker(true)}>＋ 案件詳細を追記する</HiBigBtn>
+          </div>
+        </div>
 
         {/* 一覧 */}
         {filtered.map(order=>(
           <HiOrderCard key={order.id} role={role} order={order}
-            unreadCount={getUnread(order.id)}
-            onClick={()=>{ setCurrentId(order.id); setScreen("detail"); }}
-            onChat={()=>openChat(order)} />
+            unreadCount={0}
+            onClick={()=>onGoDetailView(order)}
+            onDetail={()=>onGoDetail(order)}
+            onChat={()=>onGoChat(order)} />
         ))}
 
         {/* 案件ピッカーシート */}
@@ -3662,7 +3810,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout }) {
                   const st  = HI_STATUS[order.status] || HI_STATUS["調整中"];
                   return (
                     <button key={order.id}
-                      onClick={()=>{ setCurrentId(order.id); setScreen("detail"); setShowPicker(false); }}
+                      onClick={()=>{ setShowPicker(false); onGoDetail(order); }}
                       style={{ width:"100%", padding:"12px 14px", marginBottom:8, borderRadius:12,
                         border:"1px solid "+C.grayL, background:C.white, textAlign:"left",
                         cursor:"pointer", fontFamily:"inherit", display:"flex", alignItems:"center", gap:12 }}>
@@ -5577,6 +5725,9 @@ function AdminApp({ role, onLogout }) {
     function App() {
       const [screen, setScreen] = React.useState(null); // null = セッション確認中
       const [userRole, setUserRole] = React.useState(null);
+      const [detailOrder, setDetailOrder] = React.useState(null);
+      const [detailViewOnly, setDetailViewOnly] = React.useState(false);
+      const [chatBackTo, setChatBackTo] = React.useState("detail");
 
       React.useEffect(() => {
         const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
@@ -5602,6 +5753,33 @@ function AdminApp({ role, onLogout }) {
         setScreen((role === "admin" || role === "staff") ? "admin" : "history");
       };
 
+      const handleGoDetail = (order) => {
+        setDetailOrder(order);
+        setDetailViewOnly(false);
+        setScreen("detail");
+      };
+
+      const handleGoDetailView = (order) => {
+        setDetailOrder(order);
+        setDetailViewOnly(true);
+        setScreen("detail");
+      };
+
+      const handleGoChat = (order) => {
+        setDetailOrder(order);
+        setChatBackTo("history");
+        setScreen("chat");
+      };
+
+      const handleDetailOpenChat = () => {
+        setChatBackTo("detail");
+        setScreen("chat");
+      };
+
+      const handleDetailStatusChange = (_, newStatus) => {
+        setDetailOrder(prev => ({ ...prev, status: newStatus, statusChangedAt: Date.now() }));
+      };
+
       if (screen === null) return (
         <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
           height:"100vh", background:C.bg, flexDirection:"column", gap:16,
@@ -5612,7 +5790,9 @@ function AdminApp({ role, onLogout }) {
       );
       if (screen === "login")    return <LoginApp onLogin={handleLogin} onRegister={() => setScreen("register")} />;
       if (screen === "register") return <RegisterApp onDone={() => setScreen("login")} onBack={() => setScreen("login")} />;
-      if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => setScreen("mypage")} onLogout={() => setScreen("login")} />;
+      if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => setScreen("mypage")} onLogout={() => setScreen("login")} onGoDetail={handleGoDetail} onGoDetailView={handleGoDetailView} onGoChat={handleGoChat} />;
+      if (screen === "detail" && detailOrder) return <DetailScreen role={userRole} order={detailOrder} onBack={() => setScreen("history")} onOpenChat={handleDetailOpenChat} onStatusChange={handleDetailStatusChange} onChat={() => {}} viewOnly={detailViewOnly} />;
+      if (screen === "chat" && detailOrder) return <ChatScreen role={userRole} order={detailOrder} onBack={() => setScreen(chatBackTo)} />;
       if (screen === "order")    return <OrderApp onDone={() => setScreen("history")} onBack={() => setScreen("history")} />;
       if (screen === "mypage")   return <MyPageApp onBack={() => setScreen("history")} onLogout={() => setScreen("login")} />;
       if (screen === "admin")    return <AdminApp role={userRole} onLogout={() => setScreen("login")} />;
