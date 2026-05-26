@@ -3117,7 +3117,14 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [manualSaving,   setManualSaving]   = useState(false);
   const [savedMsg,       setSavedMsg]       = useState(false);
   const [uploadingField, setUploadingField] = useState(null);
-  const saveTimer = useRef(null);
+  const saveTimer   = useRef(null);
+  const blobUrlsRef = useRef({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(blobUrlsRef.current).forEach(url => { try { URL.revokeObjectURL(url); } catch(e) {} });
+    };
+  }, []);
 
   const [cid, setCid] = useState(order.companyId || '');
   const siteName = order.site;
@@ -3205,9 +3212,16 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     if (!files.length || !cid || !siteName) return;
     setUploadingField(imgField);
     const newPaths = [];
+    const blobUrlMap = {};
     for (const file of files) {
       const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
       const path = `${cid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      // PDF以外はblob URLを即時生成（Storage権限に依存しない即時表示）
+      if (!/\.pdf$/i.test(path)) {
+        const blobUrl = URL.createObjectURL(file);
+        blobUrlMap[path] = blobUrl;
+        blobUrlsRef.current[path] = blobUrl;
+      }
       const { error } = await sb.storage.from('site-images')
         .upload(path, file, { contentType: file.type });
       if (!error) newPaths.push(path);
@@ -3220,15 +3234,29 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         [imgField]: updated,
       }, { onConflict: 'company_id,site_name' });
       setSiteData(prev => ({ ...prev, [imgField]: updated }));
-      // アップロード直後に署名付きURLを取得してサムネイル即時表示
-      const urlEntries = await Promise.all(
-        newPaths.map(async path => {
-          const { data } = await sb.storage.from('site-images').createSignedUrl(path, 3600);
-          return data?.signedUrl ? [path, data.signedUrl] : null;
+      // blob URLで即時サムネイル表示
+      if (Object.keys(blobUrlMap).length) {
+        setSignedUrls(prev => ({ ...prev, ...blobUrlMap }));
+      }
+      // 署名付きURLを非同期取得して置換（Storage RLSが正しく設定されていれば差し替わる）
+      Promise.all(
+        newPaths.map(async p => {
+          const { data } = await sb.storage.from('site-images').createSignedUrl(p, 3600);
+          return data?.signedUrl ? [p, data.signedUrl] : null;
         })
-      );
-      const newUrls = Object.fromEntries(urlEntries.filter(Boolean));
-      if (Object.keys(newUrls).length) setSignedUrls(prev => ({ ...prev, ...newUrls }));
+      ).then(entries => {
+        const urlMap = Object.fromEntries(entries.filter(Boolean));
+        if (Object.keys(urlMap).length) {
+          setSignedUrls(prev => ({ ...prev, ...urlMap }));
+          // blob URLをrevokeして置換
+          Object.keys(urlMap).forEach(p => {
+            if (blobUrlsRef.current[p]) {
+              URL.revokeObjectURL(blobUrlsRef.current[p]);
+              delete blobUrlsRef.current[p];
+            }
+          });
+        }
+      });
     }
     setUploadingField(null);
     e.target.value = '';
