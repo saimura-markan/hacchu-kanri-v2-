@@ -2890,7 +2890,6 @@ function HiOrderCard({ role, order, unreadCount, onClick, onDetail, onChat }) {
 function MemoSection({ order }) {
   const [memo,      setMemo]      = useState("");
   const [images,    setImages]    = useState([]); // Storage paths
-  const [imgUrls,   setImgUrls]   = useState({}); // path → signedUrl
   const [saving,    setSaving]    = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saved,     setSaved]     = useState(false);
@@ -2910,17 +2909,6 @@ function MemoSection({ order }) {
         setImages(data.images || []);
       });
   }, [cid, site]);
-
-  useEffect(() => {
-    images.forEach(path => {
-      if (imgUrls[path]) return;
-      sb.storage.from('site-images').createSignedUrl(path, 3600)
-        .then(({ data }) => {
-          if (data?.signedUrl)
-            setImgUrls(prev => ({ ...prev, [path]: data.signedUrl }));
-        });
-    });
-  }, [images]);
 
   const handleSaveMemo = async () => {
     if (!cid || !site) return;
@@ -2982,16 +2970,15 @@ function MemoSection({ order }) {
 
         {images.length > 0 && (
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:14 }}>
-            {images.map((path, i) => (
-              imgUrls[path]
-                ? <img key={i} src={imgUrls[path]}
-                    style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
-                      border:"1px solid "+C.grayL, cursor:"pointer" }}
-                    onClick={()=>window.open(imgUrls[path], '_blank')} />
-                : <div key={i} style={{ width:80, height:80, background:C.grayL,
-                    borderRadius:8, display:"flex", alignItems:"center",
-                    justifyContent:"center", fontSize:10, color:C.gray }}>読込中</div>
-            ))}
+            {images.map((path, i) => {
+              const url = sb.storage.from('site-images').getPublicUrl(path).data.publicUrl;
+              return (
+                <img key={i} src={url}
+                  style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
+                    border:"1px solid "+C.grayL, cursor:"pointer" }}
+                  onClick={()=>window.open(url, '_blank')} />
+              );
+            })}
           </div>
         )}
 
@@ -3025,15 +3012,16 @@ function SiteInfoCard({ icon, label, children }) {
   );
 }
 
-function SiteAttachments({ paths, signedUrls }) {
+function SiteAttachments({ paths, blobUrls }) {
   if (!paths || !paths.length) return null;
   return (
     <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
       {paths.map((path, i) => {
-        const url   = signedUrls[path];
+        // アップロード直後はblob URL、リロード後はpublic URL（site-imagesはpublicバケット前提）
+        const url   = blobUrls[path] || sb.storage.from('site-images').getPublicUrl(path).data.publicUrl;
         const isPdf = /\.pdf$/i.test(path);
         if (isPdf) return (
-          <a key={i} href={url||'#'} target="_blank" rel="noopener"
+          <a key={i} href={url} target="_blank" rel="noopener"
             style={{ width:80, height:80, border:"2px solid #f0c0c0", borderRadius:8,
               display:"flex", flexDirection:"column", alignItems:"center",
               justifyContent:"center", gap:3, textDecoration:"none",
@@ -3041,15 +3029,11 @@ function SiteAttachments({ paths, signedUrls }) {
             <span style={{ fontSize:24 }}>📄</span>PDF
           </a>
         );
-        return url ? (
+        return (
           <img key={i} src={url}
             style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
               border:"1px solid "+C.grayL, cursor:"pointer" }}
             onClick={()=>window.open(url,'_blank')} />
-        ) : (
-          <div key={i} style={{ width:80, height:80, background:C.grayL, borderRadius:8,
-            display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:10, color:C.gray }}>読込中</div>
         );
       })}
     </div>
@@ -3105,14 +3089,14 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [reschedErr,  setReschedErr]  = useState("");
 
   const [siteData, setSiteData] = useState({
-    key_info:'', key_images:[],
-    parking_info:'', parking_images:[],
+    key_info:'', parking_info:'',
     contact_name:'', contact_phone:'',
-    memo:'', images:[],
-    entry_info:'', entry_images:[],
-    yosei_info:'', yosei_images:[],
+    memo:'', entry_info:'', yosei_info:'',
   });
-  const [signedUrls,     setSignedUrls]     = useState({});
+  const [imagePaths, setImagePaths] = useState({
+    key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[],
+  });
+  const [blobUrls,       setBlobUrls]       = useState({}); // アップロード直後のblob URL（セッション中保持）
   const [saving,         setSaving]         = useState(false);
   const [manualSaving,   setManualSaving]   = useState(false);
   const [savedMsg,       setSavedMsg]       = useState(false);
@@ -3151,43 +3135,32 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       .maybeSingle()
       .then(({ data }) => {
         if (!data) return;
-        // 画像配列はDBパスを優先しつつ、ローカルのみのパス（アップロード中など）を保持する
+        // テキスト情報のみ更新（blobUrlsは一切触らない）
+        setSiteData({
+          key_info:     data.key_info     || '',
+          parking_info: data.parking_info || '',
+          contact_name: data.contact_name || '',
+          contact_phone:data.contact_phone|| '',
+          memo:         data.memo         || '',
+          entry_info:   data.entry_info   || '',
+          yosei_info:   data.yosei_info   || '',
+        });
+        // 画像パスはDBパスを優先しつつ、未DB保存の新規パスを保持
         const mergeImgs = (dbImgs, prevImgs) => {
           const dbSet = new Set(dbImgs);
           return [...dbImgs, ...(prevImgs || []).filter(p => !dbSet.has(p))];
         };
-        setSiteData(prev => ({
-          key_info:       data.key_info       || '',
+        setImagePaths(prev => ({
           key_images:     mergeImgs(data.key_images     || [], prev.key_images),
-          parking_info:   data.parking_info   || '',
           parking_images: mergeImgs(data.parking_images || [], prev.parking_images),
-          contact_name:   data.contact_name   || '',
-          contact_phone:  data.contact_phone  || '',
-          memo:           data.memo           || '',
           images:         mergeImgs(data.images         || [], prev.images),
-          entry_info:     data.entry_info     || '',
           entry_images:   mergeImgs(data.entry_images   || [], prev.entry_images),
-          yosei_info:     data.yosei_info     || '',
           yosei_images:   mergeImgs(data.yosei_images   || [], prev.yosei_images),
         }));
       });
   };
 
   useEffect(() => { fetchSiteData(cid); }, [cid, siteName]);
-
-  useEffect(() => {
-    const all = [
-      ...siteData.key_images, ...siteData.parking_images,
-      ...siteData.images, ...siteData.entry_images, ...siteData.yosei_images,
-    ];
-    all.forEach(path => {
-      if (signedUrls[path]) return;
-      sb.storage.from('site-images').createSignedUrl(path, 3600)
-        .then(({ data }) => {
-          if (data?.signedUrl) setSignedUrls(prev => ({ ...prev, [path]: data.signedUrl }));
-        });
-    });
-  }, [siteData.key_images, siteData.parking_images, siteData.images, siteData.entry_images, siteData.yosei_images]);
 
   const handleText = (field, value) => {
     const next = { ...siteData, [field]: value };
@@ -3216,10 +3189,10 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     const files = Array.from(e.target.files);
     if (!files.length || !siteName) return;
     const activeCid = cid;
-    const preExistingPaths = siteData[imgField] || []; // 関数呼び出し時点の既存パス
+    const preExistingPaths = imagePaths[imgField] || [];
 
     setUploadingField(imgField);
-    const savedPaths = []; // Storage アップロード成功パス
+    const savedPaths = [];
 
     for (const file of files) {
       const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
@@ -3227,14 +3200,13 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         ? `${activeCid}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
         : `local/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
-      // ── アップロード前にサムネイルを即時表示 ──────────────────
+      // アップロード前にblob URLで即時表示（セッション中はそのまま保持）
       if (!/\.pdf$/i.test(ext)) {
         const blobUrl = URL.createObjectURL(file);
         blobUrlsRef.current[path] = blobUrl;
-        setSignedUrls(prev => ({ ...prev, [path]: blobUrl }));
+        setBlobUrls(prev => ({ ...prev, [path]: blobUrl }));
       }
-      setSiteData(prev => ({ ...prev, [imgField]: [...(prev[imgField] || []), path] }));
-      // ──────────────────────────────────────────────────────────
+      setImagePaths(prev => ({ ...prev, [imgField]: [...(prev[imgField] || []), path] }));
 
       if (!activeCid) { savedPaths.push(path); continue; }
 
@@ -3242,18 +3214,13 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         .upload(path, file, { contentType: file.type });
 
       if (error) {
-        // アップロード失敗 → 表示から除去
-        setSiteData(prev => ({ ...prev, [imgField]: (prev[imgField] || []).filter(p => p !== path) }));
-        setSignedUrls(prev => { const n = { ...prev }; delete n[path]; return n; });
+        // アップロード失敗時のみ除去
+        setImagePaths(prev => ({ ...prev, [imgField]: (prev[imgField] || []).filter(p => p !== path) }));
+        setBlobUrls(prev => { const n = { ...prev }; delete n[path]; return n; });
         if (blobUrlsRef.current[path]) { URL.revokeObjectURL(blobUrlsRef.current[path]); delete blobUrlsRef.current[path]; }
       } else {
+        // 成功：blob URLはセッション中そのまま保持（revokeしない）
         savedPaths.push(path);
-        // 署名付きURLを非同期で取得してblob URLを置換
-        sb.storage.from('site-images').createSignedUrl(path, 3600).then(({ data }) => {
-          if (!data?.signedUrl) return;
-          setSignedUrls(prev => ({ ...prev, [path]: data.signedUrl }));
-          if (blobUrlsRef.current[path]) { URL.revokeObjectURL(blobUrlsRef.current[path]); delete blobUrlsRef.current[path]; }
-        });
       }
     }
 
@@ -3279,17 +3246,17 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         company_id:     cid,
         site_name:      siteName,
         key_info:       siteData.key_info,
-        key_images:     siteData.key_images,
+        key_images:     imagePaths.key_images,
         parking_info:   siteData.parking_info,
-        parking_images: siteData.parking_images,
+        parking_images: imagePaths.parking_images,
         contact_name:   siteData.contact_name,
         contact_phone:  siteData.contact_phone,
         memo:           siteData.memo,
-        images:         siteData.images,
+        images:         imagePaths.images,
         entry_info:     siteData.entry_info,
-        entry_images:   siteData.entry_images,
+        entry_images:   imagePaths.entry_images,
         yosei_info:     siteData.yosei_info,
-        yosei_images:   siteData.yosei_images,
+        yosei_images:   imagePaths.yosei_images,
       }, { onConflict: 'company_id,site_name' });
       setSavedMsg(true);
       setTimeout(() => setSavedMsg(false), 2000);
@@ -3516,29 +3483,29 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>{order.address || '—'}</div>
         </SiteInfoCard>
 
-        {viewOnly && (siteData.key_info || siteData.key_images.length > 0 ||
-          siteData.parking_info || siteData.parking_images.length > 0 ||
+        {viewOnly && (siteData.key_info || imagePaths.key_images.length > 0 ||
+          siteData.parking_info || imagePaths.parking_images.length > 0 ||
           siteData.contact_name || siteData.contact_phone ||
-          siteData.memo || siteData.images.length > 0 ||
-          siteData.entry_info || siteData.entry_images.length > 0 ||
-          siteData.yosei_info || siteData.yosei_images.length > 0) && (
+          siteData.memo || imagePaths.images.length > 0 ||
+          siteData.entry_info || imagePaths.entry_images.length > 0 ||
+          siteData.yosei_info || imagePaths.yosei_images.length > 0) && (
           <>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16,
               borderTop:"2px solid "+C.grayL, paddingTop:20, marginTop:8 }}>
               <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>🏗️ 現場情報</div>
             </div>
 
-            {(siteData.key_info || siteData.key_images.length > 0) && (
+            {(siteData.key_info || imagePaths.key_images.length > 0) && (
               <SiteInfoCard icon="🔑" label="鍵の情報">
                 {siteData.key_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.key_info}</div>}
-                <SiteAttachments paths={siteData.key_images} signedUrls={signedUrls} />
+                <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
 
-            {(siteData.parking_info || siteData.parking_images.length > 0) && (
+            {(siteData.parking_info || imagePaths.parking_images.length > 0) && (
               <SiteInfoCard icon="🚗" label="駐車場情報">
                 {siteData.parking_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.parking_info}</div>}
-                <SiteAttachments paths={siteData.parking_images} signedUrls={signedUrls} />
+                <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
 
@@ -3556,24 +3523,24 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               </SiteInfoCard>
             )}
 
-            {(siteData.memo || siteData.images.length > 0) && (
+            {(siteData.memo || imagePaths.images.length > 0) && (
               <SiteInfoCard icon="⚠️" label="現場注意事項">
                 {siteData.memo && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.memo}</div>}
-                <SiteAttachments paths={siteData.images} signedUrls={signedUrls} />
+                <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
 
-            {(siteData.entry_info || siteData.entry_images.length > 0) && (
+            {(siteData.entry_info || imagePaths.entry_images.length > 0) && (
               <SiteInfoCard icon="🚪" label="入館情報">
                 {siteData.entry_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.entry_info}</div>}
-                <SiteAttachments paths={siteData.entry_images} signedUrls={signedUrls} />
+                <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
 
-            {(siteData.yosei_info || siteData.yosei_images.length > 0) && (
+            {(siteData.yosei_info || imagePaths.yosei_images.length > 0) && (
               <SiteInfoCard icon="📦" label="養生範囲">
                 {siteData.yosei_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.yosei_info}</div>}
-                <SiteAttachments paths={siteData.yosei_images} signedUrls={signedUrls} />
+                <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
           </>
@@ -3588,13 +3555,13 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
             <SiteInfoCard icon="🔑" label="鍵の情報">
               <SiteTArea value={siteData.key_info} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
-              <SiteAttachments paths={siteData.key_images} signedUrls={signedUrls} />
+              <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
               <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} />
             </SiteInfoCard>
 
             <SiteInfoCard icon="🚗" label="駐車場情報">
               <SiteTArea value={siteData.parking_info} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
-              <SiteAttachments paths={siteData.parking_images} signedUrls={signedUrls} />
+              <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
               <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} />
             </SiteInfoCard>
 
@@ -3613,19 +3580,19 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
             <SiteInfoCard icon="⚠️" label="現場注意事項">
               <SiteTArea value={siteData.memo} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
-              <SiteAttachments paths={siteData.images} signedUrls={signedUrls} />
+              <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
               <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} />
             </SiteInfoCard>
 
             <SiteInfoCard icon="🚪" label="入館情報">
               <SiteTArea value={siteData.entry_info} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
-              <SiteAttachments paths={siteData.entry_images} signedUrls={signedUrls} />
+              <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
               <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} />
             </SiteInfoCard>
 
             <SiteInfoCard icon="📦" label="養生範囲">
               <SiteTArea value={siteData.yosei_info} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
-              <SiteAttachments paths={siteData.yosei_images} signedUrls={signedUrls} />
+              <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
               <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} />
             </SiteInfoCard>
 
