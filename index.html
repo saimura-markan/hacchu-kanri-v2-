@@ -3114,6 +3114,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   });
   const [signedUrls,     setSignedUrls]     = useState({});
   const [saving,         setSaving]         = useState(false);
+  const [savedMsg,       setSavedMsg]       = useState(false);
   const [uploadingField, setUploadingField] = useState(null);
   const saveTimer = useRef(null);
 
@@ -3200,9 +3201,35 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       await sb.from('sites').update({ [imgField]: updated })
         .eq('company_id', cid).eq('site_name', siteName);
       setSiteData(prev => ({ ...prev, [imgField]: updated }));
+      // アップロード直後に署名付きURLを取得してサムネイル即時表示
+      const urlEntries = await Promise.all(
+        newPaths.map(async path => {
+          const { data } = await sb.storage.from('site-images').createSignedUrl(path, 3600);
+          return data?.signedUrl ? [path, data.signedUrl] : null;
+        })
+      );
+      const newUrls = Object.fromEntries(urlEntries.filter(Boolean));
+      if (Object.keys(newUrls).length) setSignedUrls(prev => ({ ...prev, ...newUrls }));
     }
     setUploadingField(null);
     e.target.value = '';
+  };
+
+  const handleSave = async () => {
+    if (!cid || !siteName) return;
+    setSaving(true);
+    await sb.from('sites').update({
+      key_info:      siteData.key_info,
+      parking_info:  siteData.parking_info,
+      contact_name:  siteData.contact_name,
+      contact_phone: siteData.contact_phone,
+      memo:          siteData.memo,
+      entry_info:    siteData.entry_info,
+      yosei_info:    siteData.yosei_info,
+    }).eq('company_id', cid).eq('site_name', siteName);
+    setSaving(false);
+    setSavedMsg(true);
+    setTimeout(() => setSavedMsg(false), 2000);
   };
 
   const nowStr = () => {
@@ -3472,6 +3499,16 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               <SiteAttachments paths={siteData.yosei_images} signedUrls={signedUrls} />
               <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} />
             </SiteInfoCard>
+
+            <button onClick={handleSave} disabled={saving}
+              style={{ display:"block", width:"100%",
+                background: savedMsg ? "linear-gradient(135deg,#2eaa72,#1a7a50)" : "linear-gradient(135deg,#2952c8,#0a1f5c)",
+                color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
+                padding:"16px 0", cursor:saving?"default":"pointer",
+                fontFamily:"inherit", marginBottom:8, transition:"background 0.3s",
+                opacity: saving ? 0.7 : 1 }}>
+              {savedMsg ? "保存しました ✓" : saving ? "保存中..." : "💾 保存する"}
+            </button>
           </>
         )}
 
