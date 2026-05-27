@@ -953,7 +953,7 @@ function Step1({ companyId, setCompanyId, setCompanyName, onNext }) {
 }
 
 // ── STEP 2: 個人情報入力 ────────────────────────────────
-function Step2({ data, setData, companyId, companyName, onNext, onBack }) {
+function Step2({ data, setData, companyId, companyName, onNext, onBack, loading, regError }) {
   const [errors, setErrors] = useState({});
 
   const company = companyName || "";
@@ -1028,12 +1028,18 @@ function Step2({ data, setData, companyId, companyName, onNext, onBack }) {
           error={errors.confirmPw} placeholder="もう一度入力してください" />
       </RgField>
 
+      {regError && (
+        <div style={{ background:"#fff0f0", border:"2px solid #e53e3e", borderRadius:10,
+          padding:"12px 14px", marginBottom:14, fontSize:14, color:"#c53030", fontWeight:600 }}>
+          ⚠️ {regError}
+        </div>
+      )}
       <div style={{ marginBottom:12 }}>
-        <RgPrimaryBtn onClick={()=>{ if(validate()) onNext(); }}>
-          登録する →
+        <RgPrimaryBtn onClick={()=>{ if(!loading && validate()) onNext(); }} disabled={loading}>
+          {loading ? "登録中..." : "登録する →"}
         </RgPrimaryBtn>
       </div>
-      <RgSubBtn onClick={onBack}>← もどる</RgSubBtn>
+      <RgSubBtn onClick={onBack} disabled={loading}>← もどる</RgSubBtn>
     </div>
   );
 }
@@ -1088,6 +1094,38 @@ function RegisterApp({ onDone, onBack }) {
   const [data, setData]           = useState({
     name:"", phone:"", email:"", password:"", confirmPw:"",
   });
+  const [regLoading, setRegLoading] = useState(false);
+  const [regError,   setRegError]   = useState("");
+
+  const handleRegister = async () => {
+    setRegLoading(true);
+    setRegError("");
+    // 1. Supabase Auth にユーザー登録
+    const { data: authData, error: signUpErr } = await sb.auth.signUp({
+      email:    data.email.toLowerCase(),
+      password: data.password,
+      options:  { data: { role: "user" } },
+    });
+    if (signUpErr) {
+      setRegError(signUpErr.message);
+      setRegLoading(false);
+      return;
+    }
+    // 2. profiles テーブルに追加
+    if (authData?.user) {
+      const { error: profileErr } = await sb.from('profiles').insert({
+        id:         authData.user.id,
+        name:       data.name,
+        phone:      data.phone,
+        company_id: companyId,
+        company:    companyName,
+        role:       "user",
+      });
+      if (profileErr) console.error('[profiles insert]', profileErr.message);
+    }
+    setRegLoading(false);
+    setDone(true);
+  };
 
   const eliMsg = [
     <>企業IDを入力してください😊<br /><span style={{fontSize:13,color:C.gray}}>担当者より発行されたIDです</span></>,
@@ -1115,7 +1153,8 @@ function RegisterApp({ onDone, onBack }) {
               )}
               {step===1 && (
                 <Step2 data={data} setData={setData} companyId={companyId}
-                  companyName={companyName} onNext={()=>setDone(true)} onBack={()=>setStep(0)} />
+                  companyName={companyName} onNext={handleRegister} onBack={()=>setStep(0)}
+                  loading={regLoading} regError={regError} />
               )}
             </>
           ) : (
