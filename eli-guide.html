@@ -35,7 +35,6 @@
       pointer-events: none;
       z-index: 0;
     }
-
     .hero-container {
       position: relative;
       z-index: 1;
@@ -47,15 +46,12 @@
       justify-content: space-between;
       gap: 32px;
     }
-
-    /* ── 左カラム ── */
     .hero-left {
       display: flex;
       flex-direction: column;
       align-items: flex-start;
       gap: 0;
     }
-
     .service-label {
       font-size: 12px;
       font-weight: 700;
@@ -63,7 +59,6 @@
       letter-spacing: 4px;
       margin-bottom: 4px;
     }
-
     .logo-img {
       height: 160px;
       width: auto;
@@ -75,7 +70,6 @@
       mix-blend-mode: screen;
       filter: brightness(0) invert(1);
     }
-
     .ruby {
       font-size: 12px;
       color: #fff;
@@ -84,7 +78,6 @@
       margin-top: 2px;
       margin-bottom: 8px;
     }
-
     .catchcopy {
       font-size: 42px;
       font-weight: 900;
@@ -94,7 +87,6 @@
       text-shadow: 0 2px 12px rgba(41,82,200,0.4);
       margin-bottom: 8px;
     }
-
     .subcatch {
       font-size: 16px;
       color: rgba(255,255,255,0.75);
@@ -102,7 +94,6 @@
       line-height: 1.6;
       margin-bottom: 20px;
     }
-
     .guide-badge {
       display: inline-flex;
       align-items: center;
@@ -118,8 +109,6 @@
       box-shadow: 0 4px 20px rgba(41,82,200,0.5);
       backdrop-filter: blur(8px);
     }
-
-    /* ── 右カラム（LiBot） ── */
     .hero-libot {
       height: 300px;
       width: auto;
@@ -127,21 +116,395 @@
       filter: drop-shadow(0 8px 24px rgba(41,82,200,0.4));
       flex-shrink: 0;
     }
-
-    /* ── アニメーション ── */
     @keyframes libot-float {
       0%, 100% { transform: translateY(0px); }
       50%       { transform: translateY(-14px); }
     }
-    .libot-float {
-      animation: libot-float 2.8s ease-in-out infinite;
+    .libot-float { animation: libot-float 2.8s ease-in-out infinite; }
+
+    /* ═══════════════════════════════════════
+       目次バー
+    ═══════════════════════════════════════ */
+    .toc-bar {
+      background: #fff;
+      border-bottom: 2px solid #e4e9f5;
+      padding: 0 20px;
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(10,31,92,0.07);
+    }
+    .toc-bar a {
+      display: inline-block;
+      padding: 14px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #5a6e99;
+      text-decoration: none;
+      border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .toc-bar a:hover {
+      color: #2952c8;
+      border-bottom-color: #2952c8;
+    }
+
+    /* ═══════════════════════════════════════
+       セクション共通
+    ═══════════════════════════════════════ */
+    .section-wrap {
+      padding: 52px 24px 0;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .section-wrap:last-of-type { padding-bottom: 72px; }
+
+    .section-title {
+      font-size: 21px;
+      font-weight: 900;
+      color: #0a1f5c;
+      border-left: 5px solid #2952c8;
+      padding-left: 14px;
+      margin-bottom: 22px;
+      scroll-margin-top: 56px;
+    }
+
+    /* ═══════════════════════════════════════
+       E-Liとは？ 特徴カード
+    ═══════════════════════════════════════ */
+    .feat-section {
+      background:
+        linear-gradient(rgba(41,82,200,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(41,82,200,0.07) 1px, transparent 1px),
+        linear-gradient(135deg, #050d1a 0%, #0d1e40 100%);
+      background-size: 48px 48px, 48px 48px, 100% 100%;
+      padding: 52px 24px 56px;
+    }
+    .feat-section .section-title {
+      color: #fff;
+      border-left-color: #00a8ff;
+      text-align: center;
+      border-left: none;
+      padding-left: 0;
+      margin-bottom: 32px;
+    }
+    .feat-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .feat-card {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px;
+      padding: 24px 16px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+      transition: background 0.25s, border-color 0.25s, transform 0.2s, box-shadow 0.2s;
+    }
+    .feat-card:hover {
+      background: rgba(0,168,255,0.08);
+      border-color: rgba(0,168,255,0.35);
+      transform: translateY(-4px);
+      box-shadow: 0 10px 32px rgba(0,168,255,0.14);
+    }
+    .feat-icon {
+      width: 48px;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .feat-icon svg {
+      filter: drop-shadow(0 0 5px #00a8ff) drop-shadow(0 0 10px rgba(0,168,255,0.5));
+    }
+    .feat-card:hover .feat-icon svg {
+      filter: drop-shadow(0 0 7px #00a8ff) drop-shadow(0 0 18px rgba(0,168,255,0.7));
+    }
+    .feat-title { font-size: 14px; font-weight: 800; color: #fff; }
+    .feat-desc  { font-size: 11px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+
+    /* ═══════════════════════════════════════
+       ステップカード
+    ═══════════════════════════════════════ */
+    .step-card {
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
+      border-radius: 18px;
+      padding: 20px 22px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 12px rgba(10,31,92,0.07);
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .step-num {
+      background: linear-gradient(135deg, #1a3a8f, #2952c8);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 900;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(41,82,200,0.3);
+    }
+    .step-content { flex: 1; padding-top: 2px; }
+    .step-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0a1f5c;
+      margin-bottom: 6px;
+    }
+    .step-desc {
+      font-size: 13px;
+      color: #5a6e99;
+      line-height: 1.8;
+    }
+    .step-arrow {
+      text-align: center;
+      color: #2952c8;
+      font-size: 20px;
+      margin: -2px 0 2px 30px;
+      opacity: 0.5;
+    }
+
+    /* ═══════════════════════════════════════
+       Tipボックス
+    ═══════════════════════════════════════ */
+    .tip-box {
+      background: #e8f0ff;
+      border: 1.5px solid #2952c8;
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #0a1f5c;
+      line-height: 1.75;
+    }
+    .tip-box::before { content: "💡 "; }
+
+    /* ═══════════════════════════════════════
+       ステータス一覧
+    ═══════════════════════════════════════ */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .status-item {
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
+      border-radius: 14px;
+      padding: 16px 18px;
+      box-shadow: 0 2px 10px rgba(10,31,92,0.06);
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+    }
+    .status-badge {
+      font-size: 12px;
+      font-weight: 800;
+      border-radius: 99px;
+      padding: 5px 14px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .status-desc {
+      font-size: 13px;
+      color: #5a6e99;
+      line-height: 1.65;
+      padding-top: 2px;
+    }
+
+    /* ═══════════════════════════════════════
+       シンプル情報カード
+    ═══════════════════════════════════════ */
+    .info-card {
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
+      border-radius: 18px;
+      padding: 24px 24px;
+      box-shadow: 0 2px 12px rgba(10,31,92,0.07);
+      font-size: 14px;
+      color: #3a4d7a;
+      line-height: 1.85;
+    }
+    .info-card strong {
+      color: #0a1f5c;
+      font-weight: 800;
+    }
+
+    /* ═══════════════════════════════════════
+       よくある質問
+    ═══════════════════════════════════════ */
+    .faq-item {
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
+      border-radius: 16px;
+      margin-bottom: 10px;
+      box-shadow: 0 2px 10px rgba(10,31,92,0.06);
+      overflow: hidden;
+    }
+    .faq-q {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 18px 20px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 800;
+      color: #0a1f5c;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .faq-q:hover { background: #f4f7ff; }
+    .faq-q-label {
+      background: linear-gradient(135deg, #1a3a8f, #2952c8);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 900;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .faq-q-text { flex: 1; }
+    .faq-chevron {
+      font-size: 14px;
+      color: #8a9cc5;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-a {
+      display: none;
+      padding: 0 20px 18px 64px;
+      font-size: 13px;
+      color: #5a6e99;
+      line-height: 1.8;
+      border-top: 1px solid #f0f4ff;
+    }
+    .faq-item.open .faq-a { display: block; padding-top: 14px; }
+
+    /* ═══════════════════════════════════════
+       お問い合わせカード
+    ═══════════════════════════════════════ */
+    .contact-card {
+      background: linear-gradient(135deg, #0a1f5c 0%, #1a3a8f 100%);
+      border-radius: 22px;
+      padding: 32px 32px;
+      color: #fff;
+      box-shadow: 0 8px 32px rgba(10,31,92,0.25);
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+    .contact-libot {
+      height: 110px;
+      width: auto;
+      flex-shrink: 0;
+      filter: drop-shadow(0 4px 16px rgba(41,82,200,0.5));
+    }
+    .contact-info { flex: 1; }
+    .contact-title {
+      font-size: 18px;
+      font-weight: 900;
+      margin-bottom: 16px;
+      color: #fff;
+    }
+    .contact-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .contact-row:last-child { margin-bottom: 0; }
+    .contact-icon {
+      font-size: 20px;
+      width: 32px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .contact-text {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .contact-text strong {
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 1px;
+    }
+    .contact-sub {
+      font-size: 12px;
+      color: rgba(255,255,255,0.6);
+    }
+    .contact-chat-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,168,255,0.2);
+      border: 1px solid rgba(0,168,255,0.4);
+      border-radius: 99px;
+      padding: 4px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #7cd3ff;
+      margin-top: 4px;
+    }
+
+    /* ═══════════════════════════════════════
+       フッター
+    ═══════════════════════════════════════ */
+    .guide-footer {
+      background: #050d1a;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 20px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 72px;
+    }
+    .footer-logo {
+      height: 38px;
+      width: auto;
+      display: block;
+      mix-blend-mode: screen;
+      filter: brightness(1.8);
+    }
+    .footer-company {
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.85);
+    }
+    .footer-right {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      text-align: right;
+      line-height: 1.9;
     }
 
     /* ═══════════════════════════════════════
        レスポンシブ
     ═══════════════════════════════════════ */
-
-    /* タブレット（481〜1024px） */
     @media (min-width: 481px) and (max-width: 1024px) {
       .hero-container  { padding: 36px 28px 40px; }
       .logo-img        { height: 110px; margin-left: -12px; }
@@ -149,9 +512,9 @@
       .subcatch        { font-size: 14px; }
       .hero-libot      { height: 220px; }
       .guide-badge     { font-size: 14px; padding: 9px 20px; }
+      .feat-grid       { grid-template-columns: repeat(2, 1fr); }
+      .status-grid     { grid-template-columns: repeat(2, 1fr); }
     }
-
-    /* スマホ（〜480px） */
     @media (max-width: 480px) {
       .hero-container  { padding: 24px 16px 28px; flex-direction: row; align-items: flex-start; gap: 12px; }
       .logo-img        { height: 80px; margin-left: -8px; margin-top: 6px; }
@@ -161,261 +524,390 @@
       .subcatch        { font-size: 12px; margin-bottom: 14px; }
       .hero-libot      { height: 140px; margin-top: 24px; }
       .guide-badge     { font-size: 12px; padding: 8px 16px; }
-    }
-
-    /* ═══════════════════════════════════════
-       ガイドコンテンツ本体
-    ═══════════════════════════════════════ */
-    .guide-body {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 40px 24px 80px;
-    }
-
-    .section-title {
-      font-size: 20px;
-      font-weight: 900;
-      color: #0a1f5c;
-      border-left: 5px solid #2952c8;
-      padding-left: 14px;
-      margin-bottom: 20px;
-      margin-top: 48px;
-    }
-
-    .step-card {
-      background: #fff;
-      border: 1.5px solid #e4e9f5;
-      border-radius: 18px;
-      padding: 20px 22px;
-      margin-bottom: 14px;
-      box-shadow: 0 2px 12px rgba(10,31,92,0.07);
-      display: flex;
-      gap: 16px;
-      align-items: flex-start;
-    }
-
-    .step-num {
-      background: linear-gradient(135deg, #1a3a8f, #2952c8);
-      color: #fff;
-      font-size: 18px;
-      font-weight: 900;
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .step-content { flex: 1; }
-
-    .step-title {
-      font-size: 16px;
-      font-weight: 800;
-      color: #0a1f5c;
-      margin-bottom: 6px;
-    }
-
-    .step-desc {
-      font-size: 13px;
-      color: #5a6e99;
-      line-height: 1.75;
-    }
-
-    .tip-box {
-      background: #e8f0ff;
-      border: 1.5px solid #2952c8;
-      border-radius: 12px;
-      padding: 14px 18px;
-      margin-top: 10px;
-      font-size: 12px;
-      color: #0a1f5c;
-      line-height: 1.7;
-    }
-
-    .tip-box::before {
-      content: "💡 ";
-      font-size: 14px;
-    }
-
-    /* フッター */
-    .guide-footer {
-      background: #050d1a;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      padding: 20px 28px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .footer-logo {
-      height: 38px;
-      width: auto;
-      display: block;
-      mix-blend-mode: screen;
-      filter: brightness(1.8);
-    }
-
-    .footer-company {
-      font-size: 13px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.85);
-    }
-
-    .footer-right {
-      font-size: 11px;
-      color: rgba(255,255,255,0.45);
-      text-align: right;
-      line-height: 1.9;
-    }
-
-    @media (max-width: 480px) {
+      .toc-bar a       { padding: 12px 10px; font-size: 12px; }
+      .feat-section    { padding: 36px 16px 40px; }
+      .feat-grid       { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+      .feat-card       { padding: 18px 10px 16px; }
+      .feat-title      { font-size: 13px; }
+      .section-wrap    { padding: 36px 16px 0; }
+      .section-title   { font-size: 18px; }
+      .status-grid     { grid-template-columns: 1fr; }
+      .contact-card    { flex-direction: column; gap: 20px; padding: 24px 20px; }
+      .contact-libot   { height: 80px; }
+      .contact-text strong { font-size: 18px; }
+      .faq-a           { padding: 0 16px 16px 46px; }
       .guide-footer    { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 16px; }
       .footer-right    { text-align: left; font-size: 10px; }
-      .footer-company  { font-size: 12px; }
-      .guide-body      { padding: 28px 14px 60px; }
-      .section-title   { font-size: 17px; margin-top: 36px; }
     }
   </style>
 </head>
 <body>
 
-  <!-- ══════════════════════════════════════
-       ヒーローヘッダー
-  ══════════════════════════════════════ -->
-  <header class="hero">
-    <div class="hero-container">
-
-      <!-- 左：テキスト -->
-      <div class="hero-left">
-        <div class="service-label">工事 受発注システム</div>
-        <img src="./logo_img.png" class="logo-img" alt="E-Li" />
-        <div class="ruby">イーライ</div>
-        <div class="catchcopy">発注を、もっとスマートに。</div>
-        <div class="subcatch">現場を支える、次世代の受発注システム。</div>
-        <div class="guide-badge">📘 お客様ご利用ガイド</div>
-      </div>
-
-      <!-- 右：LiBotキャラクター -->
-      <img src="./eli_img.png" class="hero-libot libot-float" alt="LiBot" />
-
+<!-- ══════════════════════════════════════
+     ヒーローヘッダー
+══════════════════════════════════════ -->
+<header class="hero">
+  <div class="hero-container">
+    <div class="hero-left">
+      <div class="service-label">工事 受発注システム</div>
+      <img src="./logo_img.png" class="logo-img" alt="E-Li" />
+      <div class="ruby">イーライ</div>
+      <div class="catchcopy">発注を、もっとスマートに。</div>
+      <div class="subcatch">現場を支える、次世代の受発注システム。</div>
+      <div class="guide-badge">📘 お客様ご利用ガイド</div>
     </div>
-  </header>
+    <img src="./eli_img.png" class="hero-libot libot-float" alt="LiBot" />
+  </div>
+</header>
 
-  <!-- ══════════════════════════════════════
-       ガイド本文
-  ══════════════════════════════════════ -->
-  <main class="guide-body">
+<!-- ══════════════════════════════════════
+     目次バー
+══════════════════════════════════════ -->
+<nav class="toc-bar">
+  <a href="#about">E-Liとは？</a>
+  <a href="#register">アカウント登録</a>
+  <a href="#login">ログイン</a>
+  <a href="#order">発注の流れ</a>
+  <a href="#status">ステータス</a>
+  <a href="#chat">チャット</a>
+  <a href="#faq">よくある質問</a>
+  <a href="#contact">お問い合わせ</a>
+</nav>
 
-    <h2 class="section-title">🚀 基本的な使い方</h2>
+<!-- ══════════════════════════════════════
+     E-Liとは？
+══════════════════════════════════════ -->
+<section class="feat-section" id="about">
+  <h2 class="section-title">✨ E-Liとは？</h2>
+  <div class="feat-grid">
 
-    <div class="step-card">
-      <div class="step-num">1</div>
-      <div class="step-content">
-        <div class="step-title">ログイン</div>
-        <div class="step-desc">
-          担当者からお知らせしたメールアドレスとパスワードでログインしてください。<br />
-          初回ログイン後は、マイページからパスワードを変更することを推奨します。
+    <div class="feat-card">
+      <div class="feat-icon">
+        <svg viewBox="0 0 24 24" width="36" height="36">
+          <path fill="#00a8ff" d="M16 2L7 13h5L9 22l10-11h-5z"/>
+        </svg>
+      </div>
+      <div class="feat-title">スピーディー</div>
+      <div class="feat-desc">即日対応・迅速発注<br />入力はスマホ数分で完結</div>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#00a8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L3 6v5.5C3 16.9 7 21.5 12 23c5-1.5 9-6.1 9-11.5V6L12 2z"/>
+          <path d="M9 12.5l2 2 4-4"/>
+        </svg>
+      </div>
+      <div class="feat-title">セキュア</div>
+      <div class="feat-desc">SSL暗号化通信<br />安全な情報管理</div>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#00a8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 17A5 5 0 0 1 5 7A8 8 0 0 0 19 7A5 5 0 0 1 19 17H5z"/>
+          <path d="M7 20l3 2.5 5-5"/>
+        </svg>
+      </div>
+      <div class="feat-title">クラウド管理</div>
+      <div class="feat-desc">いつでも確認・管理<br />スマホ・PC対応</div>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#00a8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 7v5l3.5 3.5"/>
+        </svg>
+      </div>
+      <div class="feat-title">24/365</div>
+      <div class="feat-desc">年中無休サービス<br />チャットは24時間受付</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     アカウント登録
+══════════════════════════════════════ -->
+<section class="section-wrap" id="register">
+  <h2 class="section-title">📝 アカウント登録</h2>
+
+  <div class="step-card">
+    <div class="step-num">1</div>
+    <div class="step-content">
+      <div class="step-title">E-Liにアクセスして登録ページへ</div>
+      <div class="step-desc">ログイン画面下の「新規アカウントを作成する」をタップしてください。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">2</div>
+    <div class="step-content">
+      <div class="step-title">企業IDを入力して会社を確認</div>
+      <div class="step-desc">担当者からお知らせした <strong>企業ID（MK-XXXX 形式）</strong> を入力し「確認する」をタップ。会社名が表示されたら「つぎへ」をタップしてください。</div>
+      <div class="tip-box">企業IDがわからない場合は担当者にお問い合わせください。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">3</div>
+    <div class="step-content">
+      <div class="step-title">お客様情報を入力して登録</div>
+      <div class="step-desc">氏名・電話番号・メールアドレス・パスワードを入力し「登録する」をタップしてください。</div>
+      <div class="tip-box">パスワードは英字・数字を含む8文字以上で設定してください。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">✅</div>
+    <div class="step-content">
+      <div class="step-title">登録完了</div>
+      <div class="step-desc">「登録が完了しました！」と表示されたら登録成功です。「ログイン画面へ」から、登録したメールアドレスとパスワードでログインしてください。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     ログイン
+══════════════════════════════════════ -->
+<section class="section-wrap" id="login">
+  <h2 class="section-title">🔑 ログイン</h2>
+  <div class="info-card">
+    登録したメールアドレスとパスワードを入力してログインしてください。<br /><br />
+    <strong>パスワードを忘れた場合</strong><br />
+    ログイン画面の「パスワードをわすれた方はこちら」をタップすると、登録メールアドレス宛にパスワードリセットのご案内をお送りします。
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     発注の流れ
+══════════════════════════════════════ -->
+<section class="section-wrap" id="order">
+  <h2 class="section-title">📋 発注の流れ</h2>
+
+  <div class="step-card">
+    <div class="step-num">1</div>
+    <div class="step-content">
+      <div class="step-title">「＋ 新しく工事を頼む」をタップ</div>
+      <div class="step-desc">ホーム画面（案件一覧）の黄色いボタンをタップして発注フォームを開きます。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">2</div>
+    <div class="step-content">
+      <div class="step-title">工事種別を選択</div>
+      <div class="step-desc">産廃・養生・家具移動・清掃・解体など、依頼する工事の種類を選択してください。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">3</div>
+    <div class="step-content">
+      <div class="step-title">現場情報を入力</div>
+      <div class="step-desc">現場名・郵便番号・住所・建物名・部屋番号などを入力してください。郵便番号入力で住所が自動補完されます。</div>
+      <div class="tip-box">一度登録した現場名は次回から予測変換で選択できます。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">4</div>
+    <div class="step-content">
+      <div class="step-title">希望日と作業時間帯を選択</div>
+      <div class="step-desc">「＋ 日程を追加」から希望日を選び、時間帯（終日 / AM / PM）をボタンで選択してください。手動入力も可能です。複数日の追加にも対応しています。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">5</div>
+    <div class="step-content">
+      <div class="step-title">内容を確認して送信</div>
+      <div class="step-desc">入力内容を確認画面で確認し「送信する」をタップすると発注完了です。担当者が内容を確認し、日程調整結果をE-Liでお知らせします。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     ステータス
+══════════════════════════════════════ -->
+<section class="section-wrap" id="status">
+  <h2 class="section-title">🏷 案件ステータスの見方</h2>
+  <div class="status-grid">
+
+    <div class="status-item">
+      <span class="status-badge" style="background:#fff8d0;color:#b58a00;border:1.5px solid #f5c800;">調整中</span>
+      <div class="status-desc">担当者が日程を確認・調整中です。しばらくお待ちください。</div>
+    </div>
+
+    <div class="status-item">
+      <span class="status-badge" style="background:#e8f0ff;color:#2952c8;border:1.5px solid #2952c8;">日程確定</span>
+      <div class="status-desc">作業日程が確定しました。詳細を確認してください。</div>
+    </div>
+
+    <div class="status-item">
+      <span class="status-badge" style="background:#fff0e0;color:#c06000;border:1.5px solid #f07800;">日程相談中</span>
+      <div class="status-desc">日程を再調整中です。チャットで詳細をご確認ください。</div>
+    </div>
+
+    <div class="status-item">
+      <span class="status-badge" style="background:#e6f9f1;color:#1e8855;border:1.5px solid #2eaa72;">完了</span>
+      <div class="status-desc">作業が完了しました。ご利用ありがとうございました。</div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     チャット機能
+══════════════════════════════════════ -->
+<section class="section-wrap" id="chat">
+  <h2 class="section-title">💬 チャット機能</h2>
+  <div class="info-card">
+    案件一覧の「チャット」ボタンをタップすると、その案件の担当者とメッセージのやり取りができます。<br /><br />
+    <strong>LINE・メール・FAXは不要です。</strong>現場の追加連絡・鍵の確認・写真の共有などすべてE-Li上で完結できます。<br /><br />
+    📞 担当者への返信は営業時間内（<strong>平日 9:00〜18:00</strong>）となります。緊急の場合はお電話ください。
+    <div class="tip-box">未読メッセージがある案件はカードにバッジ表示されます。見逃しを防ぎます。</div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     よくある質問
+══════════════════════════════════════ -->
+<section class="section-wrap" id="faq">
+  <h2 class="section-title">❓ よくある質問</h2>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="toggleFaq(this)">
+      <div class="faq-q-label">Q</div>
+      <div class="faq-q-text">企業IDがわかりません</div>
+      <div class="faq-chevron">▼</div>
+    </div>
+    <div class="faq-a">担当者にお問い合わせいただくか、お電話（06-6392-3882）でご連絡ください。</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="toggleFaq(this)">
+      <div class="faq-q-label">Q</div>
+      <div class="faq-q-text">パスワードを忘れました</div>
+      <div class="faq-chevron">▼</div>
+    </div>
+    <div class="faq-a">ログイン画面の「パスワードをわすれた方はこちら」をタップしてください。登録メールアドレス宛にパスワードリセットのご案内をお送りします。</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="toggleFaq(this)">
+      <div class="faq-q-label">Q</div>
+      <div class="faq-q-text">キャンセルや日程変更はできますか？</div>
+      <div class="faq-chevron">▼</div>
+    </div>
+    <div class="faq-a">
+      案件詳細画面から操作できます。<br />
+      ・<strong>キャンセル</strong>：「キャンセル依頼」ボタンから申請<br />
+      ・<strong>日程変更</strong>：「日程変更を相談」ボタンから希望日時を入力<br />
+      担当者が確認後、チャットで結果をお知らせします。
+    </div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="toggleFaq(this)">
+      <div class="faq-q-label">Q</div>
+      <div class="faq-q-text">複数の現場を登録できますか？</div>
+      <div class="faq-chevron">▼</div>
+    </div>
+    <div class="faq-a">はい、発注時に入力した現場情報は自動的に登録されます。次回の発注時から現場名を入力すると予測変換で選択できるようになります。</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="toggleFaq(this)">
+      <div class="faq-q-label">Q</div>
+      <div class="faq-q-text">スマートフォンで使えますか？</div>
+      <div class="faq-chevron">▼</div>
+    </div>
+    <div class="faq-a">はい、スマートフォン・タブレット・PCすべてに対応しています。専用アプリは不要で、ブラウザ（Safari / Chrome など）からご利用いただけます。</div>
+  </div>
+
+  <div class="faq-item">
+    <div class="faq-q" onclick="toggleFaq(this)">
+      <div class="faq-q-label">Q</div>
+      <div class="faq-q-text">ログインできません</div>
+      <div class="faq-chevron">▼</div>
+    </div>
+    <div class="faq-a">メールアドレスとパスワードをご確認ください。パスワードは英字・数字を含む8文字以上です。それでも解決しない場合はお電話（06-6392-3882）までご連絡ください。</div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════
+     お問い合わせ
+══════════════════════════════════════ -->
+<section class="section-wrap" id="contact">
+  <h2 class="section-title">📞 お問い合わせ</h2>
+  <div class="contact-card">
+    <img src="./eli_img.png" class="contact-libot libot-float" alt="LiBot" />
+    <div class="contact-info">
+      <div class="contact-title">お気軽にご連絡ください</div>
+
+      <div class="contact-row">
+        <div class="contact-icon">📞</div>
+        <div class="contact-text">
+          <strong>06-6392-3882</strong><br />
+          <span class="contact-sub">平日 9:00〜18:00 受付</span>
         </div>
-        <div class="tip-box">パスワードは英字・数字を含む8文字以上で設定してください。</div>
       </div>
-    </div>
 
-    <div class="step-card">
-      <div class="step-num">2</div>
-      <div class="step-content">
-        <div class="step-title">工事を発注する</div>
-        <div class="step-desc">
-          ホーム画面の「➕ 新しく工事を頼む」ボタンから発注フォームを開きます。<br />
-          作業内容・現場住所・日程・鍵の情報などを入力して送信してください。
+      <div class="contact-row">
+        <div class="contact-icon">💬</div>
+        <div class="contact-text">
+          LiBotチャット<br />
+          <span class="contact-chat-badge">🕐 24時間365日受付</span>
+        </div>
+      </div>
+
+      <div class="contact-row">
+        <div class="contact-icon">🏢</div>
+        <div class="contact-text">
+          <span class="contact-sub">OSAKA MARUKAN<br />〒 大阪府</span>
         </div>
       </div>
     </div>
+  </div>
+</section>
 
-    <div class="step-card">
-      <div class="step-num">3</div>
-      <div class="step-content">
-        <div class="step-title">案件の確認</div>
-        <div class="step-desc">
-          発注後はホーム画面に案件が表示されます。ステータス（調整中 / 日程確定 / 完了 など）を確認できます。<br />
-          案件をタップすると詳細情報・日程・チャットを確認できます。
-        </div>
-      </div>
+<!-- ══════════════════════════════════════
+     フッター
+══════════════════════════════════════ -->
+<footer class="guide-footer">
+  <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+    <img src="./logo_img.png" class="footer-logo" alt="E-Li" />
+    <div>
+      <div class="footer-company">OSAKA MARUKAN</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.45)">E-Li 工事受発注システム</div>
     </div>
+  </div>
+  <div class="footer-right">
+    📞 電話受付：平日 9:00〜18:00<br />
+    💬 チャット：24時間365日受付
+  </div>
+</footer>
 
-    <h2 class="section-title">💬 チャット機能</h2>
-
-    <div class="step-card">
-      <div class="step-num">💬</div>
-      <div class="step-content">
-        <div class="step-title">担当者とのやり取り</div>
-        <div class="step-desc">
-          案件ごとにチャット画面があり、担当者と直接やり取りできます。<br />
-          LINE・メール・FAXは不要になります。現場の追加連絡や確認もE-Liで完結できます。
-        </div>
-        <div class="tip-box">未読メッセージがあると案件カードにバッジが表示されます。</div>
-      </div>
-    </div>
-
-    <h2 class="section-title">🔄 日程変更・キャンセル</h2>
-
-    <div class="step-card">
-      <div class="step-num">🔄</div>
-      <div class="step-content">
-        <div class="step-title">日程変更の依頼</div>
-        <div class="step-desc">
-          案件詳細画面の「日程変更を依頼する」ボタンから希望日時を入力して送信してください。<br />
-          担当者に通知が届き、調整結果をチャットでお知らせします。
-        </div>
-      </div>
-    </div>
-
-    <div class="step-card">
-      <div class="step-num">❌</div>
-      <div class="step-content">
-        <div class="step-title">キャンセルの依頼</div>
-        <div class="step-desc">
-          案件詳細画面の「キャンセルを依頼する」ボタンからキャンセルを申請できます。<br />
-          担当者が確認後、ステータスが「キャンセル」に更新されます。
-        </div>
-        <div class="tip-box">キャンセル料が発生する場合があります。詳細は担当者にご確認ください。</div>
-      </div>
-    </div>
-
-    <h2 class="section-title">📁 案件追記・写真アップ</h2>
-
-    <div class="step-card">
-      <div class="step-num">📁</div>
-      <div class="step-content">
-        <div class="step-title">現場情報の追記</div>
-        <div class="step-desc">
-          ホーム画面の「＋ 案件詳細を追記する」から鍵の情報・駐車場・注意事項などを随時追加・更新できます。<br />
-          現場写真・図面PDFのアップロードにも対応しています。
-        </div>
-        <div class="tip-box">追記した情報は担当者にもリアルタイムで共有されます。</div>
-      </div>
-    </div>
-
-  </main>
-
-  <!-- ══════════════════════════════════════
-       フッター
-  ══════════════════════════════════════ -->
-  <footer class="guide-footer">
-    <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
-      <img src="./logo_img.png" class="footer-logo" alt="E-Li" />
-      <div>
-        <div class="footer-company">OSAKA MARUKAN</div>
-        <div style="font-size:11px;color:rgba(255,255,255,0.45)">E-Li 工事受発注システム</div>
-      </div>
-    </div>
-    <div class="footer-right">
-      📞 電話受付：平日 9:00〜18:00<br />
-      🕐 緊急対応：24時間受付
-    </div>
-  </footer>
+<script>
+  function toggleFaq(el) {
+    const item = el.closest('.faq-item');
+    const isOpen = item.classList.contains('open');
+    // 全部閉じる
+    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+    // クリックしたものが閉じていたら開く
+    if (!isOpen) item.classList.add('open');
+  }
+</script>
 
 </body>
 </html>
