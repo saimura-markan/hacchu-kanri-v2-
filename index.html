@@ -4045,6 +4045,29 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         {/* LiBotのメッセージ */}
         <EliMessage orders={orders} chats={{}} />
 
+        {/* アップデート情報 */}
+        <div style={{ marginBottom:18 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+            <span style={{ fontSize:13, fontWeight:800, color:C.navy, letterSpacing:1 }}>📢 アップデート情報</span>
+            <span style={{ background:"#2952c8", color:"#fff", fontSize:11, fontWeight:700, borderRadius:99, padding:"2px 9px" }}>NEW</span>
+          </div>
+          {[
+            { icon:"🔄", color:"#fff3cd", border:"#f0c040", title:"キャンセル・日程変更リクエスト機能", body:"発注するだけでなく、キャンセルや日程変更の依頼もE-Li上から直接できるようになりました。" },
+            { icon:"💬", color:"#e8f0ff", border:"#2952c8", title:"案件ごとのチャット機能", body:"担当者とのやり取りをE-Li上で完結。LINE・メール・FAXは不要になります。" },
+            { icon:"📁", color:"#eafaf1", border:"#27ae60", title:"案件管理機能（追記・写真アップ）", body:"鍵の情報・駐車場情報・注意事項などをスマホから簡単に更新でき、写真もアップ可能。案件データをE-Liに蓄積していけるため「伝え忘れ」がなくなります。" },
+          ].map((item, i) => (
+            <div key={i} style={{ background:item.color, border:"1.5px solid "+item.border,
+              borderRadius:14, padding:"12px 14px", marginBottom:8,
+              boxShadow:"0 2px 8px rgba(10,31,92,0.06)", display:"flex", gap:12, alignItems:"flex-start" }}>
+              <div style={{ fontSize:24, lineHeight:1, flexShrink:0, marginTop:2 }}>{item.icon}</div>
+              <div>
+                <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:4 }}>{item.title}</div>
+                <div style={{ fontSize:12, color:"#444", lineHeight:1.6 }}>{item.body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
         {/* フィルター */}
         <div style={{ display:"flex", gap:8, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
           {Object.entries(counts).map(([key,cnt])=>{
