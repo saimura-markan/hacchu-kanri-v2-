@@ -1179,6 +1179,25 @@ const SERVICES = [
 ];
 
 const TIME_OPTIONS = ['08:00', '08:15', '08:30', '08:45', '09:00', '09:15', '09:30', '09:45', '10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30', '11:45', '12:00', '12:15', '12:30', '12:45', '13:00', '13:15', '13:30', '13:45', '14:00', '14:15', '14:30', '14:45', '15:00', '15:15', '15:30', '15:45', '16:00', '16:15', '16:30', '16:45', '17:00', '17:15', '17:30', '17:45', '18:00', '18:15', '18:30', '18:45', '19:00', '19:15', '19:30', '19:45', '20:00', '20:15', '20:30', '20:45', '21:00', '21:15', '21:30', '21:45', '22:00'];
+// 時間帯パターン（産廃は4種、清掃・解体は3種）
+const TIME_PATTERNS = {
+  sanpai: [
+    { label:"朝一", sub:"9時〜11時",  start:"09:00", end:"11:00" },
+    { label:"昼",   sub:"11時〜13時", start:"11:00", end:"13:00" },
+    { label:"夕方", sub:"15時〜17時", start:"15:00", end:"17:00" },
+    { label:"フリー", sub:"9時〜17時", start:"09:00", end:"17:00" },
+  ],
+  kaitai: [
+    { label:"終日", sub:"9時〜17時",  start:"09:00", end:"17:00" },
+    { label:"AM",   sub:"9時〜12時",  start:"09:00", end:"12:00" },
+    { label:"PM",   sub:"14時〜17時", start:"14:00", end:"17:00" },
+  ],
+  souji: [
+    { label:"終日", sub:"9時〜17時",  start:"09:00", end:"17:00" },
+    { label:"AM",   sub:"9時〜12時",  start:"09:00", end:"12:00" },
+    { label:"PM",   sub:"14時〜17時", start:"14:00", end:"17:00" },
+  ],
+};
 const ASBESTOS_TYPES = ["キッチン","浴室","クッションフロア","その他"];
 
 // ── 現場名サジェスト入力（Supabase sites テーブル連携） ──────
@@ -1422,6 +1441,37 @@ function TimeSelect({ value, onChange, label, hasError }) {
         <option value="">選択</option>
         {TIME_OPTIONS.map(t=><option key={t} value={t}>{t}</option>)}
       </select>
+    </div>
+  );
+}
+
+// 時間帯パターンボタン選択（産廃・清掃・解体用）
+function TimePatternSelect({ serviceId, startTime, endTime, onChange, hasError }) {
+  const patterns = TIME_PATTERNS[serviceId] || [];
+  const activeIdx = patterns.findIndex(p => p.start === startTime && p.end === endTime);
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ fontSize:13, color:hasError?C.red:C.gray, marginBottom:8, fontWeight:600 }}>
+        時間帯{hasError?" ⚠️ 必須":""}
+      </div>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+        {patterns.map((p, i) => {
+          const active = i === activeIdx;
+          return (
+            <button key={p.label} type="button"
+              onClick={() => onChange({ startTime:p.start, endTime:p.end })}
+              style={{ flex:"1 1 auto", minWidth:0, padding:"10px 6px", borderRadius:12,
+                border:"2px solid "+(active?C.blue:hasError&&activeIdx<0?C.red:C.grayL),
+                background:active?C.blue:hasError&&activeIdx<0?"#fff0f0":C.white,
+                color:active?C.white:C.navy, cursor:"pointer", fontFamily:"inherit",
+                textAlign:"center", transition:"all 0.15s", outline:"none" }}>
+              <div style={{ fontSize:15, fontWeight:800 }}>{p.label}</div>
+              <div style={{ fontSize:11, fontWeight:500, marginTop:2,
+                color:active?"rgba(255,255,255,0.8)":C.gray }}>{p.sub}</div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1789,13 +1839,20 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
             fontFamily:"inherit", outline:"none", color:C.navy,
             background:errDate?"#fff0f0":C.white, transition:"all 0.2s" }} />
       </div>
-      <div style={{ display:"flex", gap:10, alignItems:"flex-end", marginBottom:14 }}>
-        <TimeSelect label="開始時間" value={sch.startTime||""}
-          onChange={e=>onChange({...sch,startTime:e.target.value})} hasError={errStart} />
-        <div style={{ paddingBottom:14, fontSize:18, color:C.gray, fontWeight:700, flexShrink:0 }}>〜</div>
-        <TimeSelect label="終了時間" value={sch.endTime||""}
-          onChange={e=>onChange({...sch,endTime:e.target.value})} hasError={errEnd} />
-      </div>
+      {TIME_PATTERNS[serviceId] ? (
+        <TimePatternSelect serviceId={serviceId}
+          startTime={sch.startTime||""} endTime={sch.endTime||""}
+          onChange={({startTime,endTime})=>onChange({...sch,startTime,endTime})}
+          hasError={errStart||errEnd} />
+      ) : (
+        <div style={{ display:"flex", gap:10, alignItems:"flex-end", marginBottom:14 }}>
+          <TimeSelect label="開始時間" value={sch.startTime||""}
+            onChange={e=>onChange({...sch,startTime:e.target.value})} hasError={errStart} />
+          <div style={{ paddingBottom:14, fontSize:18, color:C.gray, fontWeight:700, flexShrink:0 }}>〜</div>
+          <TimeSelect label="終了時間" value={sch.endTime||""}
+            onChange={e=>onChange({...sch,endTime:e.target.value})} hasError={errEnd} />
+        </div>
+      )}
       <div style={{ marginBottom:4 }}>
         <div style={{ fontSize:13, color:C.gray, marginBottom:6, fontWeight:600 }}>作業内容</div>
         <div style={{ background:C.white, borderRadius:10, padding:"0 12px", border:"1px solid "+C.grayL }}>
