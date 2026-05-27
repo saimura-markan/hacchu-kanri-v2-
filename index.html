@@ -1450,10 +1450,25 @@ function TimeSelect({ value, onChange, label, hasError }) {
   );
 }
 
-// 時間帯パターンボタン選択（産廃・清掃・解体用）
+// 時間帯パターンボタン選択（手動入力切替付き）
 function TimePatternSelect({ serviceId, startTime, endTime, onChange, hasError }) {
   const patterns = TIME_PATTERNS[serviceId] || [];
   const activeIdx = patterns.findIndex(p => p.start === startTime && p.end === endTime);
+  // 既存の時間値がどのパターンにも一致しない場合は手動モードで初期化
+  const [isManual, setIsManual] = useState(
+    activeIdx < 0 && (!!startTime || !!endTime)
+  );
+
+  const handlePattern = (p) => {
+    setIsManual(false);
+    onChange({ startTime:p.start, endTime:p.end });
+  };
+  const handleManual = () => {
+    setIsManual(true);
+    onChange({ startTime:"", endTime:"" });
+  };
+
+  const nothingSelected = !isManual && activeIdx < 0;
   return (
     <div style={{ marginBottom:14 }}>
       <div style={{ fontSize:13, color:hasError?C.red:C.gray, marginBottom:8, fontWeight:600 }}>
@@ -1461,13 +1476,13 @@ function TimePatternSelect({ serviceId, startTime, endTime, onChange, hasError }
       </div>
       <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
         {patterns.map((p, i) => {
-          const active = i === activeIdx;
+          const active = !isManual && i === activeIdx;
           return (
             <button key={p.label} type="button"
-              onClick={() => onChange({ startTime:p.start, endTime:p.end })}
+              onClick={() => handlePattern(p)}
               style={{ flex:"1 1 auto", minWidth:0, padding:"10px 6px", borderRadius:12,
-                border:"2px solid "+(active?C.blue:hasError&&activeIdx<0?C.red:C.grayL),
-                background:active?C.blue:hasError&&activeIdx<0?"#fff0f0":C.white,
+                border:"2px solid "+(active?C.blue:hasError&&nothingSelected?C.red:C.grayL),
+                background:active?C.blue:hasError&&nothingSelected?"#fff0f0":C.white,
                 color:active?C.white:C.navy, cursor:"pointer", fontFamily:"inherit",
                 textAlign:"center", transition:"all 0.15s", outline:"none" }}>
               <div style={{ fontSize:15, fontWeight:800 }}>{p.label}</div>
@@ -1476,7 +1491,28 @@ function TimePatternSelect({ serviceId, startTime, endTime, onChange, hasError }
             </button>
           );
         })}
+        <button type="button" onClick={handleManual}
+          style={{ flex:"1 1 auto", minWidth:0, padding:"10px 6px", borderRadius:12,
+            border:"2px solid "+(isManual?C.navy:C.grayL),
+            background:isManual?C.navy:C.white,
+            color:isManual?C.white:C.navy, cursor:"pointer", fontFamily:"inherit",
+            textAlign:"center", transition:"all 0.15s", outline:"none" }}>
+          <div style={{ fontSize:15, fontWeight:800 }}>手動入力</div>
+          <div style={{ fontSize:11, fontWeight:500, marginTop:2,
+            color:isManual?"rgba(255,255,255,0.8)":C.gray }}>時間を指定</div>
+        </button>
       </div>
+      {isManual && (
+        <div style={{ display:"flex", gap:10, alignItems:"flex-end", marginTop:10 }}>
+          <TimeSelect label="開始時間" value={startTime}
+            onChange={e=>onChange({ startTime:e.target.value, endTime })}
+            hasError={hasError&&!startTime} />
+          <div style={{ paddingBottom:14, fontSize:18, color:C.gray, fontWeight:700, flexShrink:0 }}>〜</div>
+          <TimeSelect label="終了時間" value={endTime}
+            onChange={e=>onChange({ startTime, endTime:e.target.value })}
+            hasError={hasError&&!endTime} />
+        </div>
+      )}
     </div>
   );
 }
