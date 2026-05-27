@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E-Li お客様ご利用ガイド</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;
+      background: #f4f7ff;
+      color: #0a1f5c;
+    }
+
+    /* ═══════════════════════════════════════
+       ヒーローヘッダー
+    ═══════════════════════════════════════ */
+    .hero {
+      position: relative;
+      background-color: #050d1a;
+      background-image:
+        linear-gradient(rgba(41,82,200,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(41,82,200,0.07) 1px, transparent 1px);
+      background-size: 48px 48px;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 80% at 50% 50%, rgba(7,20,40,0) 0%, rgba(5,13,26,0.6) 100%),
+        radial-gradient(ellipse 65% 55% at 15% 65%, rgba(41,82,200,0.18) 0%, transparent 100%),
+        radial-gradient(ellipse 55% 45% at 85% 25%, rgba(41,82,200,0.12) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .hero-container {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 48px 40px 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+    }
+
+    /* ── 左カラム ── */
+    .hero-left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0;
+    }
+
+    .service-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 4px;
+      margin-bottom: 4px;
+    }
+
+    .logo-img {
+      height: 160px;
+      width: auto;
+      display: block;
+      object-fit: contain;
+      object-position: left center;
+      margin-left: -18px;
+      align-self: flex-start;
+      mix-blend-mode: screen;
+      filter: brightness(0) invert(1);
+    }
+
+    .ruby {
+      font-size: 12px;
+      color: #fff;
+      letter-spacing: 6px;
+      font-weight: 600;
+      margin-top: 2px;
+      margin-bottom: 8px;
+    }
+
+    .catchcopy {
+      font-size: 42px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: -0.5px;
+      line-height: 1.2;
+      text-shadow: 0 2px 12px rgba(41,82,200,0.4);
+      margin-bottom: 8px;
+    }
+
+    .subcatch {
+      font-size: 16px;
+      color: rgba(255,255,255,0.75);
+      font-weight: 500;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+
+    .guide-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(41,82,200,0.85);
+      border: 1.5px solid rgba(255,255,255,0.25);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+      border-radius: 99px;
+      padding: 10px 24px;
+      letter-spacing: 1px;
+      box-shadow: 0 4px 20px rgba(41,82,200,0.5);
+      backdrop-filter: blur(8px);
+    }
+
+    /* ── 右カラム（LiBot） ── */
+    .hero-libot {
+      height: 300px;
+      width: auto;
+      object-fit: contain;
+      filter: drop-shadow(0 8px 24px rgba(41,82,200,0.4));
+      flex-shrink: 0;
+    }
+
+    /* ── アニメーション ── */
+    @keyframes libot-float {
+      0%, 100% { transform: translateY(0px); }
+      50%       { transform: translateY(-14px); }
+    }
+    .libot-float {
+      animation: libot-float 2.8s ease-in-out infinite;
+    }
+
+    /* ═══════════════════════════════════════
+       レスポンシブ
+    ═══════════════════════════════════════ */
+
+    /* タブレット（481〜1024px） */
+    @media (min-width: 481px) and (max-width: 1024px) {
+      .hero-container  { padding: 36px 28px 40px; }
+      .logo-img        { height: 110px; margin-left: -12px; }
+      .catchcopy       { font-size: 34px; }
+      .subcatch        { font-size: 14px; }
+      .hero-libot      { height: 220px; }
+      .guide-badge     { font-size: 14px; padding: 9px 20px; }
+    }
+
+    /* スマホ（〜480px） */
+    @media (max-width: 480px) {
+      .hero-container  { padding: 24px 16px 28px; flex-direction: row; align-items: flex-start; gap: 12px; }
+      .logo-img        { height: 80px; margin-left: -8px; margin-top: 6px; }
+      .service-label   { font-size: 10px; letter-spacing: 2px; }
+      .ruby            { font-size: 10px; letter-spacing: 3px; }
+      .catchcopy       { font-size: 20px; }
+      .subcatch        { font-size: 12px; margin-bottom: 14px; }
+      .hero-libot      { height: 140px; margin-top: 24px; }
+      .guide-badge     { font-size: 12px; padding: 8px 16px; }
+    }
+
+    /* ═══════════════════════════════════════
+       ガイドコンテンツ本体
+    ═══════════════════════════════════════ */
+    .guide-body {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 40px 24px 80px;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 900;
+      color: #0a1f5c;
+      border-left: 5px solid #2952c8;
+      padding-left: 14px;
+      margin-bottom: 20px;
+      margin-top: 48px;
+    }
+
+    .step-card {
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
+      border-radius: 18px;
+      padding: 20px 22px;
+      margin-bottom: 14px;
+      box-shadow: 0 2px 12px rgba(10,31,92,0.07);
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      background: linear-gradient(135deg, #1a3a8f, #2952c8);
+      color: #fff;
+      font-size: 18px;
+      font-weight: 900;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-content { flex: 1; }
+
+    .step-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #0a1f5c;
+      margin-bottom: 6px;
+    }
+
+    .step-desc {
+      font-size: 13px;
+      color: #5a6e99;
+      line-height: 1.75;
+    }
+
+    .tip-box {
+      background: #e8f0ff;
+      border: 1.5px solid #2952c8;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #0a1f5c;
+      line-height: 1.7;
+    }
+
+    .tip-box::before {
+      content: "💡 ";
+      font-size: 14px;
+    }
+
+    /* フッター */
+    .guide-footer {
+      background: #050d1a;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 20px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .footer-logo {
+      height: 38px;
+      width: auto;
+      display: block;
+      mix-blend-mode: screen;
+      filter: brightness(1.8);
+    }
+
+    .footer-company {
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.85);
+    }
+
+    .footer-right {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      text-align: right;
+      line-height: 1.9;
+    }
+
+    @media (max-width: 480px) {
+      .guide-footer    { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 16px; }
+      .footer-right    { text-align: left; font-size: 10px; }
+      .footer-company  { font-size: 12px; }
+      .guide-body      { padding: 28px 14px 60px; }
+      .section-title   { font-size: 17px; margin-top: 36px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════
+       ヒーローヘッダー
+  ══════════════════════════════════════ -->
+  <header class="hero">
+    <div class="hero-container">
+
+      <!-- 左：テキスト -->
+      <div class="hero-left">
+        <div class="service-label">工事 受発注システム</div>
+        <img src="./logo_img.png" class="logo-img" alt="E-Li" />
+        <div class="ruby">イーライ</div>
+        <div class="catchcopy">発注を、もっとスマートに。</div>
+        <div class="subcatch">現場を支える、次世代の受発注システム。</div>
+        <div class="guide-badge">📘 お客様ご利用ガイド</div>
+      </div>
+
+      <!-- 右：LiBotキャラクター -->
+      <img src="./eli_img.png" class="hero-libot libot-float" alt="LiBot" />
+
+    </div>
+  </header>
+
+  <!-- ══════════════════════════════════════
+       ガイド本文
+  ══════════════════════════════════════ -->
+  <main class="guide-body">
+
+    <h2 class="section-title">🚀 基本的な使い方</h2>
+
+    <div class="step-card">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">ログイン</div>
+        <div class="step-desc">
+          担当者からお知らせしたメールアドレスとパスワードでログインしてください。<br />
+          初回ログイン後は、マイページからパスワードを変更することを推奨します。
+        </div>
+        <div class="tip-box">パスワードは英字・数字を含む8文字以上で設定してください。</div>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">工事を発注する</div>
+        <div class="step-desc">
+          ホーム画面の「➕ 新しく工事を頼む」ボタンから発注フォームを開きます。<br />
+          作業内容・現場住所・日程・鍵の情報などを入力して送信してください。
+        </div>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">案件の確認</div>
+        <div class="step-desc">
+          発注後はホーム画面に案件が表示されます。ステータス（調整中 / 日程確定 / 完了 など）を確認できます。<br />
+          案件をタップすると詳細情報・日程・チャットを確認できます。
+        </div>
+      </div>
+    </div>
+
+    <h2 class="section-title">💬 チャット機能</h2>
+
+    <div class="step-card">
+      <div class="step-num">💬</div>
+      <div class="step-content">
+        <div class="step-title">担当者とのやり取り</div>
+        <div class="step-desc">
+          案件ごとにチャット画面があり、担当者と直接やり取りできます。<br />
+          LINE・メール・FAXは不要になります。現場の追加連絡や確認もE-Liで完結できます。
+        </div>
+        <div class="tip-box">未読メッセージがあると案件カードにバッジが表示されます。</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">🔄 日程変更・キャンセル</h2>
+
+    <div class="step-card">
+      <div class="step-num">🔄</div>
+      <div class="step-content">
+        <div class="step-title">日程変更の依頼</div>
+        <div class="step-desc">
+          案件詳細画面の「日程変更を依頼する」ボタンから希望日時を入力して送信してください。<br />
+          担当者に通知が届き、調整結果をチャットでお知らせします。
+        </div>
+      </div>
+    </div>
+
+    <div class="step-card">
+      <div class="step-num">❌</div>
+      <div class="step-content">
+        <div class="step-title">キャンセルの依頼</div>
+        <div class="step-desc">
+          案件詳細画面の「キャンセルを依頼する」ボタンからキャンセルを申請できます。<br />
+          担当者が確認後、ステータスが「キャンセル」に更新されます。
+        </div>
+        <div class="tip-box">キャンセル料が発生する場合があります。詳細は担当者にご確認ください。</div>
+      </div>
+    </div>
+
+    <h2 class="section-title">📁 案件追記・写真アップ</h2>
+
+    <div class="step-card">
+      <div class="step-num">📁</div>
+      <div class="step-content">
+        <div class="step-title">現場情報の追記</div>
+        <div class="step-desc">
+          ホーム画面の「＋ 案件詳細を追記する」から鍵の情報・駐車場・注意事項などを随時追加・更新できます。<br />
+          現場写真・図面PDFのアップロードにも対応しています。
+        </div>
+        <div class="tip-box">追記した情報は担当者にもリアルタイムで共有されます。</div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ══════════════════════════════════════
+       フッター
+  ══════════════════════════════════════ -->
+  <footer class="guide-footer">
+    <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+      <img src="./logo_img.png" class="footer-logo" alt="E-Li" />
+      <div>
+        <div class="footer-company">OSAKA MARUKAN</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45)">E-Li 工事受発注システム</div>
+      </div>
+    </div>
+    <div class="footer-right">
+      📞 電話受付：平日 9:00〜18:00<br />
+      🕐 緊急対応：24時間受付
+    </div>
+  </footer>
+
+</body>
+</html>
