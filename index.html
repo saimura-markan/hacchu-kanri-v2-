@@ -2089,7 +2089,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     setErrors(errs);
     setShowErrors(true);
     if (errs.length>0) { setTimeout(scrollToFirst,100); return; }
-    onSubmit({siteName,address,addrNum,addrBldg,addrOk,keyInfo,schedules,note});
+    onSubmit({siteName,address,addrNum,addrBldg,addrOk,keyInfo,schedules,note,zipCode});
   };
 
   return (
@@ -2718,15 +2718,15 @@ function OrderApp({ onDone, onBack }) {
           address:      d.address    || '',
           address_num:  d.addrNum    || '',
           address_bldg: d.addrBldg   || '',
-          zip_code:     zipCode      || '',
+          zip_code:     d.zipCode    || '',
         }, { onConflict: ['company_id', 'site_name'] });
         // ローカルキャッシュも更新
         setSitesCache(prev => {
           const exists = prev.some(s => s.site_name === d.siteName);
           if (exists) return prev.map(s => s.site_name === d.siteName
-            ? {...s, address:d.address, address_num:d.addrNum, address_bldg:d.addrBldg, zip_code:zipCode}
+            ? {...s, address:d.address, address_num:d.addrNum, address_bldg:d.addrBldg, zip_code:d.zipCode}
             : s);
-          return [...prev, {site_name:d.siteName, address:d.address||'', address_num:d.addrNum||'', address_bldg:d.addrBldg||'', zip_code:zipCode||''}];
+          return [...prev, {site_name:d.siteName, address:d.address||'', address_num:d.addrNum||'', address_bldg:d.addrBldg||'', zip_code:d.zipCode||''}];
         });
       }
     }
