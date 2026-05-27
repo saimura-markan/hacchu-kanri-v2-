@@ -1179,13 +1179,14 @@ const SERVICES = [
 ];
 
 const TIME_OPTIONS = ['08:00', '08:15', '08:30', '08:45', '09:00', '09:15', '09:30', '09:45', '10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30', '11:45', '12:00', '12:15', '12:30', '12:45', '13:00', '13:15', '13:30', '13:45', '14:00', '14:15', '14:30', '14:45', '15:00', '15:15', '15:30', '15:45', '16:00', '16:15', '16:30', '16:45', '17:00', '17:15', '17:30', '17:45', '18:00', '18:15', '18:30', '18:45', '19:00', '19:15', '19:30', '19:45', '20:00', '20:15', '20:30', '20:45', '21:00', '21:15', '21:30', '21:45', '22:00'];
-// 時間帯パターン（産廃は4種、清掃・解体は3種）
+// 時間帯パターン（全作業区分で終日を選択可能）
 const TIME_PATTERNS = {
   sanpai: [
-    { label:"朝一", sub:"9時〜11時",  start:"09:00", end:"11:00" },
-    { label:"昼",   sub:"11時〜13時", start:"11:00", end:"13:00" },
-    { label:"夕方", sub:"15時〜17時", start:"15:00", end:"17:00" },
-    { label:"フリー", sub:"9時〜17時", start:"09:00", end:"17:00" },
+    { label:"終日",   sub:"9時〜17時",  start:"09:00", end:"17:00" },
+    { label:"朝一",   sub:"9時〜11時",  start:"09:00", end:"11:00" },
+    { label:"昼",     sub:"11時〜13時", start:"11:00", end:"13:00" },
+    { label:"夕方",   sub:"15時〜17時", start:"15:00", end:"17:00" },
+    { label:"フリー", sub:"9時〜17時",  start:"09:00", end:"17:00" },
   ],
   kaitai: [
     { label:"終日", sub:"9時〜17時",  start:"09:00", end:"17:00" },
@@ -1193,6 +1194,11 @@ const TIME_PATTERNS = {
     { label:"PM",   sub:"14時〜17時", start:"14:00", end:"17:00" },
   ],
   souji: [
+    { label:"終日", sub:"9時〜17時",  start:"09:00", end:"17:00" },
+    { label:"AM",   sub:"9時〜12時",  start:"09:00", end:"12:00" },
+    { label:"PM",   sub:"14時〜17時", start:"14:00", end:"17:00" },
+  ],
+  yousei: [
     { label:"終日", sub:"9時〜17時",  start:"09:00", end:"17:00" },
     { label:"AM",   sub:"9時〜12時",  start:"09:00", end:"12:00" },
     { label:"PM",   sub:"14時〜17時", start:"14:00", end:"17:00" },
@@ -1527,7 +1533,7 @@ function AsbestosDetail({ val, onChange }) {
 
 // ── 解体の詳細 ───────────────────────────────────────────
 function KaitaiDetail({ details, detail, onChange, showErrors }) {
-  const v=detail||{floorSize:"",days:"",offDays:"",asbestosDetail:null};
+  const v=detail||{floorSize:"",days:"",offDays:"",asbestosDetail:null,house_plan:""};
   const u=p=>onChange({...v,...p});
   const FLOOR_SIZES=["30㎡以下","30〜50㎡","50㎡以上"];
   const hasFloor=details.includes("フロアめくり");
@@ -1564,6 +1570,17 @@ function KaitaiDetail({ details, detail, onChange, showErrors }) {
           <AsbestosDetail val={v.asbestosDetail} onChange={val=>u({asbestosDetail:val})} />
         </div>
       )}
+      <SubSection title="📄 図面">
+        <RadioGroup options={["図面なし","図面あり"]} value={v.house_plan||""} onChange={val=>u({house_plan:val})} />
+        {v.house_plan==="図面あり"&&(
+          <div style={{ marginTop:10, background:"#eef3ff", borderRadius:10,
+            padding:"12px 14px", border:"1px solid "+C.blue }}>
+            <div style={{ fontSize:14, color:C.blue, fontWeight:700 }}>
+              📷 次のページで図面の写真添付をお願いします
+            </div>
+          </div>
+        )}
+      </SubSection>
     </div>
   );
 }
@@ -1783,6 +1800,17 @@ function YouseiDetail({ details, detail, onChange }) {
             placeholder="例：2Fへ資材10箱の荷上げ" rows={2} />
         </SubSection>
       )}
+      <SubSection title="📄 図面">
+        <RadioGroup options={["図面なし","図面あり"]} value={v.house_plan||""} onChange={val=>u({house_plan:val})} />
+        {v.house_plan==="図面あり"&&(
+          <div style={{ marginTop:10, background:"#eef3ff", borderRadius:10,
+            padding:"12px 14px", border:"1px solid "+C.blue }}>
+            <div style={{ fontSize:14, color:C.blue, fontWeight:700 }}>
+              📷 次のページで図面の写真添付をお願いします
+            </div>
+          </div>
+        )}
+      </SubSection>
     </div>
   );
 }
