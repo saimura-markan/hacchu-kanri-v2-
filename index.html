@@ -1069,13 +1069,6 @@ function RgDone({ data, companyId, companyName, onDone }) {
         ))}
       </div>
 
-      <div style={{ background:"#f0faf5", border:"2px solid "+C.green, borderRadius:14,
-        padding:"14px", marginBottom:24, fontSize:14, color:"#1a5c3a", lineHeight:1.9 }}>
-        📧 <b style={{color:C.blue}}>{data.email}</b> に<br />
-        本登録メールをお送りしました。<br />
-        メール内のリンクをクリックして<br />登録を完了してください。
-      </div>
-
       <button onClick={onDone} style={{ display:"block", width:"100%",
         background:"linear-gradient(135deg,#2952c8,#0a1f5c)",
         color:C.white, border:"none", borderRadius:14,
