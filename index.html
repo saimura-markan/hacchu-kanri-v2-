@@ -3107,6 +3107,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
   useEffect(() => {
     return () => {
+      clearTimeout(saveTimer.current);
       Object.values(blobUrlsRef.current).forEach(url => { try { URL.revokeObjectURL(url); } catch(e) {} });
     };
   }, []);
@@ -3133,8 +3134,10 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     sb.from('sites')
       .select('key_info,key_images,parking_info,parking_images,contact_name,contact_phone,memo,images,entry_info,entry_images,yosei_info,yosei_images')
       .eq('company_id', resolvedCid).eq('site_name', siteName)
-      .maybeSingle()
-      .then(({ data }) => {
+      .limit(1)
+      .then(({ data: rows, error }) => {
+        if (error) { console.error('[fetchSiteData]', error.message); return; }
+        const data = rows?.[0];
         if (!data) return;
         // テキスト情報のみ更新（blobUrlsは一切触らない）
         setSiteData({
@@ -3181,8 +3184,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         entry_info:    next.entry_info,
         yosei_info:    next.yosei_info,
       }, { onConflict: 'company_id,site_name' })
-        .then(() => setSaving(false))
-        .catch(() => setSaving(false));
+        .then(({ error }) => { if (error) console.error('[handleText upsert]', error.message); setSaving(false); })
+        .catch(e => { console.error('[handleText catch]', e.message); setSaving(false); });
     }, 1000);
   };
 
@@ -3248,7 +3251,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     if (manualSaving) return;
     setManualSaving(true);
     try {
-      await sb.from('sites').upsert({
+      const { error } = await sb.from('sites').upsert({
         company_id:     cid,
         site_name:      siteName,
         key_info:       siteData.key_info,
@@ -3264,8 +3267,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         yosei_info:     siteData.yosei_info,
         yosei_images:   imagePaths.yosei_images,
       }, { onConflict: 'company_id,site_name' });
-      setSavedMsg(true);
-      setTimeout(() => setSavedMsg(false), 2000);
+      if (error) { console.error('[handleSave upsert]', error.message); }
+      else { setSavedMsg(true); setTimeout(() => setSavedMsg(false), 2000); }
     } finally {
       setManualSaving(false);
     }
@@ -3330,7 +3333,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           </div>
           <div style={{ marginBottom:14 }}>
             <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>変更希望日</div>
-            <input type="date" value={reschedDate} min={new Date().toISOString().split("T")[0]}
+            <input type="date" value={reschedDate}
               onChange={e=>{ setReschedDate(e.target.value); setReschedErr(""); }}
               style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:10,
                 border:"2px solid "+(reschedErr&&!reschedDate?C.red:C.grayL),
