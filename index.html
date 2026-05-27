@@ -3333,7 +3333,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           </div>
           <div style={{ marginBottom:14 }}>
             <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>変更希望日</div>
-            <input type="date" value={reschedDate}
+            <input type="date" value={reschedDate} min={new Date().toISOString().split("T")[0]}
               onChange={e=>{ setReschedDate(e.target.value); setReschedErr(""); }}
               style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:10,
                 border:"2px solid "+(reschedErr&&!reschedDate?C.red:C.grayL),
