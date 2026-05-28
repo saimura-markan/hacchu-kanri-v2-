@@ -520,7 +520,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
     if (error) { setLoading(false); setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
     const role = data.user?.user_metadata?.role ?? "user";
     if (role !== "admin" && role !== "staff") {
-      const { data: profile } = await sb.from('profiles').select('company_id').eq('id', data.user.id).single();
+      const { data: profile } = await sb.from('profiles').select('company_id').eq('id', data.user.id).maybeSingle();
       if (profile?.company_id) {
         const { data: company } = await sb.from('companies').select('is_active').eq('id', profile.company_id).single();
         if (company && !company.is_active) {
@@ -2660,7 +2660,7 @@ function OrderApp({ onDone, onBack }) {
     sb.auth.getUser().then(({ data: { user } }) => {
       if (!user) { setPersonNameLoading(false); return; }
       setUserId(user.id);
-      sb.from('profiles').select('name, company_id').eq('id', user.id).single()
+      sb.from('profiles').select('name, company_id').eq('id', user.id).maybeSingle()
         .then(({ data }) => {
           if (data?.name) setPersonName(data.name);
           setPersonNameLoading(false);
@@ -3286,7 +3286,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     if (cid) return;
     sb.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
-      sb.from('profiles').select('company_id').eq('id', user.id).single()
+      sb.from('profiles').select('company_id').eq('id', user.id).maybeSingle()
         .then(({ data }) => { if (data?.company_id) setCid(data.company_id); });
     });
   }, []);
@@ -4470,7 +4470,7 @@ function MyPageApp({ onBack, onLogout }) {
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
       if (error && error.code !== 'PGRST116') {
         setDbError(error.message);
       } else if (data) {
