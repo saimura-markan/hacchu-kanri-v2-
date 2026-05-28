@@ -4318,10 +4318,12 @@ function ReadOnlyField({ label, value }) {
 function EditField({ label, value, onChange, error, type, hint }) {
   const [focused, setFocused] = useState(false);
   return (
-    <div style={{ marginBottom:16 }}>
-      <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:6 }}>
-        {label} <span style={{ fontSize:12, color:C.blue, fontWeight:600 }}>（変更可）</span>
-      </div>
+    <div style={{ marginBottom:label?16:0 }}>
+      {label && (
+        <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:6 }}>
+          {label} <span style={{ fontSize:12, color:C.blue, fontWeight:600 }}>（変更可）</span>
+        </div>
+      )}
       <input type={type||"text"} value={value} onChange={onChange}
         onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
         style={{ width:"100%", fontSize:17, padding:"14px 18px", borderRadius:12,
@@ -4512,18 +4514,21 @@ function PwModal({ onClose, email }) {
 
 // ── メイン ───────────────────────────────────────────────
 function MyPageApp({ onBack, onLogout }) {
-  const [name,      setName]      = useState("");
-  const [phone,     setPhone]     = useState("");
-  const [email,     setEmail]     = useState("");
-  const [company,   setCompany]   = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [userId,    setUserId]    = useState(null);
-  const [errors,    setErrors]    = useState({});
-  const [toast,     setToast]     = useState("");
-  const [showPwModal, setShowPwModal] = useState(false);
-  const [loading,   setLoading]   = useState(true);
-  const [dbError,   setDbError]   = useState(null);
-  const [saving,    setSaving]    = useState(false);
+  const [lastName,      setLastName]      = useState("");
+  const [firstName,     setFirstName]     = useState("");
+  const [lastNameKana,  setLastNameKana]  = useState("");
+  const [firstNameKana, setFirstNameKana] = useState("");
+  const [phone,         setPhone]         = useState("");
+  const [email,         setEmail]         = useState("");
+  const [company,       setCompany]       = useState("");
+  const [companyId,     setCompanyId]     = useState("");
+  const [userId,        setUserId]        = useState(null);
+  const [errors,        setErrors]        = useState({});
+  const [toast,         setToast]         = useState("");
+  const [showPwModal,   setShowPwModal]   = useState(false);
+  const [loading,       setLoading]       = useState(true);
+  const [dbError,       setDbError]       = useState(null);
+  const [saving,        setSaving]        = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -4533,7 +4538,7 @@ function MyPageApp({ onBack, onLogout }) {
       setEmail(user.email || "");
       const { data, error } = await sb
         .from('profiles')
-        .select('name, phone, company_id')
+        .select('name, name_kana, phone, company_id')
         .eq('id', user.id)
         .maybeSingle();
       if (error && error.code !== 'PGRST116') {
@@ -4543,7 +4548,12 @@ function MyPageApp({ onBack, onLogout }) {
       }
 
       let cid = data?.company_id || "";
-      setName(data?.name || "");
+      const nameParts = (data?.name || "").split(" ");
+      setLastName(nameParts[0] || "");
+      setFirstName(nameParts.slice(1).join(" ") || "");
+      const kanaParts = (data?.name_kana || "").split(" ");
+      setLastNameKana(kanaParts[0] || "");
+      setFirstNameKana(kanaParts.slice(1).join(" ") || "");
       setPhone(data?.phone || "");
 
       // company_id がプロフィールにない場合は直近の発注からフォールバック
@@ -4577,12 +4587,17 @@ function MyPageApp({ onBack, onLogout }) {
 
   const handleSave = async () => {
     const e = {};
-    if (!name.trim()) e.name = "氏名を入力してください";
+    if (!lastName.trim())      e.lastName      = "姓を入力してください";
+    if (!firstName.trim())     e.firstName     = "名を入力してください";
+    if (!lastNameKana.trim())  e.lastNameKana  = "姓（ふりがな）を入力してください";
+    if (!firstNameKana.trim()) e.firstNameKana = "名（ふりがな）を入力してください";
     if (!/^[\d\-]{10,13}$/.test(phone.replace(/\s/g,""))) e.phone = "正しい電話番号を入力してください";
     setErrors(e);
     if (Object.keys(e).length) return;
+    const fullName     = lastName.trim() + " " + firstName.trim();
+    const fullNameKana = lastNameKana.trim() + " " + firstNameKana.trim();
     setSaving(true);
-    const { error } = await sb.from('profiles').upsert({ id: userId, name, phone });
+    const { error } = await sb.from('profiles').upsert({ id: userId, name: fullName, name_kana: fullNameKana, phone });
     setSaving(false);
     if (error) { showToast("保存に失敗しました"); return; }
     showToast("変更を保存しました");
@@ -4620,7 +4635,7 @@ function MyPageApp({ onBack, onLogout }) {
           boxShadow:"0 4px 24px rgba(10,31,92,0.10)", border:"1px solid "+C.grayL, marginBottom:16 }}>
 
           <MyEliRow>
-            {(name || "担当者").split(" ")[0]}さん、<br />情報を確認・変更できます✏️
+            {(lastName || "担当者")}さん、<br />情報を確認・変更できます✏️
           </MyEliRow>
 
           <div style={{ padding:"0 24px 28px" }}>
@@ -4635,9 +4650,48 @@ function MyPageApp({ onBack, onLogout }) {
 
             {/* 変更可能 */}
             <SectionTitle icon="👤">個人情報</SectionTitle>
-            <EditField label="担当者名" value={name}
-              onChange={e=>{ setName(e.target.value); setErrors(er=>({...er,name:""})); }}
-              error={errors.name} />
+
+            {/* 氏名（漢字）*/}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:6 }}>
+                担当者名 <span style={{ fontSize:12, color:C.blue, fontWeight:600 }}>（変更可）</span>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:C.gray, marginBottom:4, fontWeight:600 }}>姓（苗字）</div>
+                  <EditField label="" value={lastName}
+                    onChange={e=>{ setLastName(e.target.value); setErrors(er=>({...er,lastName:""})); }}
+                    error={errors.lastName} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:C.gray, marginBottom:4, fontWeight:600 }}>名（名前）</div>
+                  <EditField label="" value={firstName}
+                    onChange={e=>{ setFirstName(e.target.value); setErrors(er=>({...er,firstName:""})); }}
+                    error={errors.firstName} />
+                </div>
+              </div>
+            </div>
+
+            {/* 氏名（ふりがな）*/}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:C.navy, marginBottom:6 }}>
+                ふりがな <span style={{ fontSize:12, color:C.blue, fontWeight:600 }}>（変更可）</span>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:C.gray, marginBottom:4, fontWeight:600 }}>姓（ふりがな）</div>
+                  <EditField label="" value={lastNameKana}
+                    onChange={e=>{ setLastNameKana(e.target.value); setErrors(er=>({...er,lastNameKana:""})); }}
+                    error={errors.lastNameKana} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:C.gray, marginBottom:4, fontWeight:600 }}>名（ふりがな）</div>
+                  <EditField label="" value={firstNameKana}
+                    onChange={e=>{ setFirstNameKana(e.target.value); setErrors(er=>({...er,firstNameKana:""})); }}
+                    error={errors.firstNameKana} />
+                </div>
+              </div>
+            </div>
             <EditField label="携帯電話番号" value={phone} type="tel"
               onChange={e=>{ setPhone(e.target.value); setErrors(er=>({...er,phone:""})); }}
               error={errors.phone} hint="ログイン時の確認に使用します" />
