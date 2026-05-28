@@ -969,7 +969,10 @@ function Step2({ data, setData, companyId, companyName, onNext, onBack, loading,
 
   const validate = () => {
     const e = {};
-    if (!data.name.trim())  e.name = "氏名を入力してください";
+    if (!data.lastName?.trim())      e.lastName      = "姓を入力してください";
+    if (!data.firstName?.trim())     e.firstName     = "名を入力してください";
+    if (!data.lastNameKana?.trim())  e.lastNameKana  = "姓（ふりがな）を入力してください";
+    if (!data.firstNameKana?.trim()) e.firstNameKana = "名（ふりがな）を入力してください";
     if (!/^[\d\-]{10,13}$/.test((data.phone||"").replace(/\s/g,"")))
       e.phone = "正しい電話番号を入力してください";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email))
@@ -1003,9 +1006,38 @@ function Step2({ data, setData, companyId, companyName, onNext, onBack, loading,
         <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", marginTop:2 }}>企業ID：{companyId}</div>
       </div>
 
-      <RgField label="👤 氏名" error={errors.name}>
-        <RgTextInput placeholder="例：田中 太郎" {...bind("name")} />
-      </RgField>
+      {/* 氏名（漢字）*/}
+      <div style={{ marginBottom:18 }}>
+        <div style={{ fontSize:15, fontWeight:700, color:C.navy, marginBottom:7 }}>👤 氏名</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:12, color:C.gray, marginBottom:4, fontWeight:600 }}>姓（苗字）</div>
+            <RgTextInput placeholder="例：田中" error={errors.lastName} {...bind("lastName")} />
+            {errors.lastName && <div style={{ color:C.red, fontSize:13, marginTop:4 }}>⚠️ {errors.lastName}</div>}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:12, color:C.gray, marginBottom:4, fontWeight:600 }}>名（名前）</div>
+            <RgTextInput placeholder="例：太郎" error={errors.firstName} {...bind("firstName")} />
+            {errors.firstName && <div style={{ color:C.red, fontSize:13, marginTop:4 }}>⚠️ {errors.firstName}</div>}
+          </div>
+        </div>
+      </div>
+      {/* 氏名（ふりがな）*/}
+      <div style={{ marginBottom:18 }}>
+        <div style={{ fontSize:15, fontWeight:700, color:C.navy, marginBottom:7 }}>👤 ふりがな</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:12, color:C.gray, marginBottom:4, fontWeight:600 }}>姓（ふりがな）</div>
+            <RgTextInput placeholder="例：たなか" error={errors.lastNameKana} {...bind("lastNameKana")} />
+            {errors.lastNameKana && <div style={{ color:C.red, fontSize:13, marginTop:4 }}>⚠️ {errors.lastNameKana}</div>}
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:12, color:C.gray, marginBottom:4, fontWeight:600 }}>名（ふりがな）</div>
+            <RgTextInput placeholder="例：たろう" error={errors.firstNameKana} {...bind("firstNameKana")} />
+            {errors.firstNameKana && <div style={{ color:C.red, fontSize:13, marginTop:4 }}>⚠️ {errors.firstNameKana}</div>}
+          </div>
+        </div>
+      </div>
 
       <RgField label="📱 携帯電話番号" error={errors.phone}
         hint="ログイン時の確認に使用します">
@@ -1054,6 +1086,7 @@ function Step2({ data, setData, companyId, companyName, onNext, onBack, loading,
 
 // ── 完了画面 ─────────────────────────────────────────────
 function RgDone({ data, companyId, companyName, onDone }) {
+  const fullName = ((data.lastName||'') + ' ' + (data.firstName||'')).trim();
   return (
     <div style={{ padding:"24px", textAlign:"center" }}>
       <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ height:100, width:"auto",
@@ -1062,7 +1095,7 @@ function RgDone({ data, companyId, companyName, onDone }) {
         登録が完了しました！🎉
       </div>
       <div style={{ fontSize:14, color:C.gray, marginBottom:20 }}>
-        {data.name} さん、ご登録ありがとうございます
+        {fullName} さん、ご登録ありがとうございます
       </div>
 
       <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
@@ -1072,7 +1105,7 @@ function RgDone({ data, companyId, companyName, onDone }) {
         </div>
         {[
           ["会社名", companyName],
-          ["氏名",   data.name],
+          ["氏名",   fullName],
           ["メール（ログインID）", data.email],
         ].map(([k,v])=>(
           <div key={k} style={{ display:"flex", gap:10, padding:"6px 0",
@@ -1100,7 +1133,8 @@ function RegisterApp({ onDone, onBack }) {
   const [companyId, setCompanyId] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [data, setData]           = useState({
-    name:"", phone:"", email:"", password:"", confirmPw:"",
+    lastName:"", firstName:"", lastNameKana:"", firstNameKana:"",
+    phone:"", email:"", password:"", confirmPw:"",
   });
   const [regLoading, setRegLoading] = useState(false);
   const [regError,   setRegError]   = useState("");
@@ -1121,9 +1155,12 @@ function RegisterApp({ onDone, onBack }) {
     }
     // 2. profiles テーブルに追加
     if (authData?.user) {
+      const fullName     = (data.lastName.trim() + ' ' + data.firstName.trim()).trim();
+      const fullNameKana = (data.lastNameKana.trim() + ' ' + data.firstNameKana.trim()).trim();
       const { error: profileErr } = await sb.from('profiles').insert({
         id:         authData.user.id,
-        name:       data.name,
+        name:       fullName,
+        name_kana:  fullNameKana,
         phone:      data.phone,
         company_id: companyId,
         role:       "user",
@@ -2658,6 +2695,7 @@ function OrderApp({ onDone, onBack }) {
   const [submitting,      setSubmitting]      = useState(false);
   const [savedIds,        setSavedIds]        = useState([]);
   const [personName,      setPersonName]      = useState("");
+  const [personNameKana,  setPersonNameKana]  = useState("");
   const [personNameLoading, setPersonNameLoading] = useState(true);
   const [attachedImages,  setAttachedImages]  = useState([]);
   const [companyId,       setCompanyId]       = useState(null);
@@ -2668,9 +2706,10 @@ function OrderApp({ onDone, onBack }) {
     sb.auth.getUser().then(({ data: { user } }) => {
       if (!user) { setPersonNameLoading(false); return; }
       setUserId(user.id);
-      sb.from('profiles').select('name, company_id').eq('id', user.id).maybeSingle()
+      sb.from('profiles').select('name, name_kana, company_id').eq('id', user.id).maybeSingle()
         .then(({ data }) => {
-          if (data?.name) setPersonName(data.name);
+          if (data?.name)      setPersonName(data.name);
+          if (data?.name_kana) setPersonNameKana(data.name_kana);
           setPersonNameLoading(false);
           if (data?.company_id) {
             setCompanyId(data.company_id);
@@ -2715,7 +2754,7 @@ function OrderApp({ onDone, onBack }) {
       .select('id').eq('id', currentUserId).maybeSingle();
     if (!existingProfile) {
       const { error: profileCreateErr } = await sb.from('profiles').upsert(
-        { id: currentUserId, name: personName || '', company_id: companyId || null, role: 'user' },
+        { id: currentUserId, name: personName || '', name_kana: personNameKana || '', company_id: companyId || null, role: 'user' },
         { onConflict: 'id', ignoreDuplicates: true }
       );
       if (profileCreateErr) console.error('[profiles 自動作成]', profileCreateErr.message);
@@ -2727,7 +2766,8 @@ function OrderApp({ onDone, onBack }) {
       const d   = order.data;
       const { data: newOrder, error } = await sb.from('orders').insert({
         user_id:        currentUserId,
-        company_id:     companyId   || null,
+        company_id:     companyId        || null,
+        person_kana:    personNameKana   || '',
         service:        svc.label,
         site:           d.siteName  || '',
         address:        d.address   || '',
@@ -4676,8 +4716,9 @@ function mapOrder(row) {
     id:             row.id,
     company:        row.company    || '',
     companyId:      row.company_id || '',
-    person:         row.person     || '',
-    phone:          row.phone      || '',
+    person:         row.person      || '',
+    personKana:     row.person_kana || '',
+    phone:          row.phone       || '',
     service:        row.service    || '',
     status:         row.status     || '調整中',
     site:           row.site       || '',
@@ -5293,8 +5334,9 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               <div style={{ padding:"4px 18px 12px" }}>
                 <Row label="会社名"   value={order.company}   copy />
                 <Row label="企業ID"   value={order.companyId} copy />
-                <Row label="担当者"   value={order.person}    copy />
-                <Row label="電話番号" value={order.phone}     copy />
+                <Row label="担当者"       value={order.person}     copy />
+                {order.personKana && <Row label="ふりがな" value={order.personKana} copy />}
+                <Row label="電話番号"     value={order.phone}      copy />
               </div>
             </div>
 
