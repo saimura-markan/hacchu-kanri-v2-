@@ -3705,19 +3705,38 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             )}
 
             {order.schedules.map((sch, i) => (
-              <div key={i} style={{ background:C.white, borderRadius:18, border:"1px solid "+C.grayL,
+              <div key={i} style={{ background:C.white, borderRadius:18, border:"1px solid "+(sch.history&&sch.history.length>0?"#b090e8":C.grayL),
                 boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
-                <div style={{ fontSize:15, fontWeight:800, color:C.navy,
-                  borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>📅 日程 {i+1}</div>
+                <div style={{ fontSize:15, fontWeight:800, color:C.navy, display:"flex", alignItems:"center", justifyContent:"space-between",
+                  borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>
+                  <span>📅 日程 {i+1}</span>
+                  {sch.history && sch.history.length > 0 && (
+                    <span style={{ background:"#f3eeff", color:"#6930c3", borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:800 }}>変更あり</span>
+                  )}
+                </div>
                 <div style={{ padding:"14px 18px" }}>
                   {[['日付',sch.date],['時間',sch.start+"〜"+sch.end],
                     ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers]].map(([label,value])=>
                     !value ? null : (
                       <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
                         <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
-                        <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
+                        <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>
+                          {sch.history && sch.history.length > 0 && (label==="日付"||label==="時間") ? (
+                            <span>{value}<span style={{ marginLeft:7, fontSize:11, color:"#6930c3", fontWeight:700, background:"#f3eeff", borderRadius:4, padding:"1px 7px" }}>変更後</span></span>
+                          ) : value}
+                        </div>
                       </div>
                     )
+                  )}
+                  {sch.history && sch.history.length > 0 && (
+                    <div style={{ marginTop:10, padding:"10px 14px", background:"#faf5ff", borderRadius:10, border:"1px solid #d8b4fe" }}>
+                      <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:6 }}>📋 変更履歴</div>
+                      {[...sch.history].reverse().map((h, hi) => (
+                        <div key={hi} style={{ fontSize:12, color:"#555", lineHeight:1.8 }}>
+                          変更前：{h.prevDate} {h.prevStart}〜{h.prevEnd}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
@@ -4050,7 +4069,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
     if (!user) { setLoading(false); return; }
     const { data, error } = await sb
       .from('orders')
-      .select('*, schedules(*), order_images(*)')
+      .select('*, schedules(*, schedule_history(*)), order_images(*)')
       .eq('user_id', user.id)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -4802,6 +4821,14 @@ function mapOrder(row) {
     end:     s.end_time    || '',
     workers: s.workers     || '',
     details: Array.isArray(s.details) ? s.details : [],
+    history: (s.schedule_history || [])
+      .sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at))
+      .map(h => ({
+        prevDate:  h.prev_date  || '',
+        prevStart: h.prev_start || '',
+        prevEnd:   h.prev_end   || '',
+        changedAt: h.changed_at || '',
+      })),
   }));
   const images = (row.order_images || [])
     .sort((a, b) => (a.created_at||'').localeCompare(b.created_at||''))
@@ -5453,17 +5480,31 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 
             {/* 日程 */}
             {order.schedules.map((sch,i)=>(
-              <div key={i} style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
+              <div key={i} style={{ background:C.white, borderRadius:14, border:"1px solid "+(sch.history&&sch.history.length>0?"#b090e8":C.grayL),
                 marginBottom:14, overflow:"hidden" }}>
                 <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
-                  padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
-                  📅 日程 {i+1}
+                  padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white,
+                  display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <span>📅 日程 {i+1}</span>
+                  {sch.history && sch.history.length > 0 && (
+                    <span style={{ background:"rgba(255,255,255,0.25)", color:"white", borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:800 }}>変更あり</span>
+                  )}
                 </div>
                 <div style={{ padding:"4px 18px 12px" }}>
-                  <Row label="日付"     value={sch.date} />
-                  <Row label="時間"     value={sch.start+"〜"+sch.end} />
+                  <Row label="日付" value={sch.history&&sch.history.length>0 ? sch.date+" （変更後）" : sch.date} />
+                  <Row label="時間" value={sch.history&&sch.history.length>0 ? sch.start+"〜"+sch.end+" （変更後）" : sch.start+"〜"+sch.end} />
                   <Row label="作業内容" value={(sch.details||[]).join("・")} />
                   {sch.workers&&<Row label="作業者数" value={sch.workers} />}
+                  {sch.history && sch.history.length > 0 && (
+                    <div style={{ marginTop:8, padding:"10px 14px", background:"#faf5ff", borderRadius:10, border:"1px solid #d8b4fe" }}>
+                      <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:6 }}>📋 変更履歴</div>
+                      {[...sch.history].reverse().map((h, hi) => (
+                        <div key={hi} style={{ fontSize:12, color:"#555", lineHeight:1.8 }}>
+                          変更前：{h.prevDate} {h.prevStart}〜{h.prevEnd}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -5959,7 +6000,7 @@ function AdminApp({ role, onLogout }) {
   const fetchOrders = async () => {
     const { data, error } = await sb
       .from('orders')
-      .select('*, profiles(name, name_kana), schedules(*), order_images(*)')
+      .select('*, profiles(name, name_kana), schedules(*, schedule_history(*)), order_images(*)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (error) { setDbError(error.message); setLoading(false); return; }
@@ -6116,8 +6157,28 @@ function AdminApp({ role, onLogout }) {
     const orderUpdate = { status: editData.status };
     if (statusChanged) orderUpdate.status_changed_at = new Date().toISOString();
     await sb.from('orders').update(orderUpdate).eq('id', id);
+    const newHistoryEntries = {};
     for (const sch of editData.schedules) {
       if (sch.id) {
+        const orig = order?.schedules.find(s => s.id === sch.id);
+        const dateChanged = orig && (orig.date !== sch.date || orig.start !== sch.start || orig.end !== sch.end);
+        if (dateChanged) {
+          const nowIso = new Date().toISOString();
+          await sb.from('schedule_history').insert({
+            schedule_id: sch.id,
+            order_id:    id,
+            prev_date:   orig.date  || null,
+            prev_start:  orig.start || null,
+            prev_end:    orig.end   || null,
+            new_date:    sch.date   || null,
+            new_start:   sch.start  || null,
+            new_end:     sch.end    || null,
+          });
+          newHistoryEntries[sch.id] = [
+            ...(orig.history || []),
+            { prevDate: orig.date, prevStart: orig.start, prevEnd: orig.end, changedAt: nowIso },
+          ];
+        }
         await sb.from('schedules').update({
           work_date:  sch.date,
           start_time: sch.start,
@@ -6127,8 +6188,11 @@ function AdminApp({ role, onLogout }) {
         }).eq('id', sch.id);
       }
     }
-    const updatedSchedules = editData.schedules.map(({ id:sid, date, start, end, workers, details }) =>
-      ({ id:sid, date, start, end, workers, details }));
+    const updatedSchedules = editData.schedules.map(({ id:sid, date, start, end, workers, details }) => {
+      const orig = order?.schedules.find(s => s.id === sid);
+      return { id:sid, date, start, end, workers, details,
+        history: newHistoryEntries[sid] !== undefined ? newHistoryEntries[sid] : (orig?.history || []) };
+    });
     setOrders(os => os.map(o => {
       if (o.id !== id) return o;
       return { ...o, status:editData.status, schedules:updatedSchedules,
