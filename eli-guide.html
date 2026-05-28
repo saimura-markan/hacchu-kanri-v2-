@@ -178,20 +178,14 @@
        E-Liとは？ 特徴カード
     ═══════════════════════════════════════ */
     .feat-section {
-      background:
-        linear-gradient(rgba(41,82,200,0.07) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(41,82,200,0.07) 1px, transparent 1px),
-        linear-gradient(135deg, #050d1a 0%, #0d1e40 100%);
-      background-size: 48px 48px, 48px 48px, 100% 100%;
+      background: #f4f7ff;
       padding: 52px 24px 56px;
     }
     .feat-section .section-title {
-      color: #fff;
-      border-left-color: #00a8ff;
-      text-align: center;
-      border-left: none;
-      padding-left: 0;
-      margin-bottom: 32px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+      margin-bottom: 22px;
     }
     .feat-grid {
       display: grid;
@@ -201,8 +195,8 @@
       margin: 0 auto;
     }
     .feat-card {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
       border-radius: 18px;
       padding: 24px 16px 20px;
       display: flex;
@@ -210,13 +204,14 @@
       align-items: center;
       gap: 10px;
       text-align: center;
+      box-shadow: 0 2px 12px rgba(10,31,92,0.07);
       transition: background 0.25s, border-color 0.25s, transform 0.2s, box-shadow 0.2s;
     }
     .feat-card:hover {
-      background: rgba(0,168,255,0.08);
-      border-color: rgba(0,168,255,0.35);
+      background: #eef3ff;
+      border-color: #2952c8;
       transform: translateY(-4px);
-      box-shadow: 0 10px 32px rgba(0,168,255,0.14);
+      box-shadow: 0 10px 32px rgba(41,82,200,0.12);
     }
     .feat-icon {
       width: 48px;
@@ -225,14 +220,10 @@
       align-items: center;
       justify-content: center;
     }
-    .feat-icon svg {
-      filter: drop-shadow(0 0 5px #00a8ff) drop-shadow(0 0 10px rgba(0,168,255,0.5));
-    }
-    .feat-card:hover .feat-icon svg {
-      filter: drop-shadow(0 0 7px #00a8ff) drop-shadow(0 0 18px rgba(0,168,255,0.7));
-    }
-    .feat-title { font-size: 14px; font-weight: 800; color: #fff; }
-    .feat-desc  { font-size: 11px; color: rgba(255,255,255,0.5); line-height: 1.6; }
+    .feat-icon svg { filter: none; }
+    .feat-card:hover .feat-icon svg { filter: none; }
+    .feat-title { font-size: 14px; font-weight: 800; color: #0a1f5c; }
+    .feat-desc  { font-size: 11px; color: #5a6e99; line-height: 1.6; }
 
     /* ═══════════════════════════════════════
        ステップカード
@@ -569,6 +560,7 @@
   <a href="#login">ログイン</a>
   <a href="#order">発注の流れ</a>
   <a href="#status">ステータス</a>
+  <a href="#manage">案件管理</a>
   <a href="#chat">チャット</a>
   <a href="#faq">よくある質問</a>
   <a href="#contact">お問い合わせ</a>
@@ -584,7 +576,7 @@
     <div class="feat-card">
       <div class="feat-icon">
         <svg viewBox="0 0 24 24" width="36" height="36">
-          <path fill="#00a8ff" d="M16 2L7 13h5L9 22l10-11h-5z"/>
+          <path fill="#2952c8" d="M16 2L7 13h5L9 22l10-11h-5z"/>
         </svg>
       </div>
       <div class="feat-title">スピーディー</div>
@@ -593,7 +585,7 @@
 
     <div class="feat-card">
       <div class="feat-icon">
-        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#00a8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#2952c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 2L3 6v5.5C3 16.9 7 21.5 12 23c5-1.5 9-6.1 9-11.5V6L12 2z"/>
           <path d="M9 12.5l2 2 4-4"/>
         </svg>
@@ -604,7 +596,7 @@
 
     <div class="feat-card">
       <div class="feat-icon">
-        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#00a8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#2952c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5 17A5 5 0 0 1 5 7A8 8 0 0 0 19 7A5 5 0 0 1 19 17H5z"/>
           <path d="M7 20l3 2.5 5-5"/>
         </svg>
@@ -615,7 +607,7 @@
 
     <div class="feat-card">
       <div class="feat-icon">
-        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#00a8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#2952c8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9"/>
           <path d="M12 7v5l3.5 3.5"/>
         </svg>
@@ -762,6 +754,23 @@
       <div class="status-desc">作業が完了しました。ご利用ありがとうございました。</div>
     </div>
 
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     案件管理機能
+══════════════════════════════════════ -->
+<section class="section-wrap" id="manage">
+  <h2 class="section-title">📋 案件情報の蓄積・管理機能</h2>
+  <div class="info-card">
+    <strong>「伝えてたっけ？」がなくなります。</strong><br /><br />
+    今までのE-Liは発注受付に特化したシステムでした。新しいE-Liでは、案件ごとに情報を蓄積・管理できるようになりました。<br /><br />
+    以下の情報をスマホから簡単に登録・更新できます：<br /><br />
+    ・鍵の情報（暗証番号・保管場所など）<br />
+    ・駐車場情報<br />
+    ・現場の注意事項<br />
+    ・写真のアップロード<br /><br />
+    これにより「伝えてたっけ？」「聞いてなかった」などのコミュニケーションロスがなくなり、担当者・作業者がいつでも最新情報を確認できます。
   </div>
 </section>
 
