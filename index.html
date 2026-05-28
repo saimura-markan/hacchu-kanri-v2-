@@ -3506,24 +3506,41 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     return `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
   };
 
-  const handleCancel = () => {
+  const fmtTime = t => {
+    if (!t) return "";
+    const [hh, mm] = t.split(":");
+    return mm === "00" ? `${parseInt(hh)}時` : `${parseInt(hh)}時${mm}分`;
+  };
+
+  const handleCancel = async () => {
+    const nowIso = new Date().toISOString();
+    await sb.from('orders').update({ status:"キャンセル相談中", status_changed_at:nowIso }).eq('id', order.id);
+    await sb.from('messages').insert({
+      order_id:  order.id,
+      from_role: 'eli',
+      text:      '【キャンセルのご依頼】\nキャンセルをご希望です。担当者よりご連絡いたします。',
+    });
     onStatusChange && onStatusChange(order.id, "キャンセル相談中");
-    onChat && onChat(order.id, { id:Date.now(), from:"user",
-      text:"キャンセルをお願いしたいです。\n担当者のご確認をよろしくお願いいたします。",
-      time:nowStr(), read:true });
     setModal(null);
   };
 
-  const handleReschedule = () => {
+  const handleReschedule = async () => {
     if (!reschedDate) { setReschedErr("日付を選択してください"); return; }
     if (!reschedTime) { setReschedErr("時間を入力してください"); return; }
-    const [, m, d] = reschedDate.split("-").map(Number);
-    const [hh, mm] = reschedTime.split(":");
-    const timeLabel = mm === "00" ? `${hh}時頃` : `${hh}時${mm}分頃`;
+    const sch = order.schedules?.[0];
+    let currentSchedule = "（未設定）";
+    if (sch?.date) {
+      const [, m, d] = sch.date.split("-").map(Number);
+      currentSchedule = `${m}月${d}日 ${fmtTime(sch.start)}〜${fmtTime(sch.end)}`;
+    }
+    const nowIso = new Date().toISOString();
+    await sb.from('orders').update({ status:"日程変更相談中", status_changed_at:nowIso }).eq('id', order.id);
+    await sb.from('messages').insert({
+      order_id:  order.id,
+      from_role: 'eli',
+      text:      `【日程変更のご依頼】\n日程変更をご希望です。担当者よりご連絡いたします。\n現在の日程：${currentSchedule}`,
+    });
     onStatusChange && onStatusChange(order.id, "日程変更相談中");
-    onChat && onChat(order.id, { id:Date.now(), from:"user",
-      text:`${m}月${d}日 ${timeLabel}への日程変更を希望します。\nご調整のほどよろしくお願いいたします。`,
-      time:nowStr(), read:true });
     setModal(null); setReschedDate(""); setReschedTime(""); setReschedErr("");
   };
 
