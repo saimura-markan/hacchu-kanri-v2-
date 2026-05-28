@@ -3533,12 +3533,14 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       const [, m, d] = sch.date.split("-").map(Number);
       currentSchedule = `${m}月${d}日 ${fmtTime(sch.start)}〜${fmtTime(sch.end)}`;
     }
+    const [, rm, rd] = reschedDate.split("-").map(Number);
+    const requestedSchedule = `${rm}月${rd}日 ${fmtTime(reschedTime)}〜`;
     const nowIso = new Date().toISOString();
     await sb.from('orders').update({ status:"日程変更相談中", status_changed_at:nowIso }).eq('id', order.id);
     await sb.from('messages').insert({
       order_id:  order.id,
       from_role: 'eli',
-      text:      `【日程変更のご依頼】\n日程変更をご希望です。担当者よりご連絡いたします。\n現在の日程：${currentSchedule}`,
+      text:      `【日程変更のご依頼】\n日程変更をご希望です。担当者よりご連絡いたします。\n現在の日程：${currentSchedule}\nご希望の日程：${requestedSchedule}`,
     });
     onStatusChange && onStatusChange(order.id, "日程変更相談中");
     setModal(null); setReschedDate(""); setReschedTime(""); setReschedErr("");
