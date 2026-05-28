@@ -4533,17 +4533,38 @@ function MyPageApp({ onBack, onLogout }) {
       setEmail(user.email || "");
       const { data, error } = await sb
         .from('profiles')
-        .select('*')
+        .select('name, phone, company_id')
         .eq('id', user.id)
         .maybeSingle();
       if (error && error.code !== 'PGRST116') {
         setDbError(error.message);
-      } else if (data) {
-        setName(data.name || "");
-        setPhone(data.phone || "");
-        setCompany(data.company || "");
-        setCompanyId(data.company_id || "");
+        setLoading(false);
+        return;
       }
+
+      let cid = data?.company_id || "";
+      setName(data?.name || "");
+      setPhone(data?.phone || "");
+
+      // company_id がプロフィールにない場合は直近の発注からフォールバック
+      if (!cid) {
+        const { data: ord } = await sb.from('orders')
+          .select('company_id').eq('user_id', user.id)
+          .not('company_id', 'is', null).limit(1).maybeSingle();
+        if (ord?.company_id) {
+          cid = ord.company_id;
+          // プロフィールにも書き戻す
+          await sb.from('profiles').upsert({ id: user.id, company_id: cid }, { onConflict: 'id' });
+        }
+      }
+      setCompanyId(cid);
+
+      // 企業名は companies テーブルから取得
+      if (cid) {
+        const { data: co } = await sb.from('companies').select('name').eq('id', cid).maybeSingle();
+        if (co?.name) setCompany(co.name);
+      }
+
       setLoading(false);
     };
     load();
@@ -4716,8 +4737,8 @@ function mapOrder(row) {
     id:             row.id,
     company:        row.company    || '',
     companyId:      row.company_id || '',
-    person:         row.person      || '',
-    personKana:     row.person_kana || '',
+    person:         row.person      || row.profiles?.name     || '',
+    personKana:     row.person_kana || row.profiles?.name_kana || '',
     phone:          row.phone       || '',
     service:        row.service    || '',
     status:         row.status     || '調整中',
@@ -5865,7 +5886,7 @@ function AdminApp({ role, onLogout }) {
   const fetchOrders = async () => {
     const { data, error } = await sb
       .from('orders')
-      .select('*, schedules(*), order_images(*)')
+      .select('*, profiles(name, name_kana), schedules(*), order_images(*)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (error) { setDbError(error.message); setLoading(false); return; }
