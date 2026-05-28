@@ -519,8 +519,16 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
     const { data, error } = await sb.auth.signInWithPassword({ email: email.toLowerCase(), password });
     if (error) { setLoading(false); setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
     const role = data.user?.user_metadata?.role ?? "user";
+    const { data: profile } = await sb.from('profiles').select('name, company_id').eq('id', data.user.id).maybeSingle();
+    // name が空の場合はメールアドレスの @ 前を仮名として自動設定
+    if (!profile?.name) {
+      const fallbackName = email.split('@')[0];
+      await sb.from('profiles').upsert(
+        { id: data.user.id, name: fallbackName },
+        { onConflict: 'id' }
+      );
+    }
     if (role !== "admin" && role !== "staff") {
-      const { data: profile } = await sb.from('profiles').select('company_id').eq('id', data.user.id).maybeSingle();
       if (profile?.company_id) {
         const { data: company } = await sb.from('companies').select('is_active').eq('id', profile.company_id).single();
         if (company && !company.is_active) {
