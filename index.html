@@ -2696,12 +2696,29 @@ function OrderApp({ onDone, onBack }) {
   };
 
   const saveToSupabase = async (ordersList, images) => {
+    // stale closure を避けるため state の userId は使わず直接取得
+    const { data: { user: currentUser } } = await sb.auth.getUser();
+    console.log('[saveToSupabase] userId:', currentUser?.id ?? null);
+    if (!currentUser) throw new Error('ログインセッションが切れています。再度ログインしてください。');
+    const currentUserId = currentUser.id;
+
+    // profiles 行が存在しない場合は自動作成（登録時の insert 失敗を補完）
+    const { data: existingProfile } = await sb.from('profiles')
+      .select('id').eq('id', currentUserId).maybeSingle();
+    if (!existingProfile) {
+      const { error: profileCreateErr } = await sb.from('profiles').upsert(
+        { id: currentUserId, name: personName || '', company_id: companyId || null, role: 'user' },
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+      if (profileCreateErr) console.error('[profiles 自動作成]', profileCreateErr.message);
+    }
+
     const ids = [];
     for (const order of ordersList) {
       const svc = SERVICES.find(s => s.id === order.serviceId);
       const d   = order.data;
       const { data: newOrder, error } = await sb.from('orders').insert({
-        user_id:        userId      || null,
+        user_id:        currentUserId,
         company_id:     companyId   || null,
         service:        svc.label,
         site:           d.siteName  || '',
