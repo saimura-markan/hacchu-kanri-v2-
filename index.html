@@ -6122,6 +6122,21 @@ function AdminApp({ role, onLogout }) {
     await sb.from('orders').update({ status:newStatus, status_changed_at:nowIso }).eq('id', id);
     setOrders(os => os.map(o => o.id === id ? { ...o, status:newStatus, statusChangedAt:nowMs } : o));
     if (selected?.id === id) setSelected(s => ({ ...s, status:newStatus, statusChangedAt:nowMs }));
+    if (newStatus === "キャンセル") {
+      const { data: row } = await sb.from('messages').insert({
+        order_id: id, from_role: 'eli',
+        text: `【キャンセル承認のご連絡】\nキャンセルを承りました。\nまたのご依頼を心よりお待ちしております。`,
+        is_read: false,
+      }).select().single();
+      if (row) {
+        setChats(c => {
+          const existing = c[id] || [];
+          const newMsg = mapChat(row);
+          if (existing.some(m => m.id === newMsg.id)) return c;
+          return { ...c, [id]: [...existing, newMsg] };
+        });
+      }
+    }
     if (newStatus === "日程確定") {
       const order = orders.find(o => o.id === id);
       const sch = order?.schedules?.[0];
