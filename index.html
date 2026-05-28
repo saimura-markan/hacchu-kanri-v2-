@@ -6122,6 +6122,30 @@ function AdminApp({ role, onLogout }) {
     await sb.from('orders').update({ status:newStatus, status_changed_at:nowIso }).eq('id', id);
     setOrders(os => os.map(o => o.id === id ? { ...o, status:newStatus, statusChangedAt:nowMs } : o));
     if (selected?.id === id) setSelected(s => ({ ...s, status:newStatus, statusChangedAt:nowMs }));
+    if (newStatus === "日程確定") {
+      const order = orders.find(o => o.id === id);
+      const sch = order?.schedules?.[0];
+      const DAYS = ["日","月","火","水","木","金","土"];
+      const fmtT = t => { if (!t) return ""; const [hh,mm]=t.split(":"); return mm==="00"?`${parseInt(hh)}時`:`${parseInt(hh)}時${mm}分`; };
+      let schText = "（未定）";
+      if (sch?.date) {
+        const [,m,d] = sch.date.split("-").map(Number);
+        const yobi = DAYS[new Date(sch.date + "T00:00:00").getDay()];
+        schText = `${m}月${d}日（${yobi}）${fmtT(sch.start)}〜${fmtT(sch.end)}`;
+      }
+      const msgText = `【日程確定のご連絡】\nご希望の日程で段取りができましたのでご報告させていただきます。\n\n確定日程：${schText}\n\n引き続きどうぞよろしくお願いいたします。`;
+      const { data: row } = await sb.from('messages').insert({
+        order_id: id, from_role: 'eli', text: msgText, is_read: false,
+      }).select().single();
+      if (row) {
+        setChats(c => {
+          const existing = c[id] || [];
+          const newMsg = mapChat(row);
+          if (existing.some(m => m.id === newMsg.id)) return c;
+          return { ...c, [id]: [...existing, newMsg] };
+        });
+      }
+    }
   };
 
   const handleDelete = async (ids) => {
