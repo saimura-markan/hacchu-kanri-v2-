@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>セキュリティ・利用ガイド | E-Li</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;
+      background: #f4f7ff;
+      color: #0a1f5c;
+    }
+
+    /* ヘッダー */
+    .hero {
+      background-color: #050d1a;
+      background-image:
+        linear-gradient(rgba(41,82,200,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(41,82,200,0.07) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+    .hero-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 28px 36px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .logo-img {
+      height: 52px;
+      width: auto;
+      mix-blend-mode: screen;
+      filter: brightness(0) invert(1);
+      flex-shrink: 0;
+    }
+    .hero-title {
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 0.5px;
+    }
+    .hero-sub {
+      font-size: 12px;
+      color: rgba(255,255,255,0.55);
+      margin-top: 4px;
+    }
+
+    /* 目次バー */
+    .toc-bar {
+      background: #fff;
+      border-bottom: 2px solid #e4e9f5;
+      padding: 0 20px;
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(10,31,92,0.07);
+    }
+    .toc-bar a {
+      display: inline-block;
+      padding: 13px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #5a6e99;
+      text-decoration: none;
+      border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .toc-bar a:hover { color: #2952c8; border-bottom-color: #2952c8; }
+    .toc-home { color: #2952c8 !important; }
+
+    /* コンテンツ */
+    .page-wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 900;
+      color: #0a1f5c;
+      border-left: 5px solid #2952c8;
+      padding-left: 14px;
+      margin: 40px 0 16px;
+      scroll-margin-top: 56px;
+    }
+    .section-title:first-of-type { margin-top: 0; }
+
+    .policy-card {
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
+      border-radius: 16px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 12px rgba(10,31,92,0.07);
+      font-size: 14px;
+      color: #3a4d7a;
+      line-height: 1.9;
+    }
+    .policy-card + .policy-card { margin-top: 12px; }
+    .policy-card strong { color: #0a1f5c; font-weight: 800; }
+
+    .item-list {
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .item-list li {
+      padding: 7px 0 7px 20px;
+      position: relative;
+      border-bottom: 1px solid #f0f4ff;
+      font-size: 14px;
+      color: #3a4d7a;
+      line-height: 1.75;
+    }
+    .item-list li:last-child { border-bottom: none; }
+    .item-list li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: #2952c8;
+      font-size: 11px;
+      top: 9px;
+    }
+
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .info-table th, .info-table td {
+      padding: 11px 14px;
+      text-align: left;
+      border-bottom: 1px solid #f0f4ff;
+      line-height: 1.7;
+    }
+    .info-table th {
+      color: #0a1f5c;
+      font-weight: 800;
+      width: 38%;
+      background: #f8faff;
+      vertical-align: top;
+    }
+    .info-table td { color: #3a4d7a; }
+    .info-table tr:last-child th,
+    .info-table tr:last-child td { border-bottom: none; }
+
+    .highlight-box {
+      background: #e8f0ff;
+      border: 1.5px solid #2952c8;
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #0a1f5c;
+      line-height: 1.8;
+      margin-top: 12px;
+    }
+    .highlight-box::before { content: "💡 "; }
+
+    .warn-box {
+      background: #fff8e0;
+      border: 1.5px solid #f0c040;
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #7a5a00;
+      line-height: 1.8;
+      margin-top: 12px;
+    }
+    .warn-box::before { content: "⚠️ "; }
+
+    /* セキュリティバッジグリッド */
+    .badge-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 4px;
+    }
+    .badge-item {
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
+      border-radius: 14px;
+      padding: 16px 18px;
+      box-shadow: 0 2px 10px rgba(10,31,92,0.06);
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .badge-icon {
+      font-size: 26px;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .badge-label {
+      font-size: 13px;
+      font-weight: 800;
+      color: #0a1f5c;
+      margin-bottom: 4px;
+    }
+    .badge-desc {
+      font-size: 12px;
+      color: #5a6e99;
+      line-height: 1.6;
+    }
+
+    .updated-date {
+      font-size: 12px;
+      color: #8a9cc5;
+      margin-bottom: 28px;
+    }
+
+    /* フッター */
+    .guide-footer {
+      background: #050d1a;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 20px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .footer-logo {
+      height: 38px;
+      width: auto;
+      display: block;
+      mix-blend-mode: screen;
+      filter: brightness(1.8);
+    }
+    .footer-company {
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.85);
+    }
+    .footer-right {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      text-align: right;
+      line-height: 1.9;
+    }
+
+    /* レスポンシブ */
+    @media (max-width: 480px) {
+      .hero-container { padding: 24px 16px 28px; }
+      .hero-title { font-size: 18px; }
+      .logo-img { height: 40px; }
+      .page-wrap { padding: 32px 16px 60px; }
+      .section-title { font-size: 16px; }
+      .badge-grid { grid-template-columns: 1fr; }
+      .info-table th { width: 44%; }
+      .guide-footer { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 16px; }
+      .footer-right { text-align: left; font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-container">
+    <img src="./logo_img.png" class="logo-img" alt="E-Li" />
+    <div>
+      <div class="hero-title">セキュリティ・お客様利用ガイド</div>
+      <div class="hero-sub">安心・安全にお使いいただくために</div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc-bar">
+  <a href="/" class="toc-home">← E-Li トップ</a>
+  <a href="#infra">インフラ</a>
+  <a href="#auth">認証・通信</a>
+  <a href="#password">パスワード</a>
+  <a href="#data">データ管理</a>
+  <a href="#rules">ご利用ルール</a>
+  <a href="#incident">問題発生時</a>
+  <a href="#contact">お問い合わせ</a>
+</nav>
+
+<div class="page-wrap">
+
+  <p class="updated-date">最終更新日：2026年5月28日</p>
+
+  <!-- インフラ概要 -->
+  <h2 class="section-title" id="infra">インフラ・セキュリティ基盤</h2>
+  <div class="badge-grid">
+    <div class="badge-item">
+      <div class="badge-icon">🏗️</div>
+      <div>
+        <div class="badge-label">Supabase</div>
+        <div class="badge-desc">データベース・認証・ファイルストレージ<br />SOC 2 Type II 取得済み</div>
+      </div>
+    </div>
+    <div class="badge-item">
+      <div class="badge-icon">⚡</div>
+      <div>
+        <div class="badge-label">Vercel</div>
+        <div class="badge-desc">フロントエンドホスティング<br />SOC 2 Type II 取得済み</div>
+      </div>
+    </div>
+    <div class="badge-item">
+      <div class="badge-icon">☁️</div>
+      <div>
+        <div class="badge-label">AWS 東京リージョン</div>
+        <div class="badge-desc">バックエンド基盤・データ保管<br />日本国内（ap-northeast-1）</div>
+      </div>
+    </div>
+    <div class="badge-item">
+      <div class="badge-icon">🔒</div>
+      <div>
+        <div class="badge-label">GitHub（プライベート）</div>
+        <div class="badge-desc">ソースコード管理<br />SOC 2 Type II 取得済み</div>
+      </div>
+    </div>
+  </div>
+  <div class="policy-card" style="margin-top:12px">
+    <div class="highlight-box" style="margin-top:0">お客様データはすべて日本国内（AWS東京リージョン）に保管されます。国外へのデータ移転は行いません。</div>
+  </div>
+
+  <!-- 認証・通信 -->
+  <h2 class="section-title" id="auth">認証・通信セキュリティ</h2>
+  <div class="policy-card">
+    <ul class="item-list">
+      <li><strong>SSL/TLS暗号化通信</strong>：すべての通信はHTTPS（TLS 1.2以上）で暗号化されています</li>
+      <li><strong>Supabase Auth</strong>：業界標準のJWT（JSON Web Token）認証を採用</li>
+      <li><strong>Row Level Security（RLS）</strong>：データベースレベルで、各ユーザーが自分のデータのみアクセスできるよう制御しています</li>
+      <li><strong>セッション管理</strong>：ログイン状態はブラウザのローカルストレージで安全に管理されます</li>
+    </ul>
+  </div>
+
+  <!-- パスワード -->
+  <h2 class="section-title" id="password">パスワードの安全な管理</h2>
+  <div class="policy-card">
+    <strong>パスワードの設定ルール</strong>
+    <ul class="item-list">
+      <li>8文字以上で設定してください</li>
+      <li>英字（a〜z / A〜Z）と数字（0〜9）を両方含めてください</li>
+      <li>他のサービスと同じパスワードの使い回しはお控えください</li>
+    </ul>
+    <div class="highlight-box">パスワードはbcryptにより一方向ハッシュ化して保存します。当社スタッフでもお客様のパスワードを知ることはできません。</div>
+  </div>
+  <div class="policy-card">
+    <strong>パスワードを忘れた場合</strong><br /><br />
+    ログイン画面の「パスワードをわすれた方はこちら」から、登録メールアドレスにリセットリンクをお送りします。リセットリンクは一定時間で失効しますので、速やかにご対応ください。
+    <div class="warn-box">当社からパスワードをメール・電話でお伺いすることは絶対にありません。パスワードを求める連絡があった場合はご注意ください。</div>
+  </div>
+
+  <!-- データ管理 -->
+  <h2 class="section-title" id="data">データの管理・保護</h2>
+  <div class="policy-card">
+    <table class="info-table">
+      <tr>
+        <th>発注・案件データ</th>
+        <td>Supabaseデータベース（PostgreSQL）に暗号化して保管</td>
+      </tr>
+      <tr>
+        <th>アップロード画像・PDF</th>
+        <td>Supabase Storage（S3互換）にて管理。署名付きURLにより本人のみアクセス可能</td>
+      </tr>
+      <tr>
+        <th>チャットメッセージ</th>
+        <td>案件ごとにデータベースで管理。RLSにより関係者以外からは閲覧不可</td>
+      </tr>
+      <tr>
+        <th>アカウント情報</th>
+        <td>Supabase Authにて管理。パスワードはハッシュ化保存</td>
+      </tr>
+      <tr>
+        <th>バックアップ</th>
+        <td>Supabaseの自動バックアップ機能により定期保全</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ご利用ルール -->
+  <h2 class="section-title" id="rules">お客様へのお願い・利用ルール</h2>
+  <div class="policy-card">
+    <strong>アカウントの管理</strong>
+    <ul class="item-list">
+      <li>アカウントは本人のみご利用ください。他人への貸し出しはお控えください</li>
+      <li>パスワードは定期的に変更することをお勧めします</li>
+      <li>共用PC・スマートフォンでのご利用後は必ずログアウトしてください</li>
+    </ul>
+  </div>
+  <div class="policy-card">
+    <strong>禁止事項</strong>
+    <ul class="item-list">
+      <li>本サービスへの不正アクセス・改ざん行為</li>
+      <li>他のお客様の個人情報・案件情報への不正アクセス</li>
+      <li>システムへの過度な負荷をかける行為（スクレイピング等）</li>
+      <li>虚偽の情報による発注・登録</li>
+    </ul>
+    <div class="warn-box">禁止事項に違反した場合、アカウントの停止・法的措置を取る場合があります。</div>
+  </div>
+  <div class="policy-card">
+    <strong>推奨ブラウザ・環境</strong>
+    <ul class="item-list">
+      <li>Safari 最新版（iPhone / Mac）</li>
+      <li>Chrome 最新版（Android / PC）</li>
+      <li>Edge 最新版（Windows）</li>
+    </ul>
+    <div class="highlight-box">古いブラウザでは一部機能が正常に動作しない場合があります。最新バージョンへのアップデートをお勧めします。</div>
+  </div>
+
+  <!-- 問題発生時 -->
+  <h2 class="section-title" id="incident">不審なアクセス・問題発生時</h2>
+  <div class="policy-card">
+    以下のような状況にお気づきの際は、すぐにご連絡ください。<br /><br />
+    <ul class="item-list">
+      <li>身に覚えのないログイン通知が届いた</li>
+      <li>登録していない発注データが表示されている</li>
+      <li>パスワードが勝手に変更されたようだ</li>
+      <li>不審なメール・SMSが届いた（フィッシング疑い）</li>
+    </ul>
+    <div class="warn-box">お客様のアカウントへの不正アクセスが疑われる場合、まずパスワードを変更し、当社まですみやかにご連絡ください。</div>
+  </div>
+
+  <!-- お問い合わせ -->
+  <h2 class="section-title" id="contact">お問い合わせ</h2>
+  <div class="policy-card">
+    <table class="info-table">
+      <tr>
+        <th>運営会社</th>
+        <td>株式会社大阪マルカン</td>
+      </tr>
+      <tr>
+        <th>代表者</th>
+        <td>代表取締役 勘代 雅弘</td>
+      </tr>
+      <tr>
+        <th>住所</th>
+        <td>〒532-0004<br />大阪府大阪市淀川区東三国1-24-9</td>
+      </tr>
+      <tr>
+        <th>電話番号</th>
+        <td>06-6392-3882<br /><span style="font-size:12px;color:#8a9cc5;">受付：平日 9:00〜18:00</span></td>
+      </tr>
+      <tr>
+        <th>メール</th>
+        <td>saimura@markan.jp</td>
+      </tr>
+    </table>
+    <div class="highlight-box">セキュリティに関するお問い合わせは、メールまたはE-Li内チャットにてご連絡ください。内容確認の上、速やかに対応します。</div>
+  </div>
+
+</div>
+
+<footer class="guide-footer">
+  <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+    <img src="./logo_img.png" class="footer-logo" alt="E-Li" />
+    <div>
+      <div class="footer-company">株式会社大阪マルカン</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.45)">E-Li 工事受発注システム</div>
+    </div>
+  </div>
+  <div class="footer-right">
+    © 2026 株式会社大阪マルカン<br />
+    All Rights Reserved.
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>プライバシーポリシー | E-Li</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;
+      background: #f4f7ff;
+      color: #0a1f5c;
+    }
+
+    /* ヘッダー */
+    .hero {
+      background-color: #050d1a;
+      background-image:
+        linear-gradient(rgba(41,82,200,0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(41,82,200,0.07) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+    .hero-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 32px 28px 36px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .logo-img {
+      height: 52px;
+      width: auto;
+      mix-blend-mode: screen;
+      filter: brightness(0) invert(1);
+      flex-shrink: 0;
+    }
+    .hero-title {
+      font-size: 22px;
+      font-weight: 900;
+      color: #fff;
+      letter-spacing: 0.5px;
+    }
+    .hero-sub {
+      font-size: 12px;
+      color: rgba(255,255,255,0.55);
+      margin-top: 4px;
+    }
+
+    /* 目次バー */
+    .toc-bar {
+      background: #fff;
+      border-bottom: 2px solid #e4e9f5;
+      padding: 0 20px;
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(10,31,92,0.07);
+    }
+    .toc-bar a {
+      display: inline-block;
+      padding: 13px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #5a6e99;
+      text-decoration: none;
+      border-bottom: 3px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+      white-space: nowrap;
+    }
+    .toc-bar a:hover { color: #2952c8; border-bottom-color: #2952c8; }
+    .toc-home { color: #2952c8 !important; }
+
+    /* コンテンツ */
+    .page-wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: 900;
+      color: #0a1f5c;
+      border-left: 5px solid #2952c8;
+      padding-left: 14px;
+      margin: 40px 0 16px;
+      scroll-margin-top: 56px;
+    }
+    .section-title:first-of-type { margin-top: 0; }
+
+    .policy-card {
+      background: #fff;
+      border: 1.5px solid #e4e9f5;
+      border-radius: 16px;
+      padding: 22px 24px;
+      box-shadow: 0 2px 12px rgba(10,31,92,0.07);
+      font-size: 14px;
+      color: #3a4d7a;
+      line-height: 1.9;
+    }
+    .policy-card + .policy-card { margin-top: 12px; }
+    .policy-card strong { color: #0a1f5c; font-weight: 800; }
+
+    .item-list {
+      margin: 10px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .item-list li {
+      padding: 7px 0 7px 20px;
+      position: relative;
+      border-bottom: 1px solid #f0f4ff;
+      font-size: 14px;
+      color: #3a4d7a;
+      line-height: 1.75;
+    }
+    .item-list li:last-child { border-bottom: none; }
+    .item-list li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: #2952c8;
+      font-size: 11px;
+      top: 9px;
+    }
+
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .info-table th, .info-table td {
+      padding: 11px 14px;
+      text-align: left;
+      border-bottom: 1px solid #f0f4ff;
+      line-height: 1.7;
+    }
+    .info-table th {
+      color: #0a1f5c;
+      font-weight: 800;
+      width: 38%;
+      background: #f8faff;
+      vertical-align: top;
+    }
+    .info-table td { color: #3a4d7a; }
+    .info-table tr:last-child th,
+    .info-table tr:last-child td { border-bottom: none; }
+
+    .highlight-box {
+      background: #e8f0ff;
+      border: 1.5px solid #2952c8;
+      border-radius: 12px;
+      padding: 14px 18px;
+      font-size: 13px;
+      color: #0a1f5c;
+      line-height: 1.8;
+      margin-top: 12px;
+    }
+    .highlight-box::before { content: "💡 "; }
+
+    .updated-date {
+      font-size: 12px;
+      color: #8a9cc5;
+      margin-bottom: 28px;
+    }
+
+    /* フッター */
+    .guide-footer {
+      background: #050d1a;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 20px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .footer-logo {
+      height: 38px;
+      width: auto;
+      display: block;
+      mix-blend-mode: screen;
+      filter: brightness(1.8);
+    }
+    .footer-company {
+      font-size: 13px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.85);
+    }
+    .footer-right {
+      font-size: 11px;
+      color: rgba(255,255,255,0.45);
+      text-align: right;
+      line-height: 1.9;
+    }
+
+    /* レスポンシブ */
+    @media (max-width: 480px) {
+      .hero-container { padding: 24px 16px 28px; }
+      .hero-title { font-size: 18px; }
+      .logo-img { height: 40px; }
+      .page-wrap { padding: 32px 16px 60px; }
+      .section-title { font-size: 16px; }
+      .info-table th { width: 44%; }
+      .guide-footer { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 16px; }
+      .footer-right { text-align: left; font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-container">
+    <img src="./logo_img.png" class="logo-img" alt="E-Li" />
+    <div>
+      <div class="hero-title">プライバシーポリシー</div>
+      <div class="hero-sub">個人情報の取り扱いについて</div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc-bar">
+  <a href="/" class="toc-home">← E-Li トップ</a>
+  <a href="#basic">基本方針</a>
+  <a href="#collect">収集情報</a>
+  <a href="#use">利用目的</a>
+  <a href="#third">第三者提供</a>
+  <a href="#infra">インフラ</a>
+  <a href="#rights">お客様の権利</a>
+  <a href="#contact">お問い合わせ</a>
+</nav>
+
+<div class="page-wrap">
+
+  <p class="updated-date">最終更新日：2026年5月28日</p>
+
+  <!-- 基本方針 -->
+  <h2 class="section-title" id="basic">基本方針</h2>
+  <div class="policy-card">
+    株式会社大阪マルカン（以下「当社」）は、E-Li工事受発注システム（以下「本サービス」）において取得するお客様の個人情報を、適切かつ安全に取り扱うことを最重要事項と位置づけています。<br /><br />
+    本ポリシーは、個人情報の保護に関する法律（個人情報保護法）その他関連法令を遵守し、お客様の個人情報を適正に管理・保護するための基本方針を定めるものです。
+  </div>
+
+  <!-- 収集する情報 -->
+  <h2 class="section-title" id="collect">収集する情報</h2>
+  <div class="policy-card">
+    <strong>アカウント登録時</strong>
+    <ul class="item-list">
+      <li>氏名・会社名</li>
+      <li>メールアドレス</li>
+      <li>電話番号</li>
+      <li>パスワード（暗号化して保存）</li>
+    </ul>
+  </div>
+  <div class="policy-card">
+    <strong>本サービス利用時</strong>
+    <ul class="item-list">
+      <li>発注情報（工事種別・現場住所・希望日程など）</li>
+      <li>現場情報（鍵の情報・駐車場情報・注意事項）</li>
+      <li>アップロード画像・PDF</li>
+      <li>担当者とのチャットメッセージ</li>
+      <li>ログイン日時・操作ログ（セキュリティ目的）</li>
+    </ul>
+  </div>
+  <div class="policy-card">
+    <strong>自動的に収集される情報</strong>
+    <ul class="item-list">
+      <li>IPアドレス・ブラウザ種別</li>
+      <li>アクセス日時・ページ閲覧履歴</li>
+    </ul>
+    <div class="highlight-box">パスワードは一方向ハッシュ化（bcrypt）により保存します。当社スタッフもお客様のパスワードを知ることはできません。</div>
+  </div>
+
+  <!-- 利用目的 -->
+  <h2 class="section-title" id="use">利用目的</h2>
+  <div class="policy-card">
+    <ul class="item-list">
+      <li>本サービスの提供・運営（発注受付・日程調整・案件管理）</li>
+      <li>お客様へのご連絡・お知らせの送付</li>
+      <li>不正利用・セキュリティ上の問題の検知・対応</li>
+      <li>サービス品質の向上・機能改善のための統計分析</li>
+      <li>法令に基づく義務の履行</li>
+    </ul>
+    <div class="highlight-box">収集した個人情報は、上記の目的の範囲内でのみ利用します。目的外での利用は行いません。</div>
+  </div>
+
+  <!-- 第三者提供 -->
+  <h2 class="section-title" id="third">第三者への提供</h2>
+  <div class="policy-card">
+    当社は、以下の場合を除き、お客様の個人情報を第三者に提供しません。<br /><br />
+    <ul class="item-list">
+      <li>お客様の事前の同意がある場合</li>
+      <li>法令に基づき開示が求められる場合</li>
+      <li>人の生命・身体・財産の保護に必要な場合</li>
+    </ul>
+    <div class="highlight-box">工事の実施にあたり、担当作業者へ必要な現場情報（住所・鍵の情報など）を共有することがあります。これはサービス提供に必要な範囲内に限定されます。</div>
+  </div>
+
+  <!-- インフラ・データ保管 -->
+  <h2 class="section-title" id="infra">インフラ・データ保管</h2>
+  <div class="policy-card">
+    本サービスは以下のクラウドインフラを利用しています。すべてのサービスはSOC 2 Type II認証を取得しており、高水準のセキュリティ管理下にあります。
+    <table class="info-table" style="margin-top:14px">
+      <tr>
+        <th>サービス</th>
+        <th>用途・保管場所</th>
+      </tr>
+      <tr>
+        <td><strong>Supabase</strong></td>
+        <td>データベース・認証・ストレージ<br /><span style="font-size:12px;color:#8a9cc5;">AWS 東京リージョン（ap-northeast-1）</span></td>
+      </tr>
+      <tr>
+        <td><strong>Vercel</strong></td>
+        <td>フロントエンドホスティング<br /><span style="font-size:12px;color:#8a9cc5;">グローバルCDN（エッジ配信）</span></td>
+      </tr>
+      <tr>
+        <td><strong>AWS 東京</strong></td>
+        <td>バックエンドインフラ基盤<br /><span style="font-size:12px;color:#8a9cc5;">日本国内（東京）にてデータ保管</span></td>
+      </tr>
+      <tr>
+        <td><strong>GitHub</strong></td>
+        <td>ソースコード管理<br /><span style="font-size:12px;color:#8a9cc5;">プライベートリポジトリ（非公開）</span></td>
+      </tr>
+    </table>
+    <div class="highlight-box">お客様データはすべて日本国内（AWS東京リージョン）に保管されます。国外へのデータ移転は行いません。</div>
+  </div>
+
+  <!-- お客様の権利 -->
+  <h2 class="section-title" id="rights">お客様の権利</h2>
+  <div class="policy-card">
+    お客様は、当社が保有するご自身の個人情報について、以下の権利を有します。<br /><br />
+    <ul class="item-list">
+      <li><strong>開示請求</strong>：保有している個人情報の内容をお知らせします</li>
+      <li><strong>訂正・追加・削除</strong>：内容に誤りがある場合、訂正または削除します</li>
+      <li><strong>利用停止・消去</strong>：所定の手続きによりデータの利用停止・削除を請求できます</li>
+    </ul>
+    <br />
+    お問い合わせは下記の窓口（メールまたは電話）までご連絡ください。本人確認のうえ、速やかに対応します。
+  </div>
+
+  <!-- Cookie -->
+  <h2 class="section-title" id="cookie">Cookie・ローカルストレージ</h2>
+  <div class="policy-card">
+    本サービスでは、ログイン状態の維持・セキュリティのためにブラウザのローカルストレージおよびCookieを利用しています。<br /><br />
+    これらはサービスの動作に必要なものに限定しており、広告目的での利用は行っておりません。ブラウザの設定によりCookieを無効にすることも可能ですが、その場合、一部機能が正常に動作しない場合があります。
+  </div>
+
+  <!-- 改定 -->
+  <h2 class="section-title" id="revision">ポリシーの改定</h2>
+  <div class="policy-card">
+    当社は、法令の改正やサービス内容の変更に応じて、本ポリシーを改定することがあります。重要な変更がある場合は、本サービス上でお知らせします。改定後のポリシーは、掲載された時点より効力を生じるものとします。
+  </div>
+
+  <!-- お問い合わせ -->
+  <h2 class="section-title" id="contact">お問い合わせ</h2>
+  <div class="policy-card">
+    <table class="info-table">
+      <tr>
+        <th>運営会社</th>
+        <td>株式会社大阪マルカン</td>
+      </tr>
+      <tr>
+        <th>代表者</th>
+        <td>代表取締役 勘代 雅弘</td>
+      </tr>
+      <tr>
+        <th>住所</th>
+        <td>〒532-0004<br />大阪府大阪市淀川区東三国1-24-9</td>
+      </tr>
+      <tr>
+        <th>電話番号</th>
+        <td>06-6392-3882<br /><span style="font-size:12px;color:#8a9cc5;">受付：平日 9:00〜18:00</span></td>
+      </tr>
+      <tr>
+        <th>メール</th>
+        <td>saimura@markan.jp</td>
+      </tr>
+      <tr>
+        <th>個人情報保護責任者</th>
+        <td>代表取締役 勘代 雅弘</td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+
+<footer class="guide-footer">
+  <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+    <img src="./logo_img.png" class="footer-logo" alt="E-Li" />
+    <div>
+      <div class="footer-company">株式会社大阪マルカン</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.45)">E-Li 工事受発注システム</div>
+    </div>
+  </div>
+  <div class="footer-right">
+    © 2026 株式会社大阪マルカン<br />
+    All Rights Reserved.
+  </div>
+</footer>
+
+</body>
+</html>
