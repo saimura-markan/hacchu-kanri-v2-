@@ -1118,7 +1118,6 @@ function RegisterApp({ onDone, onBack }) {
         name:       data.name,
         phone:      data.phone,
         company_id: companyId,
-        company:    companyName,
         role:       "user",
       });
       if (profileErr) console.error('[profiles insert]', profileErr.message);
@@ -1932,6 +1931,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
           日付{errDate?" ⚠️ 必須":""}
         </div>
         <input type="date" value={sch.date||""}
+          min={new Date().toISOString().split("T")[0]}
           onChange={e=>onChange({...sch,date:e.target.value})}
           style={{ width:"100%", fontSize:17, padding:"12px 14px", borderRadius:12,
             border:"2px solid "+(errDate?C.red:C.grayL), boxSizing:"border-box",
@@ -2042,7 +2042,7 @@ function StepService({ onSelect, doneServices, onBack }) {
 }
 
 // ── STEP 2: 詳細入力 ────────────────────────────────────
-function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData, personName, sitesCache }) {
+function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstSiteData, personName, personNameLoading, sitesCache }) {
   const svc=SERVICES.find(s=>s.id===serviceId);
   const init=savedData||{};
   const [siteName,  setSiteName]  = useState(init.siteName||"");
@@ -2152,7 +2152,8 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
         <div style={{ padding:"14px 18px" }}>
           <div style={{ fontSize:16, fontWeight:700, color:C.navy,
             background:C.grayPale, borderRadius:10, padding:"12px 16px" }}>
-            {personName || "…"}（ログイン情報から自動入力）
+            {personNameLoading ? "（取得中）" : (personName || "…")}
+            {!personNameLoading && <span style={{ fontSize:12, fontWeight:400, color:C.gray, marginLeft:6 }}>（ログイン情報から自動入力）</span>}
           </div>
         </div>
       </Card>
@@ -2649,16 +2650,20 @@ function OrderApp({ onDone, onBack }) {
   const [submitting,      setSubmitting]      = useState(false);
   const [savedIds,        setSavedIds]        = useState([]);
   const [personName,      setPersonName]      = useState("");
+  const [personNameLoading, setPersonNameLoading] = useState(true);
   const [attachedImages,  setAttachedImages]  = useState([]);
   const [companyId,       setCompanyId]       = useState(null);
+  const [userId,          setUserId]          = useState(null);
   const [sitesCache,      setSitesCache]      = useState([]);
 
   useEffect(() => {
     sb.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
+      if (!user) { setPersonNameLoading(false); return; }
+      setUserId(user.id);
       sb.from('profiles').select('name, company_id').eq('id', user.id).single()
         .then(({ data }) => {
           if (data?.name) setPersonName(data.name);
+          setPersonNameLoading(false);
           if (data?.company_id) {
             setCompanyId(data.company_id);
             sb.from('sites')
@@ -2696,6 +2701,7 @@ function OrderApp({ onDone, onBack }) {
       const svc = SERVICES.find(s => s.id === order.serviceId);
       const d   = order.data;
       const { data: newOrder, error } = await sb.from('orders').insert({
+        user_id:        userId      || null,
         company_id:     companyId   || null,
         service:        svc.label,
         site:           d.siteName  || '',
@@ -2815,6 +2821,7 @@ function OrderApp({ onDone, onBack }) {
             isAdditional={doneServices.length>0&&!doneServices.includes(currentSvc)}
             firstSiteData={firstSiteData}
             personName={personName}
+            personNameLoading={personNameLoading}
             sitesCache={sitesCache}
             onSubmit={handleFormSubmit}
             onBack={()=>setPhase(doneServices.includes(currentSvc)?"confirm":"service")} />
