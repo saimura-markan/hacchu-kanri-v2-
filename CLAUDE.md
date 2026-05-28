@@ -264,16 +264,15 @@ handleStatusChange(id, newStatus)
 
 ## 変更履歴
 
-### 2026-05-28 — ポリシーページ・バグ修正・発注フロー強化・日程変更履歴
+### 2026-05-28 — ポリシーページ・バグ修正・発注フロー強化・日程変更履歴・LiBot自動メッセージ
 
-**コミット**: `38437fe`, `cff7ed9`, `2cc3fe6`, `08866f7`, `49b5bc9`, `a20de38`, `5d2c77a`, `fe39261`, `2ddeb8d`, `364cc12`, `580ab65`, `67eedf7`, `7d16868`, `ef69f35`, `799c598`
+**コミット**: `38437fe`, `cff7ed9`, `2cc3fe6`, `08866f7`, `49b5bc9`, `a20de38`, `5d2c77a`, `fe39261`, `2ddeb8d`, `364cc12`, `580ab65`, `67eedf7`, `7d16868`, `ef69f35`, `799c598`, `2832b15`, `fb293c7`, `e6a795d`
 
 #### 静的ページ・ガイド対応
 - `privacy-policy.html` 追加（/privacy-policy）：運営会社・収集情報・インフラ・お客様の権利など
 - `security-guide.html` 追加（/security）：SOC2バッジ・認証・パスワード・禁止事項・問題発生時の対応
 - `vercel.json` 追加：URLリライト設定（/privacy-policy・/security）
-- `eli-guide.html`：「安心・安全の仕組み」セキュリティバッジセクション追加（SOC2×4・/securityリンク）
-- `eli-guide.html`：OGPタグ・Twitter Card追加
+- `eli-guide.html`：SOC2セキュリティバッジセクション追加・OGPタグ・Twitter Card追加
 - `index.html`（HistoryApp）：フッターにプライバシーポリシー・セキュリティリンク追加
 
 #### 発注エラー修正
@@ -300,11 +299,13 @@ handleStatusChange(id, newStatus)
 - 管理者 案件詳細に「ふりがな」行を追加
 - マイページ：企業名を `companies` テーブルから取得、`company_id` を orders からフォールバック
 
-#### LiBot自動メッセージ
-- 新規発注完了時：`受け付けました！` メッセージ確認済み
-- キャンセル依頼時：`【キャンセルのご依頼】` を LiBot として自動送信
-- 日程変更依頼時：`【日程変更のご依頼】現在の日程・ご希望の日程` を LiBot として自動送信
-- `handleCancel`/`handleReschedule` を async 化し Supabase へ直接保存（管理者リアルタイム反映）
+#### LiBot自動メッセージ（全5種類）
+- 新規発注完了時：`受け付けました！` を LiBot として自動送信
+- 日程確定時（管理者操作）：`【日程確定のご連絡】確定日程（M月D日（曜日）H時〜H時）` を自動送信
+- キャンセル確定時（管理者操作）：`【キャンセル承認のご連絡】` を自動送信
+- キャンセル依頼時（お客様操作）：`【キャンセルのご依頼】` を自動送信
+- 日程変更依頼時（お客様操作）：`【日程変更のご依頼】現在の日程・ご希望の日程` を自動送信
+- `handleStatusChange` を async 化し、日程確定・キャンセル時に Supabase へ直接保存
 
 #### 日程変更履歴機能
 - `add_schedule_history.sql` 追加：`schedule_history` テーブル定義・RLSポリシー
