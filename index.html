@@ -4172,8 +4172,21 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
             </div>
           </div>
         </div>
-        <div style={{ textAlign:"center", marginTop:14, fontSize:13, color:C.gray }}>
-          🔒 SSL暗号化通信で保護されています
+        <div style={{ textAlign:"center", marginTop:14 }}>
+          <div style={{ fontSize:11, color:C.gray, marginBottom:8 }}>
+            🔒 SSL暗号化通信で保護されています
+          </div>
+          <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:6 }}>
+            <a href="/privacy-policy" target="_blank" rel="noopener noreferrer"
+              style={{ fontSize:11, color:C.gray, textDecoration:"none" }}>
+              🔒 個人情報保護方針
+            </a>
+            <span style={{ color:C.grayL, fontSize:11 }}>｜</span>
+            <a href="/security" target="_blank" rel="noopener noreferrer"
+              style={{ fontSize:11, color:C.gray, textDecoration:"none" }}>
+              セキュリティについて
+            </a>
+          </div>
         </div>
       </div>
     </div>
