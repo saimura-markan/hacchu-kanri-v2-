@@ -264,19 +264,53 @@ handleStatusChange(id, newStatus)
 
 ## 変更履歴
 
-### 2026-05-28 — ポリシーページ・セキュリティ対応
+### 2026-05-28 — ポリシーページ・バグ修正・発注フロー強化
 
-**コミット**: `38437fe`, `cff7ed9`, `2cc3fe6`
+**コミット**: `38437fe`, `cff7ed9`, `2cc3fe6`, `08866f7`, `49b5bc9`, `a20de38`, `5d2c77a`, `fe39261`, `2ddeb8d`, `364cc12`, `580ab65`, `67eedf7`, `7d16868`
 
-#### 変更内容
+#### 静的ページ・ガイド対応
 - `privacy-policy.html` 追加（/privacy-policy）：運営会社・収集情報・インフラ・お客様の権利など
 - `security-guide.html` 追加（/security）：SOC2バッジ・認証・パスワード・禁止事項・問題発生時の対応
 - `vercel.json` 追加：URLリライト設定（/privacy-policy・/security）
 - `eli-guide.html`：「安心・安全の仕組み」セキュリティバッジセクション追加（SOC2×4・/securityリンク）
 - `eli-guide.html`：「案件情報の蓄積・管理機能」セクション追加
-- `eli-guide.html`：「E-Liとは？」セクションの背景を白系に統一
+- `eli-guide.html`：OGPタグ・Twitter Cardを追加
 - `index.html`（HistoryApp）：フッターにプライバシーポリシー・セキュリティリンク追加
 - `index.html`（HistoryApp）：ホーム画面のアップデート情報カード3枚を削除
+
+#### 発注エラー修正
+- profiles insert から存在しない `company` カラムを削除（登録時エラー②解消）
+- orders insert に `user_id` を追加（FK違反エラー①解消）
+- `saveToSupabase` 内で `sb.auth.getUser()` を直接呼び出し、stale closure による `userId=null` を防止
+- profiles 行が未作成のユーザーは発注時に `upsert` で自動作成
+- profiles クエリを `.single()` → `.maybeSingle()` に統一（406エラー解消）
+
+#### 発注フォーム改善
+- 日付ピッカーに `min=今日` を追加（過去日付の選択不可）
+- 担当者欄に `personNameLoading` state を追加（取得中は「取得中」を表示）
+- ログイン時に `profiles.name` が空の場合、メールアドレスの @前を仮名として自動 upsert
+
+#### 氏名・ふりがな4フィールド対応
+- 登録フォーム Step2：氏名1フィールド → 姓/名（漢字）・姓/名（ふりがな）の横並び2列×2行
+- profiles 保存：`name = 姓+' '+名`、`name_kana = 姓ふりがな+' '+名ふりがな`
+- マイページ担当者名も同様に4フィールド分割（スペース分割で初期表示）
+- `add_name_kana.sql` 追加：`profiles.name_kana`・`orders.person_kana` カラム追加 SQL
+
+#### 管理者画面・マイページ改善
+- 管理者画面 orders クエリに `profiles(name, name_kana)` の FK JOIN を追加
+- `orders.person` が空の場合 `profiles.name` をフォールバック表示
+- 管理者 案件詳細に「ふりがな」行を追加
+- マイページ：企業名を `companies` テーブルから取得、`company_id` を orders からフォールバック
+
+#### LiBot自動メッセージ
+- 新規発注完了時（既存）：`受け付けました！` メッセージ確認済み
+- キャンセル依頼時：`【キャンセルのご依頼】` を LiBot として自動送信
+- 日程変更依頼時：`【日程変更のご依頼】現在の日程・ご希望の日程` を LiBot として自動送信
+- `handleCancel`/`handleReschedule` を async 化し Supabase へ直接保存（管理者リアルタイム反映）
+
+#### 次回課題
+- 日程変更履歴の表示機能（管理画面・注文履歴）
+- マイページの企業ID表示（既存ユーザーの `company_id` 復旧）
 
 ---
 
