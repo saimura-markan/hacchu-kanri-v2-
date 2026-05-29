@@ -3021,8 +3021,8 @@ function HiBigBtn({ children, onClick, color, disabled }) {
       onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
       style={{ display:"block", width:"100%", background:bg,
         color:disabled?"#8a9cc5":color==="yellow"?C.navy:C.white,
-        border:"none", borderRadius:14, fontSize:17, fontWeight:800,
-        padding:"17px 0", cursor:disabled?"not-allowed":"pointer", fontFamily:"inherit",
+        border:"none", borderRadius:14, fontSize:15, fontWeight:800,
+        padding:"17px 8px", whiteSpace:"nowrap", cursor:disabled?"not-allowed":"pointer", fontFamily:"inherit",
         boxShadow:disabled?"none":hov?"0 8px 24px rgba(10,31,92,0.25)":"0 4px 14px rgba(10,31,92,0.15)",
         transform:hov&&!disabled?"translateY(-1px)":"translateY(0)",
         transition:"all 0.2s" }}>
@@ -4347,21 +4347,22 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
     // ═══════════════════════════════════════════════════════
 
 function MyTopBar({ onBack, onLogout }) {
+  const myBtnStyle = { padding:"6px 14px", background:C.grayPale, border:"1px solid "+C.grayL,
+    borderRadius:8, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit",
+    whiteSpace:"nowrap" };
   return (
     <div style={{ padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
       background:C.white, borderBottom:"2px solid "+C.grayL, boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
-      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-        <button onClick={onBack} style={{ padding:"6px 14px", background:C.grayPale, border:"1px solid "+C.grayL,
-          borderRadius:8, color:C.navy, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <button onClick={onBack} style={{ ...myBtnStyle, color:C.navy }}>← もどる</button>
         <img src={LOGO_IMG} alt="E-Li" style={{ height:54, width:"auto", objectFit:"contain" }} />
       </div>
-      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
         <div style={{ textAlign:"right" }}>
           <div style={{ fontSize:11, color:C.gray }}>工事 受発注システム</div>
           <div style={{ fontSize:14, fontWeight:900, color:C.navy }}>マイページ</div>
         </div>
-        <button onClick={onLogout} style={{ padding:"6px 12px", background:C.grayPale, border:"1px solid "+C.grayL,
-          borderRadius:8, color:C.gray, fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>🚪ログアウト</button>
+        <button onClick={onLogout} style={{ ...myBtnStyle, color:C.gray }}>🚪 ログアウト</button>
       </div>
     </div>
   );
