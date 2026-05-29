@@ -382,11 +382,12 @@ function EliSVG({ size = 56 }) {
 }
 
 // ── 共通コンポーネント ───────────────────────────────────
-function TextInput({ type = "text", value, onChange, placeholder, error }) {
+function TextInput({ type = "text", value, onChange, placeholder, error, autocomplete }) {
   const [focused, setFocused] = useState(false);
   return (
     <input
       type={type} value={value} onChange={onChange} placeholder={placeholder}
+      autoComplete={autocomplete}
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
       style={{
@@ -409,6 +410,7 @@ function PwInput({ value, onChange, error }) {
       <input
         type={show ? "text" : "password"} value={value} onChange={onChange}
         placeholder="パスワードを入力"
+        autoComplete="current-password"
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{
           width: "100%", fontSize: 18, padding: "15px 52px 15px 18px",
@@ -620,6 +622,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
 
             <FieldWrap label="📧 メールアドレス" error={errors.email}>
               <TextInput type="email" value={email} placeholder="例：tanaka@example.com" error={errors.email}
+                autocomplete="email"
                 onChange={e => { setEmail(e.target.value); setErrors(er => ({ ...er, email: "" })); }} />
             </FieldWrap>
 
