@@ -2100,7 +2100,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
   const svc=SERVICES.find(s=>s.id===serviceId);
   const init=savedData||{};
   const [siteName,  setSiteName]  = useState(init.siteName||"");
-  const [zipCode,   setZipCode]   = useState("");
+  const [zipCode,   setZipCode]   = useState(init.zipCode||"");
   const [zipLoading,setZipLoading]= useState(false);
   const [address,   setAddress]   = useState(init.address||"");
   const [addrNum,   setAddrNum]   = useState(init.addrNum||"");
@@ -2722,7 +2722,7 @@ function OrderApp({ onDone, onBack }) {
           if (data?.company_id) {
             setCompanyId(data.company_id);
             sb.from('sites')
-              .select('site_name, address, address_num, address_bldg')
+              .select('site_name, address, address_num, address_bldg, zip_code')
               .eq('company_id', data.company_id)
               .order('site_name')
               .then(({ data: sites }) => { if (sites) setSitesCache(sites); });
@@ -2834,6 +2834,7 @@ function OrderApp({ onDone, onBack }) {
           address_bldg: d.addrBldg   || '',
           zip_code:     d.zipCode    || '',
         }, { onConflict: ['company_id', 'site_name'] });
+        if (upsertError) throw upsertError;
         // ローカルキャッシュも更新
         setSitesCache(prev => {
           const exists = prev.some(s => s.site_name === d.siteName);
