@@ -2580,10 +2580,10 @@ function OrStepBar({ phase }) {
   const idx=phase==="service"?0:phase==="form"?1:2;
   return (
     <div style={{ background:C.white, borderBottom:"1px solid "+C.grayL,
-      padding:"10px 20px", display:"flex", alignItems:"center" }}>
+      padding:"10px 20px", display:"flex", alignItems:"flex-start" }}>
       {["作業区分","詳細入力","確認"].map((s,i)=>(
-        <div key={i} style={{ display:"flex", alignItems:"center", flex:1 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, flex:1 }}>
+        <div key={i} style={{ display:"flex", alignItems:"flex-start", flex:1 }}>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4, flex:1 }}>
             <div style={{ width:26, height:26, borderRadius:"50%", flexShrink:0,
               background:i<idx?C.green:i===idx?C.blue:C.grayL,
               color:i<=idx?C.white:C.gray,
@@ -2591,9 +2591,9 @@ function OrStepBar({ phase }) {
               fontSize:12, fontWeight:800 }}>
               {i<idx?"✓":i+1}
             </div>
-            <span style={{ fontSize:12, color:i===idx?C.navy:C.gray, fontWeight:i===idx?700:400 }}>{s}</span>
+            <span style={{ fontSize:11, color:i===idx?C.navy:C.gray, fontWeight:i===idx?700:400, textAlign:"center" }}>{s}</span>
           </div>
-          {i<2&&<div style={{ flex:1, height:2, background:i<idx?C.blue:C.grayL, margin:"0 4px" }}/>}
+          {i<2&&<div style={{ flex:1, height:2, background:i<idx?C.blue:C.grayL, margin:"12px 4px 0" }}/>}
         </div>
       ))}
     </div>
