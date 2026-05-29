@@ -3436,11 +3436,21 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     const next = { ...siteData, [field]: value };
     setSiteData(next);
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      if (!cid || !siteName) return;
+    saveTimer.current = setTimeout(async () => {
+      if (!siteName) return;
+      let timerCid = cid;
+      if (!timerCid) {
+        const { data: { user } } = await sb.auth.getUser();
+        if (user) {
+          const { data: prof } = await sb.from('profiles')
+            .select('company_id').eq('id', user.id).maybeSingle();
+          if (prof?.company_id) { timerCid = prof.company_id; setCid(timerCid); }
+        }
+      }
+      if (!timerCid) return;
       setSaving(true);
       sb.from('sites').upsert({
-        company_id:    cid,
+        company_id:    timerCid,
         site_name:     siteName,
         key_info:      next.key_info,
         parking_info:  next.parking_info,
@@ -3515,10 +3525,30 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
   const handleSave = async () => {
     if (manualSaving) return;
+    if (!siteName) return;
+
+    // cid が未解決の場合、profilesから再取得してから保存
+    let activeCid = cid;
+    if (!activeCid) {
+      const { data: { user } } = await sb.auth.getUser();
+      if (user) {
+        const { data: prof } = await sb.from('profiles')
+          .select('company_id').eq('id', user.id).maybeSingle();
+        if (prof?.company_id) {
+          activeCid = prof.company_id;
+          setCid(activeCid);
+        }
+      }
+    }
+    if (!activeCid) {
+      console.error('[handleSave] company_id が取得できないため保存できません');
+      return;
+    }
+
     setManualSaving(true);
     try {
       const { error } = await sb.from('sites').upsert({
-        company_id:     cid,
+        company_id:     activeCid,
         site_name:      siteName,
         key_info:       siteData.key_info,
         key_images:     imagePaths.key_images,
