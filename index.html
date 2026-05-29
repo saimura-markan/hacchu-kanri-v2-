@@ -1351,12 +1351,21 @@ function SiteNameInput({ value, onChange, hasError, sites, onSelect }) {
 }
 
 // ── 共通UI ──────────────────────────────────────────────
-function OrTopBar({ title }) {
+function OrTopBar({ title, onBack }) {
   return (
     <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
       padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
       boxShadow:"0 2px 8px rgba(10,31,92,0.06)", position:"sticky", top:0, zIndex:50 }}>
-      <img src={LOGO_IMG} alt="E-Li" style={{ height:54, width:"auto", objectFit:"contain" }} />
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        {onBack && (
+          <button onClick={onBack} style={{
+            background:"none", border:"none", padding:"6px 4px",
+            fontSize:14, fontWeight:700, color:C.navy, cursor:"pointer",
+            fontFamily:"inherit", display:"flex", alignItems:"center", gap:2, flexShrink:0
+          }}>← もどる</button>
+        )}
+        <img src={LOGO_IMG} alt="E-Li" style={{ height:54, width:"auto", objectFit:"contain" }} />
+      </div>
       <div style={{ textAlign:"right" }}>
         <div style={{ fontSize:11, color:C.gray }}>工事 受発注システム</div>
         <div style={{ fontSize:15, fontWeight:800, color:C.navy }}>{title}</div>
@@ -2372,7 +2381,6 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
       </Card>
 
       <OrBigBtn onClick={handleNext}>確認画面へ →</OrBigBtn>
-      <OrSubBtn onClick={onBack}>← もどる</OrSubBtn>
     </div>
   );
 }
@@ -2875,7 +2883,7 @@ function OrderApp({ onDone, onBack }) {
     <div style={{ background:C.bg, minHeight:"100vh",
       fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
       <style>{STYLE}</style>
-      <OrTopBar title={getTitle()}/><OrStepBar phase={phase}/>
+      <OrTopBar title={getTitle()} onBack={phase==="form" ? ()=>setPhase(doneServices.includes(currentSvc)?"confirm":"service") : undefined}/><OrStepBar phase={phase}/>
       <div style={{ maxWidth:480, margin:"0 auto" }}>
         {phase==="service"&&<StepService onSelect={handleSelectService} doneServices={doneServices} onBack={onBack}/>}
         {phase==="form"&&currentSvc&&(
