@@ -47,6 +47,9 @@ Deno.serve(async (req) => {
     const { data, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email,
+      options: {
+        redirectTo: 'https://hacchu-kanri-v2.vercel.app',
+      },
     });
 
     if (linkError || !data?.properties?.action_link) {
