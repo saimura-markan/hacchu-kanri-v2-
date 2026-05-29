@@ -664,8 +664,39 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
 
 // ── パスワードリセット ───────────────────────────────────
 function ForgotScreen({ onBack }) {
-  const [email, setEmail] = useState("");
-  const [sent, setSent]   = useState(false);
+  const [email, setEmail]     = useState("");
+  const [sent, setSent]       = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const handleSendReset = async () => {
+    if (!email) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/functions/v1/send-reset-email`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ email }),
+        }
+      );
+      if (res.ok) {
+        setSent(true);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setError(err.error || '送信に失敗しました。メールアドレスを確認してください。');
+      }
+    } catch (e) {
+      setError('送信に失敗しました。メールアドレスを確認してください。');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="login-root" style={{ justifyContent: "center" }}>
@@ -682,10 +713,15 @@ function ForgotScreen({ onBack }) {
               </div>
               <FieldWrap label="📧 メールアドレス">
                 <TextInput type="email" value={email} placeholder="例：tanaka@example.com"
-                  onChange={e => setEmail(e.target.value)} />
+                  onChange={e => { setEmail(e.target.value); setError(""); }} />
               </FieldWrap>
+              {error && (
+                <div style={{ color: C.red, fontSize: 13, marginBottom: 10, textAlign: "center" }}>{error}</div>
+              )}
               <div style={{ marginBottom: 12 }}>
-                <PrimaryBtn onClick={() => setSent(true)}>リセットメールを送る</PrimaryBtn>
+                <PrimaryBtn onClick={handleSendReset} disabled={loading || !email}>
+                  {loading ? "送信中..." : "リセットメールを送る"}
+                </PrimaryBtn>
               </div>
               <div style={{ textAlign: "center", marginTop: 16 }}>
                 <TextLink onClick={onBack}>← ログイン画面にもどる</TextLink>
