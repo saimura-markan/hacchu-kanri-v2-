@@ -4377,21 +4377,18 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
     // ═══════════════════════════════════════════════════════
 
 function MyTopBar({ onBack, onLogout }) {
-  const myBtnStyle = { padding:"6px 14px", background:C.grayPale, border:"1px solid "+C.grayL,
+  const myBtnStyle = { padding:"6px 12px", background:C.grayPale, border:"1px solid "+C.grayL,
     borderRadius:8, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit",
     whiteSpace:"nowrap" };
   return (
-    <div style={{ padding:"14px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
+    <div style={{ padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"space-between",
       background:C.white, borderBottom:"2px solid "+C.grayL, boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
         <button onClick={onBack} style={{ ...myBtnStyle, color:C.navy }}>← もどる</button>
-        <img src={LOGO_IMG} alt="E-Li" style={{ height:54, width:"auto", objectFit:"contain" }} />
+        <img src={LOGO_IMG} alt="E-Li" style={{ height:40, width:"auto", objectFit:"contain" }} />
       </div>
-      <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-        <div style={{ textAlign:"right" }}>
-          <div style={{ fontSize:11, color:C.gray }}>工事 受発注システム</div>
-          <div style={{ fontSize:14, fontWeight:900, color:C.navy }}>マイページ</div>
-        </div>
+      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <div style={{ fontSize:15, fontWeight:900, color:C.navy, whiteSpace:"nowrap" }}>マイページ</div>
         <button onClick={onLogout} style={{ ...myBtnStyle, color:C.gray }}>🚪 ログアウト</button>
       </div>
     </div>
