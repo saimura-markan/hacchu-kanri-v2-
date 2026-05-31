@@ -402,14 +402,14 @@ function TextInput({ type = "text", value, onChange, placeholder, error, autocom
   );
 }
 
-function PwInput({ value, onChange, error }) {
+function PwInput({ value, onChange, error, placeholder = "パスワードを入力" }) {
   const [show, setShow] = useState(false);
   const [focused, setFocused] = useState(false);
   return (
     <div style={{ position: "relative" }}>
       <input
         type={show ? "text" : "password"} value={value} onChange={onChange}
-        placeholder="パスワードを入力"
+        placeholder={placeholder}
         autoComplete="current-password"
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{
@@ -745,6 +745,107 @@ function ForgotScreen({ onBack }) {
   );
 }
 
+
+// ── パスワード再設定画面 ──────────────────────────────────
+function ResetPasswordScreen({ onDone }) {
+  const [pw, setPw]               = useState("");
+  const [pwConfirm, setPwConfirm] = useState("");
+  const [errors, setErrors]       = useState({});
+  const [loading, setLoading]     = useState(true);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionError, setSessionError] = useState("");
+  const [done, setDone]           = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const accessToken  = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+    if (!accessToken || !refreshToken) {
+      setSessionError("無効なリンクです。パスワードリセットメールを再度お送りください。");
+      setLoading(false);
+      return;
+    }
+    sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+      .then(({ error }) => {
+        if (error) {
+          setSessionError("リンクの有効期限が切れています。パスワードリセットメールを再度お送りください。");
+        } else {
+          setSessionReady(true);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSubmit = async () => {
+    const errs = {};
+    if (pw.length < 8)    errs.pw = "パスワードは8文字以上で入力してください";
+    if (pw !== pwConfirm) errs.pwConfirm = "パスワードが一致しません";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    setLoading(true);
+    const { error } = await sb.auth.updateUser({ password: pw });
+    setLoading(false);
+    if (error) {
+      setErrors({ pw: "パスワードの更新に失敗しました。もう一度お試しください。" });
+      return;
+    }
+    history.replaceState(null, '', window.location.pathname);
+    setDone(true);
+  };
+
+  return (
+    <div className="login-root" style={{ justifyContent: "center" }}>
+      <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", padding: "40px 20px", position: "relative", zIndex: 1 }}>
+        <div className="login-card">
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "40px 0" }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🔐</div>
+              <div style={{ fontSize: 16, color: C.gray }}>認証情報を確認中...</div>
+            </div>
+          ) : sessionError ? (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
+              <div style={{ fontSize: 17, fontWeight: 800, color: C.red, marginBottom: 20 }}>{sessionError}</div>
+              <PrimaryBtn onClick={onDone}>ログイン画面にもどる</PrimaryBtn>
+            </div>
+          ) : done ? (
+            <div style={{ textAlign: "center", padding: "16px 0" }}>
+              <div style={{ fontSize: 52, marginBottom: 14 }}>✅</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: C.navy, marginBottom: 10 }}>パスワードを変更しました！</div>
+              <div style={{ fontSize: 15, color: C.gray, lineHeight: 1.9, marginBottom: 28,
+                background: C.bg, borderRadius: 12, padding: "14px" }}>
+                新しいパスワードでログインしてください
+              </div>
+              <PrimaryBtn onClick={onDone}>ログイン画面へ</PrimaryBtn>
+            </div>
+          ) : (
+            <>
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <div style={{ fontSize: 40, marginBottom: 10 }}>🔑</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: C.navy, marginBottom: 6 }}>新しいパスワードを設定</div>
+                <div style={{ fontSize: 14, color: C.gray, lineHeight: 1.8 }}>
+                  8文字以上の新しいパスワードを入力してください
+                </div>
+              </div>
+              <FieldWrap label="🔑 新しいパスワード" error={errors.pw}>
+                <PwInput value={pw} error={errors.pw} placeholder="新しいパスワード（8文字以上）"
+                  onChange={e => { setPw(e.target.value); setErrors(er => ({ ...er, pw: "" })); }} />
+              </FieldWrap>
+              <FieldWrap label="🔑 パスワード（確認）" error={errors.pwConfirm}>
+                <PwInput value={pwConfirm} error={errors.pwConfirm} placeholder="パスワードをもう一度入力"
+                  onChange={e => { setPwConfirm(e.target.value); setErrors(er => ({ ...er, pwConfirm: "" })); }} />
+              </FieldWrap>
+              <PrimaryBtn onClick={handleSubmit} disabled={loading}>
+                {loading ? "更新中..." : "パスワードを変更する"}
+              </PrimaryBtn>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── メイン ───────────────────────────────────────────────
 function LoginApp({ onLogin, onRegister }) {
@@ -6456,7 +6557,10 @@ function AdminApp({ role, onLogout }) {
 
     // ── メインルーター ──────────────────────────────────────
     function App() {
-      const [screen, setScreen] = React.useState(null); // null = セッション確認中
+      const [screen, setScreen] = React.useState(() => {
+        const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        return params.get('type') === 'recovery' ? 'resetpassword' : null;
+      });
       const [userRole, setUserRole] = React.useState(null);
       const [detailOrder, setDetailOrder] = React.useState(null);
       const [detailViewOnly, setDetailViewOnly] = React.useState(false);
@@ -6464,9 +6568,14 @@ function AdminApp({ role, onLogout }) {
 
       React.useEffect(() => {
         const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
+          if (event === 'PASSWORD_RECOVERY') {
+            setScreen('resetpassword');
+            return;
+          }
           if (!session) {
             setUserRole(null);
-            setScreen("login");
+            // パスワード再設定完了画面は維持（ユーザーが手動で「ログイン画面へ」を押すまで）
+            setScreen(prev => prev === "resetpassword" ? prev : "login");
           } else {
             const role = session.user.user_metadata?.role ?? "user";
             setUserRole(role);
@@ -6521,6 +6630,7 @@ function AdminApp({ role, onLogout }) {
           <div style={{ fontSize:16, fontWeight:700, color:C.navy }}>認証確認中...</div>
         </div>
       );
+      if (screen === "resetpassword") return <ResetPasswordScreen onDone={async () => { await sb.auth.signOut(); setScreen("login"); }} />;
       if (screen === "login")    return <LoginApp onLogin={handleLogin} onRegister={() => setScreen("register")} />;
       if (screen === "register") return <RegisterApp onDone={() => setScreen("login")} onBack={() => setScreen("login")} />;
       if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => setScreen("mypage")} onLogout={() => setScreen("login")} onGoDetail={handleGoDetail} onGoDetailView={handleGoDetailView} onGoChat={handleGoChat} />;

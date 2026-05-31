@@ -365,6 +365,16 @@ handleStatusChange(id, newStatus)
 
 ---
 
+## 次回タスク（2026-05-30）
+- ResetPasswordScreen実装
+  - URLのhash（#access_token=...&type=recovery）を検知
+  - 新パスワード入力フォームを表示
+  - Supabase の updateUser({ password }) でパスワード更新
+  - 完了後ログイン画面へリダイレクト
+- markan.co.jpのResendドメイン認証
+
+---
+
 ### 2026-05-21 — チャットリアルタイム受信修正・Supabase本番認証
 
 **コミット**: `36b7c05`, `0848d80`
