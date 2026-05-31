@@ -5393,11 +5393,17 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [editData,    setEditData]    = useState(null);
   const [saving,      setSaving]      = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
+  const [statusLogs,  setStatusLogs]  = useState([]);
   const bottomRef = useRef(null);
   useTimer();
 
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[chats, tab]);
   useEffect(()=>{ setEditMode(false); setEditData(null); }, [order?.id]);
+  useEffect(()=>{
+    if (!order?.id) return;
+    sb.from('status_logs').select('*').eq('order_id', order.id).order('changed_at')
+      .then(({ data }) => setStatusLogs(data || []));
+  }, [order?.id, order?.status]);
 
   const startEdit = () => {
     setEditData({
@@ -5494,14 +5500,16 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
           <ADStatusBadge status={order.status} />
-          <select value={order.status} onChange={e=>onStatusChange(order.id, e.target.value)}
-            style={{ fontSize:13, padding:"8px 12px", borderRadius:8,
-              border:"2px solid "+C.blue, fontFamily:"inherit", outline:"none",
-              color:C.blue, fontWeight:700, cursor:"pointer", background:C.blueL }}>
-            {AD_STATUS_LIST.map(s=>(
-              <option key={s} value={s}>{AD_STATUS[s].icon} {s}に変更</option>
-            ))}
-          </select>
+          {(role === "admin" || role === "manager") && (
+            <select value={order.status} onChange={e=>onStatusChange(order.id, e.target.value)}
+              style={{ fontSize:13, padding:"8px 12px", borderRadius:8,
+                border:"2px solid "+C.blue, fontFamily:"inherit", outline:"none",
+                color:C.blue, fontWeight:700, cursor:"pointer", background:C.blueL }}>
+              {AD_STATUS_LIST.map(s=>(
+                <option key={s} value={s}>{AD_STATUS[s].icon} {s}に変更</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -5531,7 +5539,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
           <div style={{ maxWidth:700, margin:"0 auto" }}>
 
             {/* 編集ボタン */}
-            {!editMode && (
+            {!editMode && (role === "admin" || role === "manager") && (
               <button onClick={startEdit}
                 style={{ width:"100%", marginBottom:16, padding:"11px", fontSize:14,
                   fontWeight:800, color:C.blue, background:C.blueL,
@@ -5739,6 +5747,30 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
             </div>
 
             {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
+
+            {statusLogs.length > 0 && (
+              <div style={{ background:C.white, border:"1px solid "+C.grayL, borderRadius:14,
+                marginTop:16, marginBottom:4, overflow:"hidden" }}>
+                <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
+                  padding:"10px 18px", fontSize:13, fontWeight:800, color:C.white }}>
+                  📝 ステータス変更ログ
+                </div>
+                <div>
+                  {[...statusLogs].reverse().map(log => (
+                    <div key={log.id} style={{ padding:"8px 18px", borderBottom:"1px solid "+C.grayL,
+                      display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+                      <span style={{ fontSize:12, color:C.gray, flexShrink:0, minWidth:110 }}>
+                        {new Date(log.changed_at).toLocaleString("ja",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}
+                      </span>
+                      <span style={{ fontSize:12, color:C.gray, flexShrink:0 }}>{log.changed_by}</span>
+                      <span style={{ fontSize:12, fontWeight:700, color:C.navy }}>
+                        {log.old_status || "（新規）"} → {log.new_status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {role !== "staff" && (
               <button onClick={()=>onDelete([order.id])}
@@ -6526,9 +6558,13 @@ function AdminApp({ role, onLogout }) {
   const handleStatusChange = async (id, newStatus) => {
     const nowIso = new Date().toISOString();
     const nowMs  = Date.now();
+    const oldStatus = orders.find(o => o.id === id)?.status || "";
     await sb.from('orders').update({ status:newStatus, status_changed_at:nowIso }).eq('id', id);
     setOrders(os => os.map(o => o.id === id ? { ...o, status:newStatus, statusChangedAt:nowMs } : o));
     if (selected?.id === id) setSelected(s => ({ ...s, status:newStatus, statusChangedAt:nowMs }));
+    sb.auth.getUser().then(({ data: { user } }) => {
+      sb.from('status_logs').insert({ order_id:id, changed_by:user?.email||"unknown", old_status:oldStatus, new_status:newStatus });
+    });
     if (newStatus === "キャンセル") {
       const { data: row } = await sb.from('messages').insert({
         order_id: id, from_role: 'eli',
@@ -6603,6 +6639,11 @@ function AdminApp({ role, onLogout }) {
     const orderUpdate = { status: editData.status };
     if (statusChanged) orderUpdate.status_changed_at = new Date().toISOString();
     await sb.from('orders').update(orderUpdate).eq('id', id);
+    if (statusChanged) {
+      sb.auth.getUser().then(({ data: { user } }) => {
+        sb.from('status_logs').insert({ order_id:id, changed_by:user?.email||"unknown", old_status:order.status, new_status:editData.status });
+      });
+    }
     const newHistoryEntries = {};
     for (const sch of editData.schedules) {
       if (sch.id) {
