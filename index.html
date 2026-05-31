@@ -4103,17 +4103,17 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
 function ChatScreen({ role, order, onBack }) {
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
+  const [input,    setInput]    = useState("");
+  const [replyTo,  setReplyTo]  = useState(null);
   const bottomRef = useRef(null);
+  const isAdminRole = ['admin','manager','staff'].includes(role);
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
 
-  // 初回メッセージ読み込み
   useEffect(() => {
     sb.from('messages').select('*').eq('order_id', order.id).order('id')
       .then(({ data }) => { if (data) setMessages(data.map(mapChat)); });
   }, [order.id]);
 
-  // Realtime subscription（即時反映）
   useEffect(() => {
     const oid = order.id;
     const channel = sb
@@ -4125,13 +4125,10 @@ function ChatScreen({ role, order, onBack }) {
             setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
           }
         })
-      .subscribe((status, err) => {
-        if (err) console.error('[Realtime chat]', status, err);
-      });
+      .subscribe();
     return () => sb.removeChannel(channel);
   }, [order.id]);
 
-  // ポーリング（Realtime が届かない場合のフォールバック、3秒間隔）
   useEffect(() => {
     const oid = order.id;
     const poll = async () => {
@@ -4149,25 +4146,41 @@ function ChatScreen({ role, order, onBack }) {
   const handleSend = async () => {
     if (!input.trim()) return;
     const text = input.trim();
-    setInput("");
+    const mentions = (text.match(/@\S+/g) || []).map(m => m.slice(1));
+    const replyToId = replyTo?.id || null;
+    setInput(""); setReplyTo(null);
     const { data: row, error } = await sb.from('messages').insert({
-      order_id: order.id,
-      from_role: role === 'admin' ? 'staff' : 'user',
+      order_id:   order.id,
+      from_role:  isAdminRole ? 'staff' : 'user',
       text,
+      reply_to_id: replyToId,
+      mentions:    mentions.length > 0 ? mentions : null,
     }).select().single();
-    if (error) {
-      console.error('[ChatScreen send]', error);
-      setInput(text);
-      return;
-    }
+    if (error) { console.error('[ChatScreen send]', error); setInput(text); return; }
     const msg = mapChat(row);
     setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+    // LiBot自動返答（ユーザー送信かつ直前がeli以外）
+    if (!isAdminRole) {
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last?.from !== 'eli') {
+          setTimeout(() => sb.from('messages').insert({
+            order_id: order.id, from_role: 'eli',
+            text: '受け付けました。担当者が確認次第ご連絡いたします。',
+            is_read: false,
+          }), 900);
+        }
+        return prev;
+      });
+    }
   };
 
   return (
     <div style={{ height:"100vh", display:"flex", flexDirection:"column",
       fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
       <style>{HI_CSS}</style>
+
+      {/* ヘッダー */}
       <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
         padding:"12px 16px", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
         <button onClick={onBack} style={{ background:"rgba(255,255,255,0.15)", border:"none",
@@ -4185,6 +4198,7 @@ function ChatScreen({ role, order, onBack }) {
         </div>
       </div>
 
+      {/* メッセージ一覧 */}
       <div style={{ flex:1, overflowY:"auto", padding:"16px", background:C.bg }}>
         <div style={{ maxWidth:500, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:16 }}>
@@ -4195,7 +4209,8 @@ function ChatScreen({ role, order, onBack }) {
           </div>
 
           {messages.map((msg,i)=>{
-            const isOwn = role==="admin" ? msg.from==="staff" : msg.from==="user";
+            const isOwn = isAdminRole ? msg.from==="staff" : msg.from==="user";
+            const quoted = msg.replyToId ? messages.find(m => m.id === msg.replyToId) : null;
             return (
               <div key={msg.id||i} style={{
                 display:"flex", flexDirection:isOwn?"row-reverse":"row",
@@ -4208,12 +4223,19 @@ function ChatScreen({ role, order, onBack }) {
                     : <img src={ELI_IMG} className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
                 )}
                 <div style={{ maxWidth:"78%" }}>
-                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>LiBot</div>}
-                  {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue,   marginBottom:3, fontWeight:600 }}>👷 担当者</div>}
-                  {!isOwn && msg.from==="user"  && role==="admin" && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 ユーザー</div>}
+                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>LiBot</div>}
+                  {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue, marginBottom:3, fontWeight:600 }}>👷 担当者</div>}
+                  {!isOwn && msg.from==="user" && isAdminRole && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 お客様</div>}
+                  {/* 引用 */}
+                  {quoted && (
+                    <div style={{ background:"rgba(0,0,0,0.06)", borderLeft:"3px solid "+C.gray,
+                      padding:"3px 8px", marginBottom:4, borderRadius:4,
+                      fontSize:11, color:C.gray, overflow:"hidden", maxHeight:34 }}>
+                      {quoted.text.slice(0,50)}{quoted.text.length>50?"…":""}
+                    </div>
+                  )}
                   <div style={{
-                    background: isOwn
-                      ? "linear-gradient(135deg,#2952c8,#0a1f5c)"
+                    background: isOwn ? "linear-gradient(135deg,#2952c8,#0a1f5c)"
                       : msg.from==="staff" ? "#eef3ff" : C.white,
                     color: isOwn ? C.white : C.navy,
                     borderRadius: isOwn ? "20px 4px 20px 20px" : "4px 20px 20px 20px",
@@ -4221,37 +4243,61 @@ function ChatScreen({ role, order, onBack }) {
                     boxShadow: isOwn ? "0 4px 14px rgba(10,31,92,0.2)" : "0 4px 14px rgba(10,31,92,0.07)",
                     border: !isOwn ? `1px solid ${C.grayL}` : "none",
                     whiteSpace:"pre-wrap",
-                  }}>{msg.text}</div>
-                  <div style={{ fontSize:11, color:C.gray, marginTop:4,
-                    textAlign:isOwn?"right":"left" }}>{msg.time}</div>
+                  }}>
+                    {renderMentions(msg.text)}
+                  </div>
+                  <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:4,
+                    justifyContent:isOwn?"flex-end":"flex-start", flexWrap:"wrap" }}>
+                    <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
+                    {msg.from !== 'eli' && (
+                      <button onClick={()=>setReplyTo(msg)}
+                        style={{ fontSize:10, color:C.gray, background:"none", border:"none",
+                          cursor:"pointer", padding:"0 2px", fontFamily:"inherit" }}>↩ 返信</button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
           })}
-
           <div ref={bottomRef} />
         </div>
       </div>
 
+      {/* 入力エリア */}
       <div style={{ background:C.white, borderTop:`2px solid ${C.grayL}`, padding:"12px 16px", flexShrink:0 }}>
-        <div style={{ maxWidth:500, margin:"0 auto", display:"flex", gap:10, alignItems:"flex-end" }}>
-          <textarea value={input} onChange={e=>setInput(e.target.value)}
-            onKeyDown={e=>{ if(e.key==="Enter"&&e.shiftKey){ return; } if(e.key==="Enter"){e.preventDefault();} }}
-            placeholder="メッセージを入力... (Shift+Enterで改行)" rows={1}
-            style={{ flex:1, fontSize:16, padding:"13px 16px", borderRadius:14,
-              border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
-              color:C.navy, resize:"none", lineHeight:1.5, maxHeight:100, overflowY:"auto", outline:"none" }}
-            onInput={e=>{ e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,100)+"px"; }}
-          />
-          <button onClick={handleSend} style={{
-            width:50, height:50, borderRadius:"50%", border:"none",
-            background:input.trim()?"linear-gradient(135deg,#2952c8,#0a1f5c)":C.grayL,
-            color:input.trim()?C.white:C.gray, fontSize:20, cursor:input.trim()?"pointer":"default",
-            display:"flex", alignItems:"center", justifyContent:"center",
-            flexShrink:0, transition:"all 0.15s" }}>✈️</button>
-        </div>
-        <div style={{ textAlign:"center", marginTop:6, fontSize:12, color:C.gray }}>
-          📞 緊急の場合は 06-6392-3882 まで
+        <div style={{ maxWidth:500, margin:"0 auto" }}>
+          {replyTo && (
+            <div style={{ background:"#eef3ff", borderLeft:`3px solid ${C.blue}`,
+              padding:"5px 10px", marginBottom:8, borderRadius:8,
+              display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+              <div style={{ fontSize:12, color:C.navy, overflow:"hidden",
+                textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
+                ↩ {replyTo.text.slice(0,40)}{replyTo.text.length>40?"…":""}
+              </div>
+              <button onClick={()=>setReplyTo(null)}
+                style={{ background:"none", border:"none", cursor:"pointer",
+                  color:C.gray, fontSize:14, flexShrink:0 }}>✕</button>
+            </div>
+          )}
+          <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
+            <textarea value={input} onChange={e=>setInput(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Enter"&&e.shiftKey){ return; } if(e.key==="Enter"){e.preventDefault(); handleSend();} }}
+              placeholder="メッセージを入力... (Shift+Enterで改行)" rows={1}
+              style={{ flex:1, fontSize:16, padding:"13px 16px", borderRadius:14,
+                border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
+                color:C.navy, resize:"none", lineHeight:1.5, maxHeight:100, overflowY:"auto", outline:"none" }}
+              onInput={e=>{ e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,100)+"px"; }}
+            />
+            <button onClick={handleSend} style={{
+              width:50, height:50, borderRadius:"50%", border:"none",
+              background:input.trim()?"linear-gradient(135deg,#2952c8,#0a1f5c)":C.grayL,
+              color:input.trim()?C.white:C.gray, fontSize:20, cursor:input.trim()?"pointer":"default",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              flexShrink:0, transition:"all 0.15s" }}>✈️</button>
+          </div>
+          <div style={{ textAlign:"center", marginTop:6, fontSize:12, color:C.gray }}>
+            📞 緊急の場合は 06-6392-3882 まで
+          </div>
         </div>
       </div>
     </div>
@@ -5064,12 +5110,26 @@ function mapChat(row) {
     ? new Date(row.created_at).toLocaleTimeString('ja', {hour:'2-digit', minute:'2-digit'})
     : (row.time || '');
   return {
-    id:   row.id,
-    from: row.from_role || row.from || 'user',
-    text: row.text || '',
-    time: timeStr,
-    read: row.is_read !== undefined ? row.is_read : true,
+    id:        row.id,
+    from:      row.from_role || row.from || 'user',
+    text:      row.text || '',
+    time:      timeStr,
+    read:      row.is_read !== undefined ? row.is_read : true,
+    replyToId: row.reply_to_id || null,
+    mentions:  row.mentions  || [],
+    readBy:    row.read_by   || [],
   };
+}
+
+// @メンションをハイライト表示
+function renderMentions(text) {
+  if (!text || !text.includes('@')) return text;
+  return text.split(/(@\S+)/g).map((part, i) =>
+    part.startsWith('@')
+      ? <span key={i} style={{ background:"#dbeafe", color:"#1e40af",
+          borderRadius:3, padding:"1px 4px", fontWeight:700, fontSize:"0.93em" }}>{part}</span>
+      : part
+  );
 }
 
 // ── タイマー計算 ─────────────────────────────────────────
@@ -5387,8 +5447,9 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 
 // ── 詳細パネル ───────────────────────────────────────────
 function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete }) {
-  const [tab, setTab]           = useState("detail");
-  const [chatInput, setChatInput] = useState("");
+  const [tab, setTab]             = useState("detail");
+  const [chatInput, setChatInput]   = useState("");
+  const [chatReplyTo, setChatReplyTo] = useState(null);
   const [editMode,    setEditMode]    = useState(false);
   const [editData,    setEditData]    = useState(null);
   const [saving,      setSaving]      = useState(false);
@@ -5398,12 +5459,19 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   useTimer();
 
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[chats, tab]);
-  useEffect(()=>{ setEditMode(false); setEditData(null); }, [order?.id]);
+  useEffect(()=>{ setEditMode(false); setEditData(null); setChatReplyTo(null); }, [order?.id]);
   useEffect(()=>{
     if (!order?.id) return;
     sb.from('status_logs').select('*').eq('order_id', order.id).order('changed_at')
       .then(({ data }) => setStatusLogs(data || []));
   }, [order?.id, order?.status]);
+  // チャットタブを開いたとき既読登録
+  useEffect(()=>{
+    if (tab !== 'chat' || !order?.id) return;
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (user) sb.rpc('mark_messages_read', { p_order_id: order.id, p_email: user.email });
+    });
+  }, [tab, order?.id]);
 
   const startEdit = () => {
     setEditData({
@@ -5443,9 +5511,11 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 
   const handleSend = () => {
     if (!chatInput.trim()) return;
-    onAddChat(order.id, { id:Date.now(), from:"staff", text:chatInput.trim(),
-      time:new Date().toLocaleTimeString("ja",{hour:"2-digit",minute:"2-digit"}) });
-    setChatInput("");
+    const text = chatInput.trim();
+    const mentions = (text.match(/@\S+/g) || []).map(m => m.slice(1));
+    onAddChat(order.id, { from:"staff", text, replyToId: chatReplyTo?.id || null,
+      mentions: mentions.length > 0 ? mentions : null });
+    setChatInput(""); setChatReplyTo(null);
   };
 
   const prowonText = `【受付番号】${order.id}
@@ -5816,11 +5886,15 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               </div>
 
               {/* メッセージ */}
-              {(chats[order.id]||[]).map((msg,i)=>(
+              {(chats[order.id]||[]).map((msg,i)=>{
+                const isOwn = msg.from==="staff";
+                const msgList = chats[order.id]||[];
+                const quoted = msg.replyToId ? msgList.find(m => m.id === msg.replyToId) : null;
+                return (
                 <div key={msg.id||i} style={{
-                  display:"flex", flexDirection:msg.from==="staff"?"row-reverse":"row",
+                  display:"flex", flexDirection:isOwn?"row-reverse":"row",
                   alignItems:"flex-end", gap:8, marginBottom:14 }}>
-                  {msg.from!=="staff" && (
+                  {!isOwn && (
                     msg.from==="eli"
                       ? <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
                       : <div style={{ width:34, height:34, background:C.navy, borderRadius:"50%",
@@ -5830,31 +5904,66 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   <div style={{ maxWidth:"70%" }}>
                     {msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>LiBot</div>}
                     {msg.from==="user"  && <div style={{ fontSize:11, color:C.orange, marginBottom:3, fontWeight:600 }}>👤 {order.person}</div>}
-                    {msg.from==="staff" && <div style={{ fontSize:11, color:C.green,  marginBottom:3, fontWeight:600, textAlign:"right" }}>👷 担当者（あなた）</div>}
+                    {isOwn             && <div style={{ fontSize:11, color:C.green,  marginBottom:3, fontWeight:600, textAlign:"right" }}>👷 担当者</div>}
+                    {/* 引用 */}
+                    {quoted && (
+                      <div style={{ background:"rgba(0,0,0,0.05)", borderLeft:"3px solid "+C.gray,
+                        padding:"3px 8px", marginBottom:4, borderRadius:4,
+                        fontSize:11, color:C.gray, overflow:"hidden", maxHeight:32 }}>
+                        {quoted.text.slice(0,50)}{quoted.text.length>50?"…":""}
+                      </div>
+                    )}
                     <div style={{
-                      background:msg.from==="staff"
+                      background:isOwn
                         ? `linear-gradient(135deg,${C.green},#1a7a50)`
                         : msg.from==="user" ? "#fff8e0" : C.white,
-                      color:msg.from==="staff"?C.white:C.navy,
-                      borderRadius:msg.from==="staff"?"20px 4px 20px 20px":"4px 20px 20px 20px",
+                      color:isOwn?C.white:C.navy,
+                      borderRadius:isOwn?"20px 4px 20px 20px":"4px 20px 20px 20px",
                       padding:"11px 15px", fontSize:14, lineHeight:1.7,
-                      border:msg.from!=="staff"?`1px solid ${C.grayL}`:"none",
+                      border:!isOwn?`1px solid ${C.grayL}`:"none",
                       whiteSpace:"pre-wrap",
-                    }}>{msg.text}</div>
-                    <div style={{ fontSize:11, color:C.gray, marginTop:3,
-                      textAlign:msg.from==="staff"?"right":"left" }}>{msg.time}</div>
+                    }}>
+                      {renderMentions(msg.text)}
+                    </div>
+                    <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:3,
+                      justifyContent:isOwn?"flex-end":"flex-start", flexWrap:"wrap" }}>
+                      <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
+                      {isOwn && msg.readBy && msg.readBy.length > 0 && (
+                        <span style={{ fontSize:10, color:C.gray }}>既読 {msg.readBy.length}</span>
+                      )}
+                      {msg.from !== 'eli' && (
+                        <button onClick={()=>setChatReplyTo(msg)}
+                          style={{ fontSize:10, color:C.gray, background:"none", border:"none",
+                            cursor:"pointer", padding:"0 2px", fontFamily:"inherit" }}>↩ 返信</button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              ))}
+              );})}
+              <div ref={bottomRef} />
               <div ref={bottomRef} />
             </div>
           </div>
 
           <div style={{ background:C.white, borderTop:"2px solid "+C.grayL,
             padding:"12px 20px", flexShrink:0 }}>
-            <div style={{ maxWidth:700, margin:"0 auto", display:"flex", gap:10, alignItems:"flex-end" }}>
+            <div style={{ maxWidth:700, margin:"0 auto" }}>
+              {chatReplyTo && (
+                <div style={{ background:"#eef3ff", borderLeft:`3px solid ${C.blue}`,
+                  padding:"5px 10px", marginBottom:8, borderRadius:8,
+                  display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                  <div style={{ fontSize:12, color:C.navy, overflow:"hidden",
+                    textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
+                    ↩ {chatReplyTo.text.slice(0,40)}{chatReplyTo.text.length>40?"…":""}
+                  </div>
+                  <button onClick={()=>setChatReplyTo(null)}
+                    style={{ background:"none", border:"none", cursor:"pointer",
+                      color:C.gray, fontSize:14, flexShrink:0 }}>✕</button>
+                </div>
+              )}
+              <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
               <textarea value={chatInput} onChange={e=>setChatInput(e.target.value)}
-                onKeyDown={e=>{ if(e.key==="Enter"&&e.shiftKey){ return; } if(e.key==="Enter"){e.preventDefault();} }}
+                onKeyDown={e=>{ if(e.key==="Enter"&&e.shiftKey){ return; } if(e.key==="Enter"){e.preventDefault(); handleSend();} }}
                 placeholder="お客様へのメッセージを入力... (Shift+Enterで改行)" rows={2}
                 style={{ flex:1, fontSize:14, padding:"12px 14px", borderRadius:12,
                   border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
@@ -5866,6 +5975,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   cursor:chatInput.trim()?"pointer":"default", fontFamily:"inherit", flexShrink:0 }}>
                 送信 ✈️
               </button>
+              </div>
             </div>
           </div>
         </div>
@@ -6694,6 +6804,8 @@ function AdminApp({ role, onLogout }) {
   const addChat = async (id, msg) => {
     const { data: row, error } = await sb.from('messages').insert({
       order_id:id, from_role:msg.from, text:msg.text, is_read:false,
+      reply_to_id: msg.replyToId || null,
+      mentions:    msg.mentions?.length > 0 ? msg.mentions : null,
     }).select().single();
     if (!error && row) {
       setChats(c => {
