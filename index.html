@@ -751,8 +751,8 @@ function ResetPasswordScreen({ onDone }) {
   const [pw, setPw]               = useState("");
   const [pwConfirm, setPwConfirm] = useState("");
   const [errors, setErrors]       = useState({});
-  const [loading, setLoading]     = useState(true);
-  const [sessionReady, setSessionReady] = useState(false);
+  const [submitting, setSubmitting]     = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(true); // バックグラウンドで処理中
   const [sessionError, setSessionError] = useState("");
   const [done, setDone]           = useState(false);
 
@@ -762,18 +762,18 @@ function ResetPasswordScreen({ onDone }) {
     const refreshToken = params.get('refresh_token');
     if (!accessToken || !refreshToken) {
       setSessionError("無効なリンクです。パスワードリセットメールを再度お送りください。");
-      setLoading(false);
+      setSessionLoading(false);
       return;
     }
-    sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-      .then(({ error }) => {
-        if (error) {
-          setSessionError("リンクの有効期限が切れています。パスワードリセットメールを再度お送りください。");
-        } else {
-          setSessionReady(true);
-        }
-      })
-      .finally(() => setLoading(false));
+    // JWT issued at future エラー対策: 1秒待機してからsetSession
+    const timer = setTimeout(async () => {
+      const { error } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+      if (error) {
+        setSessionError("リンクの有効期限が切れています。もう一度パスワードリセットをお試しください。");
+      }
+      setSessionLoading(false);
+    }, 1000);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleSubmit = async () => {
@@ -783,9 +783,9 @@ function ResetPasswordScreen({ onDone }) {
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
-    setLoading(true);
+    setSubmitting(true);
     const { error } = await sb.auth.updateUser({ password: pw });
-    setLoading(false);
+    setSubmitting(false);
     if (error) {
       setErrors({ pw: "パスワードの更新に失敗しました。もう一度お試しください。" });
       return;
@@ -798,18 +798,7 @@ function ResetPasswordScreen({ onDone }) {
     <div className="login-root" style={{ justifyContent: "center" }}>
       <div style={{ maxWidth: 520, width: "100%", margin: "0 auto", padding: "40px 20px", position: "relative", zIndex: 1 }}>
         <div className="login-card">
-          {loading ? (
-            <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>🔐</div>
-              <div style={{ fontSize: 16, color: C.gray }}>認証情報を確認中...</div>
-            </div>
-          ) : sessionError ? (
-            <div style={{ textAlign: "center", padding: "16px 0" }}>
-              <div style={{ fontSize: 40, marginBottom: 12 }}>⚠️</div>
-              <div style={{ fontSize: 17, fontWeight: 800, color: C.red, marginBottom: 20 }}>{sessionError}</div>
-              <PrimaryBtn onClick={onDone}>ログイン画面にもどる</PrimaryBtn>
-            </div>
-          ) : done ? (
+          {done ? (
             <div style={{ textAlign: "center", padding: "16px 0" }}>
               <div style={{ fontSize: 52, marginBottom: 14 }}>✅</div>
               <div style={{ fontSize: 22, fontWeight: 800, color: C.navy, marginBottom: 10 }}>パスワードを変更しました！</div>
@@ -836,9 +825,18 @@ function ResetPasswordScreen({ onDone }) {
                 <PwInput value={pwConfirm} error={errors.pwConfirm} placeholder="パスワードをもう一度入力"
                   onChange={e => { setPwConfirm(e.target.value); setErrors(er => ({ ...er, pwConfirm: "" })); }} />
               </FieldWrap>
-              <PrimaryBtn onClick={handleSubmit} disabled={loading}>
-                {loading ? "更新中..." : "パスワードを変更する"}
-              </PrimaryBtn>
+              {sessionError && (
+                <div style={{ color: C.red, fontSize: 13, marginBottom: 14, textAlign: "center" }}>
+                  ⚠️ {sessionError}
+                </div>
+              )}
+              {sessionError ? (
+                <PrimaryBtn onClick={onDone}>ログイン画面にもどる</PrimaryBtn>
+              ) : (
+                <PrimaryBtn onClick={handleSubmit} disabled={sessionLoading || submitting}>
+                  {submitting ? "更新中..." : sessionLoading ? "準備中..." : "パスワードを変更する"}
+                </PrimaryBtn>
+              )}
             </>
           )}
         </div>
