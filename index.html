@@ -6098,9 +6098,9 @@ function CompanyPanel({ onClose }) {
 
 // ── スタッフ管理パネル ──────────────────────────────────
 function StaffPanel({ onClose }) {
-  const ROLES      = ['admin', 'staff', 'worker'];
-  const ROLE_LABEL = { admin:'管理者', staff:'スタッフ', worker:'作業員' };
-  const ROLE_COLOR = { admin:C.red, staff:C.blue, worker:C.green };
+  const ROLES      = ['admin', 'manager', 'staff'];
+  const ROLE_LABEL = { admin:'admin', manager:'manager', staff:'staff' };
+  const ROLE_COLOR = { admin:C.red, manager:C.orange, staff:C.blue };
   const EMPTY_FORM = { name:'', role:'staff', phone:'', email:'', is_active:true };
 
   const [list,    setList]    = useState([]);

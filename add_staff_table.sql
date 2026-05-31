@@ -7,7 +7,7 @@ create table if not exists public.staff (
   id         uuid        primary key default gen_random_uuid(),
   name       text        not null,
   role       text        not null default 'staff'
-               check (role in ('admin', 'staff', 'worker')),
+               check (role in ('admin', 'manager', 'staff')),
   phone      text,
   email      text,
   is_active  boolean     not null default true,
