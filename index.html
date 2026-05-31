@@ -530,7 +530,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
         { onConflict: 'id' }
       );
     }
-    if (role !== "admin" && role !== "staff") {
+    if (!["admin","manager","staff"].includes(role)) {
       if (profile?.company_id) {
         const { data: company } = await sb.from('companies').select('is_active').eq('id', profile.company_id).single();
         if (company && !company.is_active) {
@@ -6420,7 +6420,7 @@ function AdminApp({ role, onLogout }) {
     let channel;
     const init = async () => {
       const { data: { session } } = await sb.auth.getSession();
-      if (!session || !["admin","staff"].includes(session.user.user_metadata?.role)) { onLogout(); return; }
+      if (!session || !["admin","manager","staff"].includes(session.user.user_metadata?.role)) { onLogout(); return; }
       await fetchOrders();
       channel = sb.channel('admin-orders')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
@@ -6709,7 +6709,7 @@ function AdminApp({ role, onLogout }) {
           borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>
           📋
         </div>
-        {role === "admin" && (
+        {(role === "admin" || role === "manager") && (
           <div title="企業ID管理"
             style={{ width:36, height:36, background:"rgba(255,255,255,0.08)",
             borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
@@ -6725,13 +6725,15 @@ function AdminApp({ role, onLogout }) {
             👷
           </div>
         )}
-        <div title="削除済み案件"
-          style={{ width:36, height:36,
-            background:showDeleted?"rgba(255,100,100,0.35)":"rgba(255,255,255,0.08)",
-            borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:18, cursor:"pointer" }} onClick={()=>setShowDeleted(d=>!d)}>
-          🗑️
-        </div>
+        {role !== "staff" && (
+          <div title="削除済み案件"
+            style={{ width:36, height:36,
+              background:showDeleted?"rgba(255,100,100,0.35)":"rgba(255,255,255,0.08)",
+              borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:18, cursor:"pointer" }} onClick={()=>setShowDeleted(d=>!d)}>
+            🗑️
+          </div>
+        )}
         {(adjCount+soudCount)>0 && (
           <div style={{ background:C.red, color:C.white, borderRadius:"50%",
             width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center",
@@ -6795,7 +6797,7 @@ function AdminApp({ role, onLogout }) {
             // 初期ロードまたはログイン画面のときだけ遷移（操作中の画面は維持）
             setScreen(prev =>
               (prev === null || prev === "login")
-                ? ((role === "admin" || role === "staff") ? "admin" : "history")
+                ? (["admin","manager","staff"].includes(role) ? "admin" : "history")
                 : prev
             );
           }
@@ -6805,7 +6807,7 @@ function AdminApp({ role, onLogout }) {
 
       const handleLogin = (role) => {
         setUserRole(role);
-        setScreen((role === "admin" || role === "staff") ? "admin" : "history");
+        setScreen(["admin","manager","staff"].includes(role) ? "admin" : "history");
       };
 
       const handleGoDetail = (order) => {
