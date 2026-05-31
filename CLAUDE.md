@@ -365,13 +365,52 @@ handleStatusChange(id, newStatus)
 
 ---
 
-## 次回タスク（2026-05-30）
-- ResetPasswordScreen実装
-  - URLのhash（#access_token=...&type=recovery）を検知
-  - 新パスワード入力フォームを表示
-  - Supabase の updateUser({ password }) でパスワード更新
-  - 完了後ログイン画面へリダイレクト
-- markan.co.jpのResendドメイン認証
+## 次回タスク（2026-06月〜）
+- Seed Note構築（6月中完成目標）
+
+---
+
+### 2026-05-31 — ResetPasswordScreen・ロール権限・チャット改修
+
+**コミット**: `da9c3ca`, `f21e7f6`, `1f885e8`, `df6ad5d`, `74f8ab3`, `1690982`, `934fb6f`
+
+#### ①ResetPasswordScreen実装・動作確認完了
+- URLハッシュから `access_token` / `refresh_token` を取得し `setSession()` でセッション設定
+- JWT issued at future エラー対策: `setSession()` 前に1秒待機（setTimeout）
+- フォームを即座に表示しバックグラウンドで `setSession()` → ボタンは「準備中...」で無効化
+- `updateUser({ password })` で新パスワードに更新 → 完了後 `signOut()` → ログイン画面へ
+- `App` の `onAuthStateChange` に `PASSWORD_RECOVERY` イベント処理を追加
+- `ResetPasswordScreen` 表示中はサインアウト時も画面を維持
+
+#### ②Resendドメイン認証（業者に依頼メール送付済み・返信待ち）
+- ネームサーバー: `ns1.dns.ne.jp` / `ns2.dns.ne.jp`（さくらインターネット）
+- 認証完了後: Edge Functionの `FROM_EMAIL` を `noreply@markan.co.jp` に変更してデプロイ
+
+#### ③staffテーブル作成・RLS設定（`add_staff_table.sql`）
+- カラム: `id` / `name` / `role` / `phone` / `email` / `is_active` / `created_at`
+- RLS: admin=全操作、staff=自分のメール一致行のみSELECT
+- 管理画面サイドバーに👷ボタン追加（adminのみ）→ StaffPanelモーダル
+- 一覧・追加・編集・有効/無効切替・削除
+
+#### ④ロール別権限実装（admin/manager/staff）
+- admin: 全機能（スタッフ管理👷・企業ID管理🏢・削除🗑️含む）
+- manager: adminとほぼ同じ（スタッフ管理👷のみ非表示）
+- staff: 発注一覧・案件詳細・チャットのみ（🏢・👷・🗑️・削除ボタン非表示）
+- ロール選択肢を admin/manager/staff に変更（worker → manager）
+
+#### ⑤ステータス変更権限・変更ログ（`add_status_logs_table.sql`）
+- ステータス変更セレクト・編集ボタン: admin/managerのみ表示
+- `status_logs` テーブル: `order_id` / `changed_by` / `old_status` / `new_status` / `changed_at`
+- `handleStatusChange` / `handleEdit` でfire-and-forgetでINSERT（ログ記録）
+- DetailPanel詳細タブに「📝 ステータス変更ログ」として逆順表示
+
+#### ⑥E-Liチャット改修（`alter_messages_for_chat.sql`）
+- `messages` テーブルに `reply_to_id` / `mentions` / `read_by` カラム追加
+- `mark_messages_read` RPC追加（一括既読登録）
+- リプライ: 「↩ 返信」ボタン→引用プレビュー→`reply_to_id`をDB保存→吹き出し上部に引用表示
+- メンション: `@テキスト` をハイライト表示（青背景・太字）、`mentions[]`に配列保存
+- 既読確認: チャットタブを開くとRPCで一括既読登録、担当者メッセージに「既読 N」表示
+- LiBot自動返答: ユーザー送信後・直前がeli以外なら0.9秒後に定型文を自動送信
 
 ---
 
