@@ -312,6 +312,10 @@
     const ELI_IMG    = "./eli_img.png";
     const LOGO_IMG   = "./logo_img.png";
     const MARKAN_IMG = "./markan_logo.png";
+    const ARIRI_YOJO    = "./ariri_yojo.png.PNG";
+    const ARIRI_KAITAI  = "./ariri_barashi.png.PNG";
+    const ARIRI_SANPAI  = "./ariri_hakobii.png.PNG";
+    const ARIRI_SOUJI   = "./ariri_pikaai.png.PNG";
 
     // ── 共有カラーパレット ──────────────────────────────────
     const C = {
@@ -1391,10 +1395,10 @@ function RegisterApp({ onDone, onBack }) {
     // ═══════════════════════════════════════════════════════
 
 const SERVICES = [
-  { id:"yousei", label:"養生・家具移動・荷上", icon:"🛗", color:"#e8f4ff", border:"#90c8f0" },
-  { id:"kaitai", label:"解体",                 icon:"🏚️", color:"#fff3e8", border:"#f0b070" },
-  { id:"sanpai", label:"産廃",                 icon:"🚛", color:"#e8f8ee", border:"#70c890" },
-  { id:"souji",  label:"清掃・家具移動",        icon:"🧹", color:"#f3e8ff", border:"#b070e0" },
+  { id:"yousei", label:"養生・家具移動・荷上", icon:"🛗", img:ARIRI_YOJO,   color:"#e8f4ff", border:"#90c8f0" },
+  { id:"kaitai", label:"解体",                 icon:"🏚️", img:ARIRI_KAITAI, color:"#fff3e8", border:"#f0b070" },
+  { id:"sanpai", label:"産廃",                 icon:"🚛", img:ARIRI_SANPAI, color:"#e8f8ee", border:"#70c890" },
+  { id:"souji",  label:"清掃・家具移動",        icon:"🧹", img:ARIRI_SOUJI,  color:"#f3e8ff", border:"#b070e0" },
 ];
 
 const TIME_OPTIONS = ['08:00', '08:15', '08:30', '08:45', '09:00', '09:15', '09:30', '09:45', '10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30', '11:45', '12:00', '12:15', '12:30', '12:45', '13:00', '13:15', '13:30', '13:45', '14:00', '14:15', '14:30', '14:45', '15:00', '15:15', '15:30', '15:45', '16:00', '16:15', '16:30', '16:45', '17:00', '17:15', '17:30', '17:45', '18:00', '18:15', '18:30', '18:45', '19:00', '19:15', '19:30', '19:45', '20:00', '20:15', '20:30', '20:45', '21:00', '21:15', '21:30', '21:45', '22:00'];
@@ -2215,7 +2219,7 @@ function StepService({ onSelect, doneServices, onBack }) {
                 boxShadow:done?"none":"0 2px 10px rgba(10,31,92,0.07)", transition:"all 0.15s" }}
               onMouseEnter={e=>{ if(!done) e.currentTarget.style.transform="translateY(-2px)"; }}
               onMouseLeave={e=>{ e.currentTarget.style.transform="translateY(0)"; }}>
-              <span style={{ fontSize:40, flexShrink:0 }}>{s.icon}</span>
+              <img src={s.img} alt={s.label} style={{ width:64, height:64, objectFit:"contain", flexShrink:0 }} />
               <div>
                 <div style={{ fontSize:20, fontWeight:800, color:done?"#aaa":C.navy }}>{s.label}</div>
                 {done&&<div style={{ fontSize:13, color:"#aaa", marginTop:2 }}>✅ 追加済み</div>}
