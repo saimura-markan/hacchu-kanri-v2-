@@ -4161,15 +4161,35 @@ function ChatScreen({ role, order, onBack }) {
     const oid = order.id;
     const poll = async () => {
       const { data } = await sb.from('messages').select('*').eq('order_id', oid).order('id');
-      if (data) setMessages(prev => {
-        const rows = data.map(mapChat);
-        const newOnes = rows.filter(r => !prev.some(p => p.id === r.id));
-        return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+      if (!data) return;
+      const fresh = data.map(mapChat);
+      setMessages(prev => {
+        if (fresh.length === prev.length &&
+            fresh.every((m,i) => m.id === prev[i]?.id && m.read === prev[i]?.read &&
+              JSON.stringify(m.reactions) === JSON.stringify(prev[i]?.reactions))) return prev;
+        return fresh.map(m => {
+          const ex = prev.find(e => e.id === m.id);
+          return ex ? { ...ex, read: m.read, reactions: m.reactions } : m;
+        });
       });
     };
     const timer = setInterval(poll, 3000);
     return () => clearInterval(timer);
   }, [order.id]);
+
+  const handleReaction = async (msgId, emoji) => {
+    const { data: { user } } = await sb.auth.getUser();
+    const uid = user?.email || 'anon';
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m;
+      const r = { ...(m.reactions || {}) };
+      const arr = r[emoji] || [];
+      if (arr.includes(uid)) { r[emoji] = arr.filter(u => u !== uid); if (!r[emoji].length) delete r[emoji]; }
+      else { r[emoji] = [...arr, uid]; }
+      sb.from('messages').update({ reactions: r }).eq('id', msgId);
+      return { ...m, reactions: r };
+    }));
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -4239,12 +4259,23 @@ function ChatScreen({ role, order, onBack }) {
             onContextMenu={e=>{ e.preventDefault(); setActiveMenuId(null); }} />
           <div style={{ position:"fixed", left:menuPos.x, top:menuPos.y, zIndex:200,
             background:C.navy, borderRadius:12, padding:"6px 8px",
-            display:"flex", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
+            display:"flex", flexDirection:"column", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
             onClick={e=>e.stopPropagation()}>
-            <button style={MENU_BTN} title="返信"
-              onClick={()=>{ setReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
-            <button style={MENU_BTN} title="コピー"
-              onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
+            {/* スタンプ行 */}
+            <div style={{ display:"flex", gap:2, paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.2)" }}>
+              {['👍','✅','👀','🙏','😊'].map(emoji=>(
+                <button key={emoji} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", padding:"2px 4px", borderRadius:6,
+                  opacity: (activeMsg.reactions?.[emoji]||[]).includes('self') ? 1 : 0.85 }}
+                  onClick={()=>{ handleReaction(activeMsg.id, emoji); setActiveMenuId(null); }}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            {/* アクションボタン */}
+            <div style={{ display:"flex", gap:4 }}>
+              <button style={MENU_BTN} onClick={()=>{ setReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
+              <button style={MENU_BTN} onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
+            </div>
           </div>
         </>
       )}
@@ -4335,6 +4366,20 @@ function ChatScreen({ role, order, onBack }) {
                       justifyContent:isOwn?"flex-end":"flex-start" }}>
                       <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
                     </div>
+                    {/* リアクション表示 */}
+                    {Object.keys(msg.reactions||{}).filter(e=>(msg.reactions[e]||[]).length>0).length>0 && (
+                      <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4,
+                        justifyContent:isOwn?"flex-end":"flex-start" }}>
+                        {Object.entries(msg.reactions||{}).filter(([,arr])=>arr.length>0).map(([emoji,arr])=>(
+                          <button key={emoji} onClick={()=>handleReaction(msg.id, emoji)}
+                            style={{ background:"rgba(255,255,255,0.9)", border:`1px solid ${C.grayL}`,
+                              borderRadius:99, padding:"1px 7px", fontSize:13, cursor:"pointer",
+                              display:"flex", alignItems:"center", gap:3, boxShadow:"0 1px 4px rgba(0,0,0,0.08)" }}>
+                            {emoji}<span style={{ fontSize:11, color:C.navy, fontWeight:700 }}>{arr.length}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </React.Fragment>
@@ -5191,7 +5236,7 @@ function mapChat(row) {
     ? new Date(row.created_at).toLocaleTimeString('ja', {hour:'2-digit', minute:'2-digit'})
     : (row.time || '');
   const dateStr = row.created_at
-    ? new Date(row.created_at).toLocaleDateString('ja-JP', {year:'numeric', month:'long', day:'numeric'})
+    ? (() => { const d = new Date(row.created_at); return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`; })()
     : '';
   return {
     id:         row.id,
@@ -5204,6 +5249,7 @@ function mapChat(row) {
     mentions:   row.mentions  || [],
     readBy:     row.read_by   || [],
     senderName: row.sender_name || null,
+    reactions:  row.reactions  || {},
   };
 }
 
@@ -5532,7 +5578,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead }) {
+function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg }) {
   const [tab, setTab]             = useState("detail");
   const [chatInput, setChatInput]   = useState("");
   const [chatReplyTo, setChatReplyTo] = useState(null);
@@ -5619,6 +5665,19 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
       mentions: mentions.length > 0 ? mentions : null,
       senderName: adminName || null });
     setChatInput(""); setChatReplyTo(null);
+  };
+
+  const handleReaction = async (msgId, emoji) => {
+    const { data: { user } } = await sb.auth.getUser();
+    const uid = user?.email || 'anon';
+    const msg = (chats[order.id]||[]).find(m => m.id === msgId);
+    if (!msg) return;
+    const r = { ...(msg.reactions || {}) };
+    const arr = r[emoji] || [];
+    if (arr.includes(uid)) { r[emoji] = arr.filter(u => u !== uid); if (!r[emoji].length) delete r[emoji]; }
+    else { r[emoji] = [...arr, uid]; }
+    sb.from('messages').update({ reactions: r }).eq('id', msgId);
+    onUpdateMsg && onUpdateMsg(order.id, msgId, { reactions: r });
   };
 
   const prowonText = `【受付番号】${order.id}
@@ -5978,16 +6037,28 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   onContextMenu={e=>{ e.preventDefault(); setActiveMenuId(null); }} />
                 <div style={{ position:"fixed", left:menuPos.x, top:menuPos.y, zIndex:200,
                   background:C.navy, borderRadius:12, padding:"6px 8px",
-                  display:"flex", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
+                  display:"flex", flexDirection:"column", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
                   onClick={e=>e.stopPropagation()}>
-                  <button style={MENU_BTN}
-                    onClick={()=>{ setChatReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
-                  <button style={MENU_BTN}
-                    onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
-                  {role==="admin" && (
-                    <button style={{...MENU_BTN, color:"#ff8888"}}
-                      onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
-                  )}
+                  {/* スタンプ行 */}
+                  <div style={{ display:"flex", gap:2, paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.2)" }}>
+                    {['👍','✅','👀','🙏','😊'].map(emoji=>(
+                      <button key={emoji} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", padding:"2px 4px", borderRadius:6 }}
+                        onClick={()=>{ handleReaction(activeMsg.id, emoji); setActiveMenuId(null); }}>
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                  {/* アクションボタン */}
+                  <div style={{ display:"flex", gap:4 }}>
+                    <button style={MENU_BTN}
+                      onClick={()=>{ setChatReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
+                    <button style={MENU_BTN}
+                      onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
+                    {(role==="admin" || (role==="staff" && activeMsg.senderName === adminName)) && (
+                      <button style={{...MENU_BTN, color:"#ff8888"}}
+                        onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
+                    )}
+                  </div>
                 </div>
               </>
             );
@@ -6099,6 +6170,20 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                           <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>✓✓ 既読</span>
                         )}
                       </div>
+                      {/* リアクション表示 */}
+                      {Object.keys(msg.reactions||{}).filter(e=>(msg.reactions[e]||[]).length>0).length>0 && (
+                        <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4,
+                          justifyContent:isOwn?"flex-end":"flex-start" }}>
+                          {Object.entries(msg.reactions||{}).filter(([,arr])=>arr.length>0).map(([emoji,arr])=>(
+                            <button key={emoji} onClick={()=>handleReaction(msg.id, emoji)}
+                              style={{ background:"rgba(255,255,255,0.9)", border:`1px solid ${C.grayL}`,
+                                borderRadius:99, padding:"1px 7px", fontSize:13, cursor:"pointer",
+                                display:"flex", alignItems:"center", gap:3, boxShadow:"0 1px 4px rgba(0,0,0,0.08)" }}>
+                              {emoji}<span style={{ fontSize:11, color:C.navy, fontWeight:700 }}>{arr.length}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </React.Fragment>
@@ -6707,6 +6792,7 @@ function AdminApp({ role, onLogout }) {
   const [showDeleted, setShowDeleted] = useState(false);
   const [showStaff,   setShowStaff]   = useState(false);
   const [checkedIds,  setCheckedIds]  = useState([]);
+  const pendingDeletes = useRef(new Set());
 
   const fetchOrders = async () => {
     const { data, error } = await sb
@@ -6763,20 +6849,19 @@ function AdminApp({ role, onLogout }) {
       });
     const pollTimer = setInterval(async () => {
       const { data } = await sb.from('messages').select('*').eq('order_id', id).order('id');
-      if (data) {
-        setChats(c => {
-          const existing = c[id] || [];
-          const incoming = data.map(mapChat);
-          const merged = [...existing];
-          let changed = false;
-          incoming.forEach(msg => {
-            const idx = merged.findIndex(m => m.id === msg.id);
-            if (idx === -1) { merged.push(msg); changed = true; }
-            else if (merged[idx].read !== msg.read) { merged[idx] = { ...merged[idx], read: msg.read }; changed = true; }
-          });
-          return changed ? { ...c, [id]: merged } : c;
-        });
-      }
+      if (!data) return;
+      const pending = pendingDeletes.current;
+      const fresh = data.map(mapChat).filter(m => !pending.has(m.id));
+      setChats(c => {
+        const existing = c[id] || [];
+        if (fresh.length === existing.length &&
+            fresh.every((m,i) => m.id === existing[i]?.id && m.read === existing[i]?.read &&
+              JSON.stringify(m.reactions) === JSON.stringify(existing[i]?.reactions))) return c;
+        return { ...c, [id]: fresh.map(m => {
+          const ex = existing.find(e => e.id === m.id);
+          return ex ? { ...ex, read: m.read, reactions: m.reactions } : m;
+        })};
+      });
     }, 3000);
     return () => { sb.removeChannel(channel); clearInterval(pollTimer); };
   }, [selected?.id]);
@@ -6982,13 +7067,20 @@ function AdminApp({ role, onLogout }) {
     }
   };
 
-  const deleteMsg = (orderId, msgId) => {
-    sb.from('messages').delete().eq('id', msgId);
+  const deleteMsg = async (orderId, msgId) => {
+    pendingDeletes.current.add(msgId);
     setChats(c => ({ ...c, [orderId]: (c[orderId] || []).filter(m => m.id !== msgId) }));
+    await sb.from('messages').delete().eq('id', msgId);
+    pendingDeletes.current.delete(msgId);
   };
 
   const markChatRead = (id) => {
     setChats(c => ({ ...c, [id]: (c[id]||[]).map(m => ({ ...m, read: true })) }));
+    sb.from('messages').update({ is_read: true }).eq('order_id', id).eq('from_role', 'user');
+  };
+
+  const updateMsg = (orderId, msgId, updates) => {
+    setChats(c => ({ ...c, [orderId]: (c[orderId]||[]).map(m => m.id === msgId ? { ...m, ...updates } : m) }));
   };
 
   const adjCount  = orders.filter(o => o.status === "調整中").length;
@@ -7088,7 +7180,7 @@ function AdminApp({ role, onLogout }) {
         <DetailPanel role={role} order={selected} chats={chats}
           onAddChat={addChat} onStatusChange={handleStatusChange}
           onEdit={handleEdit} onDelete={handleDelete} onDeleteMsg={deleteMsg}
-          onMarkChatRead={markChatRead} />
+          onMarkChatRead={markChatRead} onUpdateMsg={updateMsg} />
       </>)}
 
       {showComp  && <CompanyPanel onClose={()=>setShowComp(false)} />}
