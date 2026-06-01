@@ -6058,7 +6058,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       onClick={()=>{ setChatReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
                     <button style={MENU_BTN}
                       onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
-                    {(role==="admin" || (role==="staff" && adminUserId && activeMsg.senderId === adminUserId)) && (
+                    {activeMsg.from !== "user" && (role==="admin" || (role==="staff" && adminUserId && activeMsg.senderId === adminUserId)) && (
                       <button style={{...MENU_BTN, color:"#ff8888"}}
                         onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
                     )}
