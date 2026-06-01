@@ -5249,6 +5249,7 @@ function mapChat(row) {
     mentions:   row.mentions  || [],
     readBy:     row.read_by   || [],
     senderName: row.sender_name || null,
+    senderId:   row.sender_id  || null,
     reactions:  row.reactions  || {},
   };
 }
@@ -5588,6 +5589,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [lightboxUrl, setLightboxUrl] = useState(null);
   const [statusLogs,  setStatusLogs]  = useState([]);
   const [adminName,   setAdminName]   = useState("");
+  const [adminUserId, setAdminUserId] = useState(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [menuPos,     setMenuPos]     = useState({ x:0, y:0 });
   const [touching,    setTouching]    = useState(false);
@@ -5603,10 +5605,11 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
       .then(({ data }) => setStatusLogs(data || []));
   }, [order?.id, order?.status]);
 
-  // 管理者名取得
+  // 管理者名・ID取得
   useEffect(() => {
     sb.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
+      setAdminUserId(user.id);
       sb.from('profiles').select('name').eq('id', user.id).maybeSingle()
         .then(({ data }) => setAdminName(data?.name || user.email?.split('@')[0] || ''));
     });
@@ -5663,7 +5666,8 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     const mentions = (text.match(/@\S+/g) || []).map(m => m.slice(1));
     onAddChat(order.id, { from:"staff", text, replyToId: chatReplyTo?.id || null,
       mentions: mentions.length > 0 ? mentions : null,
-      senderName: adminName || null });
+      senderName: adminName  || null,
+      senderId:   adminUserId || null });
     setChatInput(""); setChatReplyTo(null);
   };
 
@@ -6054,7 +6058,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       onClick={()=>{ setChatReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
                     <button style={MENU_BTN}
                       onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
-                    {(role==="admin" || (role==="staff" && activeMsg.senderName === adminName)) && (
+                    {(role==="admin" || (role==="staff" && adminUserId && activeMsg.senderId === adminUserId)) && (
                       <button style={{...MENU_BTN, color:"#ff8888"}}
                         onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
                     )}
@@ -6854,13 +6858,19 @@ function AdminApp({ role, onLogout }) {
       const fresh = data.map(mapChat).filter(m => !pending.has(m.id));
       setChats(c => {
         const existing = c[id] || [];
-        if (fresh.length === existing.length &&
-            fresh.every((m,i) => m.id === existing[i]?.id && m.read === existing[i]?.read &&
-              JSON.stringify(m.reactions) === JSON.stringify(existing[i]?.reactions))) return c;
-        return { ...c, [id]: fresh.map(m => {
+        const merged = fresh.map(m => {
           const ex = existing.find(e => e.id === m.id);
-          return ex ? { ...ex, read: m.read, reactions: m.reactions } : m;
-        })};
+          if (!ex) return m;
+          return { ...ex,
+            read:      ex.read || m.read,   // 既読は下げない
+            reactions: m.reactions,
+          };
+        });
+        if (merged.length === existing.length &&
+            merged.every((m,i) => m.id === existing[i]?.id &&
+              m.read === existing[i]?.read &&
+              JSON.stringify(m.reactions) === JSON.stringify(existing[i]?.reactions))) return c;
+        return { ...c, [id]: merged };
       });
     }, 3000);
     return () => { sb.removeChannel(channel); clearInterval(pollTimer); };
@@ -7056,6 +7066,7 @@ function AdminApp({ role, onLogout }) {
       reply_to_id:  msg.replyToId || null,
       mentions:     msg.mentions?.length > 0 ? msg.mentions : null,
       sender_name:  msg.senderName || null,
+      sender_id:    msg.senderId   || null,
     }).select().single();
     if (!error && row) {
       setChats(c => {
@@ -7074,9 +7085,14 @@ function AdminApp({ role, onLogout }) {
     pendingDeletes.current.delete(msgId);
   };
 
-  const markChatRead = (id) => {
+  const markChatRead = async (id) => {
     setChats(c => ({ ...c, [id]: (c[id]||[]).map(m => ({ ...m, read: true })) }));
-    sb.from('messages').update({ is_read: true }).eq('order_id', id).eq('from_role', 'user');
+    const { error } = await sb.from('messages')
+      .update({ is_read: true })
+      .eq('order_id', id)
+      .in('from_role', ['user', 'staff', 'eli']);
+    if (error) console.error('[markChatRead] DB update failed:', error.message);
+    else console.log('[markChatRead] DB updated OK for order:', id);
   };
 
   const updateMsg = (orderId, msgId, updates) => {
