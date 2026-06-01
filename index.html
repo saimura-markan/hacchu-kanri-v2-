@@ -4107,6 +4107,8 @@ function ChatScreen({ role, order, onBack }) {
   const [replyTo,     setReplyTo]     = useState(null);
   const [userName,    setUserName]    = useState("");
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [menuPos,     setMenuPos]     = useState({ x:0, y:0 });
+  const [touching,    setTouching]    = useState(false);
   const bottomRef   = useRef(null);
   const touchTimer  = useRef(null);
   const isAdminRole = ['admin','manager','staff'].includes(role);
@@ -4202,7 +4204,9 @@ function ChatScreen({ role, order, onBack }) {
   };
 
   const MENU_BTN = { background:"rgba(255,255,255,0.15)", border:"none", color:C.white,
-    borderRadius:8, padding:"5px 8px", fontSize:14, cursor:"pointer", fontFamily:"inherit" };
+    borderRadius:8, padding:"5px 10px", fontSize:15, cursor:"pointer", fontFamily:"inherit" };
+  const activeMsg = activeMenuId ? messages.find(m => m.id === activeMenuId) : null;
+  const activeMsgIsOwn = activeMsg ? (isAdminRole ? activeMsg.from==="staff" : activeMsg.from==="user") : false;
 
   return (
     <div style={{ height:"100vh", display:"flex", flexDirection:"column",
@@ -4227,9 +4231,26 @@ function ChatScreen({ role, order, onBack }) {
         </div>
       </div>
 
+      {/* 固定コンテキストメニュー */}
+      {activeMenuId && activeMsg && (
+        <>
+          <div style={{ position:"fixed", inset:0, zIndex:199 }}
+            onClick={()=>setActiveMenuId(null)}
+            onContextMenu={e=>{ e.preventDefault(); setActiveMenuId(null); }} />
+          <div style={{ position:"fixed", left:menuPos.x, top:menuPos.y, zIndex:200,
+            background:C.navy, borderRadius:12, padding:"6px 8px",
+            display:"flex", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
+            onClick={e=>e.stopPropagation()}>
+            <button style={MENU_BTN} title="返信"
+              onClick={()=>{ setReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
+            <button style={MENU_BTN} title="コピー"
+              onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
+          </div>
+        </>
+      )}
+
       {/* メッセージ一覧 */}
-      <div style={{ flex:1, overflowY:"auto", padding:"16px", background:C.bg }}
-        onClick={()=>{ if(activeMenuId) setActiveMenuId(null); }}>
+      <div style={{ flex:1, overflowY:"auto", padding:"16px", background:C.bg }}>
         <div style={{ maxWidth:500, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:16 }}>
             <span style={{ background:C.grayPale, color:C.gray, fontSize:12,
@@ -4238,20 +4259,12 @@ function ChatScreen({ role, order, onBack }) {
             </span>
           </div>
 
-          {/* メニュー用バックドロップ */}
-          {activeMenuId && (
-            <div style={{ position:"fixed", inset:0, zIndex:99 }}
-              onClick={e=>{ e.stopPropagation(); setActiveMenuId(null); }} />
-          )}
-
           {messages.map((msg,i)=>{
             const isOwn = isAdminRole ? msg.from==="staff" : msg.from==="user";
             const quoted = msg.replyToId ? messages.find(m => m.id === msg.replyToId) : null;
             const prevMsg = i > 0 ? messages[i-1] : null;
             const showDate = msg.dateStr && msg.dateStr !== prevMsg?.dateStr;
-            const displayName = msg.from==="staff"
-              ? (msg.senderName || '担当者')
-              : null;
+            const displayName = msg.from==="staff" ? (msg.senderName || '担当者') : null;
             return (
               <React.Fragment key={msg.id||i}>
                 {/* 日付区切り */}
@@ -4276,13 +4289,23 @@ function ChatScreen({ role, order, onBack }) {
                           fontSize:18, flexShrink:0 }}>👷</div>
                       : <img src={ELI_IMG} className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
                   )}
-                  {/* メッセージ本体＋メニュー */}
-                  <div style={{ maxWidth:"78%", position:"relative" }}
-                    onMouseEnter={()=> msg.from !== 'eli' && setActiveMenuId(msg.id)}
-                    onMouseLeave={()=>{ clearTimeout(touchTimer.current); setActiveMenuId(null); }}
-                    onTouchStart={()=>{ touchTimer.current = setTimeout(()=>setActiveMenuId(msg.id), 500); }}
-                    onTouchEnd={()=> clearTimeout(touchTimer.current)}
-                    onTouchMove={()=> clearTimeout(touchTimer.current)}
+                  {/* メッセージ本体 */}
+                  <div style={{ maxWidth:"78%",
+                    WebkitUserSelect: touching ? "none" : "auto",
+                    userSelect:       touching ? "none" : "auto" }}
+                    onContextMenu={msg.from !== 'eli' ? e=>{ e.preventDefault();
+                      const vw = window.innerWidth, vh = window.innerHeight;
+                      const mx = Math.min(e.clientX, vw - 200);
+                      const my = Math.min(e.clientY, vh - 80);
+                      setMenuPos({ x:mx, y:my }); setActiveMenuId(msg.id); } : undefined}
+                    onTouchStart={msg.from !== 'eli' ? ()=>{ setTouching(true);
+                      touchTimer.current = setTimeout(()=>{
+                        const el = document.documentElement;
+                        setMenuPos({ x: el.clientWidth/2 - 80, y: el.clientHeight/2 - 30 });
+                        setActiveMenuId(msg.id);
+                      }, 500); } : undefined}
+                    onTouchEnd={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
+                    onTouchMove={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
                   >
                     {/* 送信者名 */}
                     {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>LiBot</div>}
@@ -4312,19 +4335,6 @@ function ChatScreen({ role, order, onBack }) {
                       justifyContent:isOwn?"flex-end":"flex-start" }}>
                       <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
                     </div>
-                    {/* コンテキストメニュー */}
-                    {activeMenuId === msg.id && msg.from !== 'eli' && (
-                      <div style={{ position:"absolute", zIndex:100,
-                        [isOwn?"right":"left"]: 0, bottom:"calc(100% + 4px)",
-                        background:C.navy, borderRadius:10, padding:"4px 6px",
-                        display:"flex", gap:4, boxShadow:"0 4px 16px rgba(0,0,0,0.28)" }}
-                        onClick={e=>e.stopPropagation()}>
-                        <button style={MENU_BTN} title="返信"
-                          onClick={()=>{ setReplyTo(msg); setActiveMenuId(null); }}>↩</button>
-                        <button style={MENU_BTN} title="コピー"
-                          onClick={()=>{ navigator.clipboard?.writeText(msg.text); setActiveMenuId(null); }}>📋</button>
-                      </div>
-                    )}
                   </div>
                 </div>
               </React.Fragment>
@@ -5522,7 +5532,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg }) {
+function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead }) {
   const [tab, setTab]             = useState("detail");
   const [chatInput, setChatInput]   = useState("");
   const [chatReplyTo, setChatReplyTo] = useState(null);
@@ -5533,6 +5543,8 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [statusLogs,  setStatusLogs]  = useState([]);
   const [adminName,   setAdminName]   = useState("");
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [menuPos,     setMenuPos]     = useState({ x:0, y:0 });
+  const [touching,    setTouching]    = useState(false);
   const bottomRef  = useRef(null);
   const touchTimer = useRef(null);
   useTimer();
@@ -5560,6 +5572,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     sb.auth.getUser().then(({ data: { user } }) => {
       if (user) sb.rpc('mark_messages_read', { p_order_id: order.id, p_email: user.email });
     });
+    onMarkChatRead && onMarkChatRead(order.id);
   }, [tab, order?.id]);
 
   const startEdit = () => {
@@ -5683,10 +5696,10 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               color:tab===key?C.blue:C.gray,
               borderBottom:tab===key?"3px solid "+C.blue:"3px solid transparent" }}>
             {label}
-            {key==="chat" && (chats[order.id]||[]).filter(m=>m.from==="user").length>0 && (
+            {key==="chat" && (chats[order.id]||[]).filter(m=>m.from==="user"&&!m.read).length>0 && (
               <span style={{ background:C.green, color:C.white, borderRadius:99,
                 padding:"1px 7px", fontSize:11, fontWeight:800, marginLeft:6 }}>
-                {(chats[order.id]||[]).filter(m=>m.from==="user").length}
+                {(chats[order.id]||[]).filter(m=>m.from==="user"&&!m.read).length}
               </span>
             )}
           </button>
@@ -5950,8 +5963,37 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
       {/* チャットタブ */}
       {tab==="chat" && (
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-          <div style={{ flex:1, overflowY:"auto", padding:"20px" }}
-            onClick={()=>{ if(activeMenuId) setActiveMenuId(null); }}>
+
+          {/* 固定コンテキストメニュー */}
+          {activeMenuId && (() => {
+            const activeMsg = (chats[order.id]||[]).find(m => m.id === activeMenuId);
+            if (!activeMsg) return null;
+            const isOwn = activeMsg.from === "staff";
+            const MENU_BTN = { background:"rgba(255,255,255,0.15)", border:"none", color:C.white,
+              borderRadius:8, padding:"5px 10px", fontSize:15, cursor:"pointer", fontFamily:"inherit" };
+            return (
+              <>
+                <div style={{ position:"fixed", inset:0, zIndex:199 }}
+                  onClick={()=>setActiveMenuId(null)}
+                  onContextMenu={e=>{ e.preventDefault(); setActiveMenuId(null); }} />
+                <div style={{ position:"fixed", left:menuPos.x, top:menuPos.y, zIndex:200,
+                  background:C.navy, borderRadius:12, padding:"6px 8px",
+                  display:"flex", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
+                  onClick={e=>e.stopPropagation()}>
+                  <button style={MENU_BTN}
+                    onClick={()=>{ setChatReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
+                  <button style={MENU_BTN}
+                    onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
+                  {role==="admin" && (
+                    <button style={{...MENU_BTN, color:"#ff8888"}}
+                      onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+
+          <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
             <div style={{ maxWidth:700, margin:"0 auto" }}>
               {/* 定型文 */}
               <div style={{ background:C.white, borderRadius:12, padding:"12px 14px",
@@ -5976,13 +6018,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 </div>
               </div>
 
-              {/* メニュー用バックドロップ */}
-              {activeMenuId && (
-                <div style={{ position:"fixed", inset:0, zIndex:99 }}
-                  onClick={e=>{ e.stopPropagation(); setActiveMenuId(null); }} />
-              )}
-
-              {/* メッセージ */}
+                  {/* メッセージ */}
               {(chats[order.id]||[]).map((msg,i)=>{
                 const isOwn = msg.from==="staff";
                 const msgList = chats[order.id]||[];
@@ -5990,8 +6026,6 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 const prevMsg = i > 0 ? msgList[i-1] : null;
                 const showDate = msg.dateStr && msg.dateStr !== prevMsg?.dateStr;
                 const displayName = isOwn ? (msg.senderName || adminName || '担当者') : null;
-                const MENU_BTN = { background:"rgba(255,255,255,0.15)", border:"none", color:C.white,
-                  borderRadius:8, padding:"5px 8px", fontSize:14, cursor:"pointer", fontFamily:"inherit" };
                 return (
                 <React.Fragment key={msg.id||i}>
                   {/* 日付区切り */}
@@ -6016,13 +6050,23 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                             display:"flex", alignItems:"center", justifyContent:"center",
                             fontSize:15, flexShrink:0 }}>👤</div>
                     )}
-                    {/* メッセージ本体＋メニュー */}
-                    <div style={{ maxWidth:"70%", position:"relative" }}
-                      onMouseEnter={()=> msg.from !== 'eli' && setActiveMenuId(msg.id)}
-                      onMouseLeave={()=>{ clearTimeout(touchTimer.current); setActiveMenuId(null); }}
-                      onTouchStart={()=>{ touchTimer.current = setTimeout(()=>setActiveMenuId(msg.id), 500); }}
-                      onTouchEnd={()=> clearTimeout(touchTimer.current)}
-                      onTouchMove={()=> clearTimeout(touchTimer.current)}
+                    {/* メッセージ本体 */}
+                    <div style={{ maxWidth:"70%",
+                      WebkitUserSelect: touching ? "none" : "auto",
+                      userSelect:       touching ? "none" : "auto" }}
+                      onContextMenu={msg.from !== 'eli' ? e=>{ e.preventDefault();
+                        const vw = window.innerWidth, vh = window.innerHeight;
+                        const mx = Math.min(e.clientX, vw - 220);
+                        const my = Math.min(e.clientY, vh - 90);
+                        setMenuPos({ x:mx, y:my }); setActiveMenuId(msg.id); } : undefined}
+                      onTouchStart={msg.from !== 'eli' ? ()=>{ setTouching(true);
+                        touchTimer.current = setTimeout(()=>{
+                          const el = document.documentElement;
+                          setMenuPos({ x: el.clientWidth/2 - 90, y: el.clientHeight/2 - 35 });
+                          setActiveMenuId(msg.id);
+                        }, 500); } : undefined}
+                      onTouchEnd={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
+                      onTouchMove={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
                     >
                       {/* 送信者名 */}
                       {msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>LiBot</div>}
@@ -6055,23 +6099,6 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                           <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>✓✓ 既読</span>
                         )}
                       </div>
-                      {/* コンテキストメニュー */}
-                      {activeMenuId === msg.id && msg.from !== 'eli' && (
-                        <div style={{ position:"absolute", zIndex:100,
-                          [isOwn?"right":"left"]: 0, bottom:"calc(100% + 4px)",
-                          background:C.navy, borderRadius:10, padding:"4px 6px",
-                          display:"flex", gap:4, boxShadow:"0 4px 16px rgba(0,0,0,0.28)" }}
-                          onClick={e=>e.stopPropagation()}>
-                          <button style={MENU_BTN} title="返信"
-                            onClick={()=>{ setChatReplyTo(msg); setActiveMenuId(null); }}>↩</button>
-                          <button style={MENU_BTN} title="コピー"
-                            onClick={()=>{ navigator.clipboard?.writeText(msg.text); setActiveMenuId(null); }}>📋</button>
-                          {role==="admin" && (
-                            <button style={{...MENU_BTN, color:"#ff8888"}} title="削除"
-                              onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, msg.id); setActiveMenuId(null); } }}>🗑</button>
-                          )}
-                        </div>
-                      )}
                     </div>
                   </div>
                 </React.Fragment>
@@ -6960,6 +6987,10 @@ function AdminApp({ role, onLogout }) {
     setChats(c => ({ ...c, [orderId]: (c[orderId] || []).filter(m => m.id !== msgId) }));
   };
 
+  const markChatRead = (id) => {
+    setChats(c => ({ ...c, [id]: (c[id]||[]).map(m => ({ ...m, read: true })) }));
+  };
+
   const adjCount  = orders.filter(o => o.status === "調整中").length;
   const soudCount = orders.filter(o => ["日程相談中","キャンセル相談中","日程変更相談中"].includes(o.status)).length;
 
@@ -7056,7 +7087,8 @@ function AdminApp({ role, onLogout }) {
 
         <DetailPanel role={role} order={selected} chats={chats}
           onAddChat={addChat} onStatusChange={handleStatusChange}
-          onEdit={handleEdit} onDelete={handleDelete} onDeleteMsg={deleteMsg} />
+          onEdit={handleEdit} onDelete={handleDelete} onDeleteMsg={deleteMsg}
+          onMarkChatRead={markChatRead} />
       </>)}
 
       {showComp  && <CompanyPanel onClose={()=>setShowComp(false)} />}
