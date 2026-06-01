@@ -4102,17 +4102,43 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 // LOGO_IMG は共有定数を使用
 
 function ChatScreen({ role, order, onBack }) {
-  const [messages, setMessages] = useState([]);
-  const [input,    setInput]    = useState("");
-  const [replyTo,  setReplyTo]  = useState(null);
-  const bottomRef = useRef(null);
+  const [messages,    setMessages]    = useState([]);
+  const [input,       setInput]       = useState("");
+  const [replyTo,     setReplyTo]     = useState(null);
+  const [userName,    setUserName]    = useState("");
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const bottomRef   = useRef(null);
+  const touchTimer  = useRef(null);
   const isAdminRole = ['admin','manager','staff'].includes(role);
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
+
+  // ユーザー名取得
+  useEffect(() => {
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      sb.from('profiles').select('name').eq('id', user.id).maybeSingle()
+        .then(({ data }) => setUserName(data?.name || user.email?.split('@')[0] || ''));
+    });
+  }, []);
 
   useEffect(() => {
     sb.from('messages').select('*').eq('order_id', order.id).order('id')
       .then(({ data }) => { if (data) setMessages(data.map(mapChat)); });
   }, [order.id]);
+
+  // ユーザー側：担当者メッセージを既読にする
+  useEffect(() => {
+    if (isAdminRole) return;
+    sb.from('messages')
+      .update({ is_read: true })
+      .eq('order_id', order.id)
+      .in('from_role', ['staff', 'eli'])
+      .then(() => {
+        setMessages(prev => prev.map(m =>
+          (m.from === 'staff' || m.from === 'eli') ? { ...m, read: true } : m
+        ));
+      });
+  }, [order.id, isAdminRole]);
 
   useEffect(() => {
     const oid = order.id;
@@ -4150,16 +4176,16 @@ function ChatScreen({ role, order, onBack }) {
     const replyToId = replyTo?.id || null;
     setInput(""); setReplyTo(null);
     const { data: row, error } = await sb.from('messages').insert({
-      order_id:   order.id,
-      from_role:  isAdminRole ? 'staff' : 'user',
+      order_id:    order.id,
+      from_role:   isAdminRole ? 'staff' : 'user',
       text,
       reply_to_id: replyToId,
       mentions:    mentions.length > 0 ? mentions : null,
+      sender_name: userName || null,
     }).select().single();
     if (error) { console.error('[ChatScreen send]', error); setInput(text); return; }
     const msg = mapChat(row);
     setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
-    // LiBot自動返答（ユーザー送信かつ直前がeli以外）
     if (!isAdminRole) {
       setMessages(prev => {
         const last = prev[prev.length - 1];
@@ -4174,6 +4200,9 @@ function ChatScreen({ role, order, onBack }) {
       });
     }
   };
+
+  const MENU_BTN = { background:"rgba(255,255,255,0.15)", border:"none", color:C.white,
+    borderRadius:8, padding:"5px 8px", fontSize:14, cursor:"pointer", fontFamily:"inherit" };
 
   return (
     <div style={{ height:"100vh", display:"flex", flexDirection:"column",
@@ -4199,7 +4228,8 @@ function ChatScreen({ role, order, onBack }) {
       </div>
 
       {/* メッセージ一覧 */}
-      <div style={{ flex:1, overflowY:"auto", padding:"16px", background:C.bg }}>
+      <div style={{ flex:1, overflowY:"auto", padding:"16px", background:C.bg }}
+        onClick={()=>{ if(activeMenuId) setActiveMenuId(null); }}>
         <div style={{ maxWidth:500, margin:"0 auto" }}>
           <div style={{ textAlign:"center", marginBottom:16 }}>
             <span style={{ background:C.grayPale, color:C.gray, fontSize:12,
@@ -4208,55 +4238,96 @@ function ChatScreen({ role, order, onBack }) {
             </span>
           </div>
 
+          {/* メニュー用バックドロップ */}
+          {activeMenuId && (
+            <div style={{ position:"fixed", inset:0, zIndex:99 }}
+              onClick={e=>{ e.stopPropagation(); setActiveMenuId(null); }} />
+          )}
+
           {messages.map((msg,i)=>{
             const isOwn = isAdminRole ? msg.from==="staff" : msg.from==="user";
             const quoted = msg.replyToId ? messages.find(m => m.id === msg.replyToId) : null;
+            const prevMsg = i > 0 ? messages[i-1] : null;
+            const showDate = msg.dateStr && msg.dateStr !== prevMsg?.dateStr;
+            const displayName = msg.from==="staff"
+              ? (msg.senderName || '担当者')
+              : null;
             return (
-              <div key={msg.id||i} style={{
-                display:"flex", flexDirection:isOwn?"row-reverse":"row",
-                alignItems:"flex-end", gap:8, marginBottom:16, animation:"msgIn 0.3s ease" }}>
-                {!isOwn && (
-                  msg.from==="staff"
-                    ? <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
-                        display:"flex", alignItems:"center", justifyContent:"center",
-                        fontSize:18, flexShrink:0 }}>👷</div>
-                    : <img src={ELI_IMG} className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
-                )}
-                <div style={{ maxWidth:"78%" }}>
-                  {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>LiBot</div>}
-                  {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue, marginBottom:3, fontWeight:600 }}>👷 担当者</div>}
-                  {!isOwn && msg.from==="user" && isAdminRole && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 お客様</div>}
-                  {/* 引用 */}
-                  {quoted && (
-                    <div style={{ background:"rgba(0,0,0,0.06)", borderLeft:"3px solid "+C.gray,
-                      padding:"3px 8px", marginBottom:4, borderRadius:4,
-                      fontSize:11, color:C.gray, overflow:"hidden", maxHeight:34 }}>
-                      {quoted.text.slice(0,50)}{quoted.text.length>50?"…":""}
-                    </div>
-                  )}
-                  <div style={{
-                    background: isOwn ? "linear-gradient(135deg,#2952c8,#0a1f5c)"
-                      : msg.from==="staff" ? "#eef3ff" : C.white,
-                    color: isOwn ? C.white : C.navy,
-                    borderRadius: isOwn ? "20px 4px 20px 20px" : "4px 20px 20px 20px",
-                    padding:"13px 17px", fontSize:16, fontWeight:500, lineHeight:1.7,
-                    boxShadow: isOwn ? "0 4px 14px rgba(10,31,92,0.2)" : "0 4px 14px rgba(10,31,92,0.07)",
-                    border: !isOwn ? `1px solid ${C.grayL}` : "none",
-                    whiteSpace:"pre-wrap",
-                  }}>
-                    {renderMentions(msg.text)}
+              <React.Fragment key={msg.id||i}>
+                {/* 日付区切り */}
+                {showDate && (
+                  <div style={{ textAlign:"center", margin:"12px 0", display:"flex",
+                    alignItems:"center", gap:8 }}>
+                    <div style={{ flex:1, height:1, background:C.grayL }} />
+                    <span style={{ fontSize:11, color:C.gray, fontWeight:600,
+                      background:C.bg, padding:"0 8px", whiteSpace:"nowrap" }}>
+                      {msg.dateStr}
+                    </span>
+                    <div style={{ flex:1, height:1, background:C.grayL }} />
                   </div>
-                  <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:4,
-                    justifyContent:isOwn?"flex-end":"flex-start", flexWrap:"wrap" }}>
-                    <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
-                    {msg.from !== 'eli' && (
-                      <button onClick={()=>setReplyTo(msg)}
-                        style={{ fontSize:10, color:C.gray, background:"none", border:"none",
-                          cursor:"pointer", padding:"0 2px", fontFamily:"inherit" }}>↩ 返信</button>
+                )}
+                <div style={{
+                  display:"flex", flexDirection:isOwn?"row-reverse":"row",
+                  alignItems:"flex-end", gap:8, marginBottom:16, animation:"msgIn 0.3s ease" }}>
+                  {!isOwn && (
+                    msg.from==="staff"
+                      ? <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
+                          display:"flex", alignItems:"center", justifyContent:"center",
+                          fontSize:18, flexShrink:0 }}>👷</div>
+                      : <img src={ELI_IMG} className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+                  )}
+                  {/* メッセージ本体＋メニュー */}
+                  <div style={{ maxWidth:"78%", position:"relative" }}
+                    onMouseEnter={()=> msg.from !== 'eli' && setActiveMenuId(msg.id)}
+                    onMouseLeave={()=>{ clearTimeout(touchTimer.current); setActiveMenuId(null); }}
+                    onTouchStart={()=>{ touchTimer.current = setTimeout(()=>setActiveMenuId(msg.id), 500); }}
+                    onTouchEnd={()=> clearTimeout(touchTimer.current)}
+                    onTouchMove={()=> clearTimeout(touchTimer.current)}
+                  >
+                    {/* 送信者名 */}
+                    {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>LiBot</div>}
+                    {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue, marginBottom:3, fontWeight:600 }}>👷 {displayName}</div>}
+                    {!isOwn && msg.from==="user" && isAdminRole && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 お客様</div>}
+                    {/* 引用 */}
+                    {quoted && (
+                      <div style={{ background:"rgba(0,0,0,0.06)", borderLeft:"3px solid "+C.gray,
+                        padding:"3px 8px", marginBottom:4, borderRadius:4,
+                        fontSize:11, color:C.gray, overflow:"hidden", maxHeight:34 }}>
+                        {quoted.text.slice(0,50)}{quoted.text.length>50?"…":""}
+                      </div>
+                    )}
+                    <div style={{
+                      background: isOwn ? "linear-gradient(135deg,#2952c8,#0a1f5c)"
+                        : msg.from==="staff" ? "#eef3ff" : C.white,
+                      color: isOwn ? C.white : C.navy,
+                      borderRadius: isOwn ? "20px 4px 20px 20px" : "4px 20px 20px 20px",
+                      padding:"13px 17px", fontSize:16, fontWeight:500, lineHeight:1.7,
+                      boxShadow: isOwn ? "0 4px 14px rgba(10,31,92,0.2)" : "0 4px 14px rgba(10,31,92,0.07)",
+                      border: !isOwn ? `1px solid ${C.grayL}` : "none",
+                      whiteSpace:"pre-wrap",
+                    }}>
+                      {renderMentions(msg.text)}
+                    </div>
+                    <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:4,
+                      justifyContent:isOwn?"flex-end":"flex-start" }}>
+                      <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
+                    </div>
+                    {/* コンテキストメニュー */}
+                    {activeMenuId === msg.id && msg.from !== 'eli' && (
+                      <div style={{ position:"absolute", zIndex:100,
+                        [isOwn?"right":"left"]: 0, bottom:"calc(100% + 4px)",
+                        background:C.navy, borderRadius:10, padding:"4px 6px",
+                        display:"flex", gap:4, boxShadow:"0 4px 16px rgba(0,0,0,0.28)" }}
+                        onClick={e=>e.stopPropagation()}>
+                        <button style={MENU_BTN} title="返信"
+                          onClick={()=>{ setReplyTo(msg); setActiveMenuId(null); }}>↩</button>
+                        <button style={MENU_BTN} title="コピー"
+                          onClick={()=>{ navigator.clipboard?.writeText(msg.text); setActiveMenuId(null); }}>📋</button>
+                      </div>
                     )}
                   </div>
                 </div>
-              </div>
+              </React.Fragment>
             );
           })}
           <div ref={bottomRef} />
@@ -4281,8 +4352,8 @@ function ChatScreen({ role, order, onBack }) {
           )}
           <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
             <textarea value={input} onChange={e=>setInput(e.target.value)}
-              onKeyDown={e=>{ if(e.key==="Enter"&&e.shiftKey){ return; } if(e.key==="Enter"){e.preventDefault(); handleSend();} }}
-              placeholder="メッセージを入力... (Shift+Enterで改行)" rows={1}
+              onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ return; } if(e.key==="Enter"&&e.shiftKey){ e.preventDefault(); handleSend(); } }}
+              placeholder="メッセージを入力... (Shift+Enterで送信)" rows={1}
               style={{ flex:1, fontSize:16, padding:"13px 16px", borderRadius:14,
                 border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
                 color:C.navy, resize:"none", lineHeight:1.5, maxHeight:100, overflowY:"auto", outline:"none" }}
@@ -5109,15 +5180,20 @@ function mapChat(row) {
   const timeStr = row.created_at
     ? new Date(row.created_at).toLocaleTimeString('ja', {hour:'2-digit', minute:'2-digit'})
     : (row.time || '');
+  const dateStr = row.created_at
+    ? new Date(row.created_at).toLocaleDateString('ja-JP', {year:'numeric', month:'long', day:'numeric'})
+    : '';
   return {
-    id:        row.id,
-    from:      row.from_role || row.from || 'user',
-    text:      row.text || '',
-    time:      timeStr,
-    read:      row.is_read !== undefined ? row.is_read : true,
-    replyToId: row.reply_to_id || null,
-    mentions:  row.mentions  || [],
-    readBy:    row.read_by   || [],
+    id:         row.id,
+    from:       row.from_role || row.from || 'user',
+    text:       row.text || '',
+    time:       timeStr,
+    dateStr:    dateStr,
+    read:       row.is_read !== undefined ? row.is_read : true,
+    replyToId:  row.reply_to_id || null,
+    mentions:   row.mentions  || [],
+    readBy:     row.read_by   || [],
+    senderName: row.sender_name || null,
   };
 }
 
@@ -5446,7 +5522,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete }) {
+function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg }) {
   const [tab, setTab]             = useState("detail");
   const [chatInput, setChatInput]   = useState("");
   const [chatReplyTo, setChatReplyTo] = useState(null);
@@ -5455,7 +5531,10 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [saving,      setSaving]      = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState(null);
   const [statusLogs,  setStatusLogs]  = useState([]);
-  const bottomRef = useRef(null);
+  const [adminName,   setAdminName]   = useState("");
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const bottomRef  = useRef(null);
+  const touchTimer = useRef(null);
   useTimer();
 
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[chats, tab]);
@@ -5465,6 +5544,16 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     sb.from('status_logs').select('*').eq('order_id', order.id).order('changed_at')
       .then(({ data }) => setStatusLogs(data || []));
   }, [order?.id, order?.status]);
+
+  // 管理者名取得
+  useEffect(() => {
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      sb.from('profiles').select('name').eq('id', user.id).maybeSingle()
+        .then(({ data }) => setAdminName(data?.name || user.email?.split('@')[0] || ''));
+    });
+  }, []);
+
   // チャットタブを開いたとき既読登録
   useEffect(()=>{
     if (tab !== 'chat' || !order?.id) return;
@@ -5514,7 +5603,8 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     const text = chatInput.trim();
     const mentions = (text.match(/@\S+/g) || []).map(m => m.slice(1));
     onAddChat(order.id, { from:"staff", text, replyToId: chatReplyTo?.id || null,
-      mentions: mentions.length > 0 ? mentions : null });
+      mentions: mentions.length > 0 ? mentions : null,
+      senderName: adminName || null });
     setChatInput(""); setChatReplyTo(null);
   };
 
@@ -5860,7 +5950,8 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
       {/* チャットタブ */}
       {tab==="chat" && (
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-          <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
+          <div style={{ flex:1, overflowY:"auto", padding:"20px" }}
+            onClick={()=>{ if(activeMenuId) setActiveMenuId(null); }}>
             <div style={{ maxWidth:700, margin:"0 auto" }}>
               {/* 定型文 */}
               <div style={{ background:C.white, borderRadius:12, padding:"12px 14px",
@@ -5885,62 +5976,106 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 </div>
               </div>
 
+              {/* メニュー用バックドロップ */}
+              {activeMenuId && (
+                <div style={{ position:"fixed", inset:0, zIndex:99 }}
+                  onClick={e=>{ e.stopPropagation(); setActiveMenuId(null); }} />
+              )}
+
               {/* メッセージ */}
               {(chats[order.id]||[]).map((msg,i)=>{
                 const isOwn = msg.from==="staff";
                 const msgList = chats[order.id]||[];
                 const quoted = msg.replyToId ? msgList.find(m => m.id === msg.replyToId) : null;
+                const prevMsg = i > 0 ? msgList[i-1] : null;
+                const showDate = msg.dateStr && msg.dateStr !== prevMsg?.dateStr;
+                const displayName = isOwn ? (msg.senderName || adminName || '担当者') : null;
+                const MENU_BTN = { background:"rgba(255,255,255,0.15)", border:"none", color:C.white,
+                  borderRadius:8, padding:"5px 8px", fontSize:14, cursor:"pointer", fontFamily:"inherit" };
                 return (
-                <div key={msg.id||i} style={{
-                  display:"flex", flexDirection:isOwn?"row-reverse":"row",
-                  alignItems:"flex-end", gap:8, marginBottom:14 }}>
-                  {!isOwn && (
-                    msg.from==="eli"
-                      ? <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
-                      : <div style={{ width:34, height:34, background:C.navy, borderRadius:"50%",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          fontSize:15, flexShrink:0 }}>👤</div>
-                  )}
-                  <div style={{ maxWidth:"70%" }}>
-                    {msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>LiBot</div>}
-                    {msg.from==="user"  && <div style={{ fontSize:11, color:C.orange, marginBottom:3, fontWeight:600 }}>👤 {order.person}</div>}
-                    {isOwn             && <div style={{ fontSize:11, color:C.green,  marginBottom:3, fontWeight:600, textAlign:"right" }}>👷 担当者</div>}
-                    {/* 引用 */}
-                    {quoted && (
-                      <div style={{ background:"rgba(0,0,0,0.05)", borderLeft:"3px solid "+C.gray,
-                        padding:"3px 8px", marginBottom:4, borderRadius:4,
-                        fontSize:11, color:C.gray, overflow:"hidden", maxHeight:32 }}>
-                        {quoted.text.slice(0,50)}{quoted.text.length>50?"…":""}
-                      </div>
-                    )}
-                    <div style={{
-                      background:isOwn
-                        ? `linear-gradient(135deg,${C.green},#1a7a50)`
-                        : msg.from==="user" ? "#fff8e0" : C.white,
-                      color:isOwn?C.white:C.navy,
-                      borderRadius:isOwn?"20px 4px 20px 20px":"4px 20px 20px 20px",
-                      padding:"11px 15px", fontSize:14, lineHeight:1.7,
-                      border:!isOwn?`1px solid ${C.grayL}`:"none",
-                      whiteSpace:"pre-wrap",
-                    }}>
-                      {renderMentions(msg.text)}
+                <React.Fragment key={msg.id||i}>
+                  {/* 日付区切り */}
+                  {showDate && (
+                    <div style={{ textAlign:"center", margin:"12px 0", display:"flex",
+                      alignItems:"center", gap:8 }}>
+                      <div style={{ flex:1, height:1, background:C.grayL }} />
+                      <span style={{ fontSize:11, color:C.gray, fontWeight:600,
+                        background:C.white, padding:"0 8px", whiteSpace:"nowrap" }}>
+                        {msg.dateStr}
+                      </span>
+                      <div style={{ flex:1, height:1, background:C.grayL }} />
                     </div>
-                    <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:3,
-                      justifyContent:isOwn?"flex-end":"flex-start", flexWrap:"wrap" }}>
-                      <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
-                      {isOwn && msg.readBy && msg.readBy.length > 0 && (
-                        <span style={{ fontSize:10, color:C.gray }}>既読 {msg.readBy.length}</span>
+                  )}
+                  <div style={{
+                    display:"flex", flexDirection:isOwn?"row-reverse":"row",
+                    alignItems:"flex-end", gap:8, marginBottom:14 }}>
+                    {!isOwn && (
+                      msg.from==="eli"
+                        ? <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+                        : <div style={{ width:34, height:34, background:C.navy, borderRadius:"50%",
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                            fontSize:15, flexShrink:0 }}>👤</div>
+                    )}
+                    {/* メッセージ本体＋メニュー */}
+                    <div style={{ maxWidth:"70%", position:"relative" }}
+                      onMouseEnter={()=> msg.from !== 'eli' && setActiveMenuId(msg.id)}
+                      onMouseLeave={()=>{ clearTimeout(touchTimer.current); setActiveMenuId(null); }}
+                      onTouchStart={()=>{ touchTimer.current = setTimeout(()=>setActiveMenuId(msg.id), 500); }}
+                      onTouchEnd={()=> clearTimeout(touchTimer.current)}
+                      onTouchMove={()=> clearTimeout(touchTimer.current)}
+                    >
+                      {/* 送信者名 */}
+                      {msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>LiBot</div>}
+                      {msg.from==="user"  && <div style={{ fontSize:11, color:C.orange, marginBottom:3, fontWeight:600 }}>👤 {order.person}</div>}
+                      {isOwn             && <div style={{ fontSize:11, color:C.green,  marginBottom:3, fontWeight:600, textAlign:"right" }}>👷 {displayName}</div>}
+                      {/* 引用 */}
+                      {quoted && (
+                        <div style={{ background:"rgba(0,0,0,0.05)", borderLeft:"3px solid "+C.gray,
+                          padding:"3px 8px", marginBottom:4, borderRadius:4,
+                          fontSize:11, color:C.gray, overflow:"hidden", maxHeight:32 }}>
+                          {quoted.text.slice(0,50)}{quoted.text.length>50?"…":""}
+                        </div>
                       )}
-                      {msg.from !== 'eli' && (
-                        <button onClick={()=>setChatReplyTo(msg)}
-                          style={{ fontSize:10, color:C.gray, background:"none", border:"none",
-                            cursor:"pointer", padding:"0 2px", fontFamily:"inherit" }}>↩ 返信</button>
+                      <div style={{
+                        background:isOwn
+                          ? `linear-gradient(135deg,${C.green},#1a7a50)`
+                          : msg.from==="user" ? "#fff8e0" : C.white,
+                        color:isOwn?C.white:C.navy,
+                        borderRadius:isOwn?"20px 4px 20px 20px":"4px 20px 20px 20px",
+                        padding:"11px 15px", fontSize:14, lineHeight:1.7,
+                        border:!isOwn?`1px solid ${C.grayL}`:"none",
+                        whiteSpace:"pre-wrap",
+                      }}>
+                        {renderMentions(msg.text)}
+                      </div>
+                      <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:3,
+                        justifyContent:isOwn?"flex-end":"flex-start" }}>
+                        <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
+                        {isOwn && msg.read && (
+                          <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>✓✓ 既読</span>
+                        )}
+                      </div>
+                      {/* コンテキストメニュー */}
+                      {activeMenuId === msg.id && msg.from !== 'eli' && (
+                        <div style={{ position:"absolute", zIndex:100,
+                          [isOwn?"right":"left"]: 0, bottom:"calc(100% + 4px)",
+                          background:C.navy, borderRadius:10, padding:"4px 6px",
+                          display:"flex", gap:4, boxShadow:"0 4px 16px rgba(0,0,0,0.28)" }}
+                          onClick={e=>e.stopPropagation()}>
+                          <button style={MENU_BTN} title="返信"
+                            onClick={()=>{ setChatReplyTo(msg); setActiveMenuId(null); }}>↩</button>
+                          <button style={MENU_BTN} title="コピー"
+                            onClick={()=>{ navigator.clipboard?.writeText(msg.text); setActiveMenuId(null); }}>📋</button>
+                          {role==="admin" && (
+                            <button style={{...MENU_BTN, color:"#ff8888"}} title="削除"
+                              onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, msg.id); setActiveMenuId(null); } }}>🗑</button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
+                </React.Fragment>
               );})}
-              <div ref={bottomRef} />
               <div ref={bottomRef} />
             </div>
           </div>
@@ -5963,8 +6098,8 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               )}
               <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
               <textarea value={chatInput} onChange={e=>setChatInput(e.target.value)}
-                onKeyDown={e=>{ if(e.key==="Enter"&&e.shiftKey){ return; } if(e.key==="Enter"){e.preventDefault(); handleSend();} }}
-                placeholder="お客様へのメッセージを入力... (Shift+Enterで改行)" rows={2}
+                onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ return; } if(e.key==="Enter"&&e.shiftKey){ e.preventDefault(); handleSend(); } }}
+                placeholder="お客様へのメッセージを入力... (Shift+Enterで送信)" rows={2}
                 style={{ flex:1, fontSize:14, padding:"12px 14px", borderRadius:12,
                   border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
                   color:C.navy, resize:"none", lineHeight:1.5, outline:"none" }} />
@@ -6606,11 +6741,13 @@ function AdminApp({ role, onLogout }) {
           const existing = c[id] || [];
           const incoming = data.map(mapChat);
           const merged = [...existing];
+          let changed = false;
           incoming.forEach(msg => {
-            if (!merged.some(m => m.id === msg.id)) merged.push(msg);
+            const idx = merged.findIndex(m => m.id === msg.id);
+            if (idx === -1) { merged.push(msg); changed = true; }
+            else if (merged[idx].read !== msg.read) { merged[idx] = { ...merged[idx], read: msg.read }; changed = true; }
           });
-          if (merged.length === existing.length) return c;
-          return { ...c, [id]: merged };
+          return changed ? { ...c, [id]: merged } : c;
         });
       }
     }, 3000);
@@ -6804,8 +6941,9 @@ function AdminApp({ role, onLogout }) {
   const addChat = async (id, msg) => {
     const { data: row, error } = await sb.from('messages').insert({
       order_id:id, from_role:msg.from, text:msg.text, is_read:false,
-      reply_to_id: msg.replyToId || null,
-      mentions:    msg.mentions?.length > 0 ? msg.mentions : null,
+      reply_to_id:  msg.replyToId || null,
+      mentions:     msg.mentions?.length > 0 ? msg.mentions : null,
+      sender_name:  msg.senderName || null,
     }).select().single();
     if (!error && row) {
       setChats(c => {
@@ -6815,6 +6953,11 @@ function AdminApp({ role, onLogout }) {
         return { ...c, [id]: [...existing, newMsg] };
       });
     }
+  };
+
+  const deleteMsg = (orderId, msgId) => {
+    sb.from('messages').delete().eq('id', msgId);
+    setChats(c => ({ ...c, [orderId]: (c[orderId] || []).filter(m => m.id !== msgId) }));
   };
 
   const adjCount  = orders.filter(o => o.status === "調整中").length;
@@ -6913,7 +7056,7 @@ function AdminApp({ role, onLogout }) {
 
         <DetailPanel role={role} order={selected} chats={chats}
           onAddChat={addChat} onStatusChange={handleStatusChange}
-          onEdit={handleEdit} onDelete={handleDelete} />
+          onEdit={handleEdit} onDelete={handleDelete} onDeleteMsg={deleteMsg} />
       </>)}
 
       {showComp  && <CompanyPanel onClose={()=>setShowComp(false)} />}
