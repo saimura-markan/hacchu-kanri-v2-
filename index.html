@@ -4191,6 +4191,11 @@ function ChatScreen({ role, order, onBack }) {
     }));
   };
 
+  const handleDelete = async (msgId) => {
+    setMessages(prev => prev.filter(m => m.id !== msgId));
+    await sb.from('messages').delete().eq('id', msgId);
+  };
+
   const handleSend = async () => {
     if (!input.trim()) return;
     const text = input.trim();
@@ -4275,6 +4280,10 @@ function ChatScreen({ role, order, onBack }) {
             <div style={{ display:"flex", gap:4 }}>
               <button style={MENU_BTN} onClick={()=>{ setReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
               <button style={MENU_BTN} onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
+              {activeMsgIsOwn && (
+                <button style={{...MENU_BTN, color:"#ff8888"}}
+                  onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ handleDelete(activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
+              )}
             </div>
           </div>
         </>
@@ -6058,7 +6067,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       onClick={()=>{ setChatReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
                     <button style={MENU_BTN}
                       onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
-                    {activeMsg.from !== "user" && (role==="admin" || (role==="staff" && adminUserId && activeMsg.senderId === adminUserId)) && (
+                    {(role==="admin" || (adminUserId && activeMsg.senderId === adminUserId)) && (
                       <button style={{...MENU_BTN, color:"#ff8888"}}
                         onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
                     )}
