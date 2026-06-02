@@ -1902,7 +1902,7 @@ function SanpaiDetail({ details, detail, onChange }) {
 // ── 清掃の詳細 ───────────────────────────────────────────
 function SoujiDetail({ details, detail, onChange }) {
   const v=detail||{
-    kanyi_yousei:"",kanyi_heavy:"",kanyi_workers:"",
+    kanyi_yousei:"",kanyi_kagu:"",kanyi_heavy:"",kanyi_workers:"",
     house_yousei:"",house_size:"",house_furniture:"",house_water:"",house_corner:false,house_vacancy:"",house_plan:"",
     ac_normal:0,ac_smart:0,ac_tencase:0,ac_tentsu:0,
     ac_normal_model:"",ac_smart_model:"",ac_model_input:"",
@@ -1927,10 +1927,16 @@ function SoujiDetail({ details, detail, onChange }) {
             <RadioGroup options={["養生撤去処分あり","養生撤去処分なし"]}
               value={v.kanyi_yousei||""} onChange={val=>u({kanyi_yousei:val})} />
           </SubSection>
-          <SubSection title="🪑 家具移動 - 重量物">
-            <RadioGroup options={["重量物あり","重量物なし"]}
-              value={v.kanyi_heavy||""} onChange={val=>u({kanyi_heavy:val})} />
+          <SubSection title="🪑 家具移動">
+            <RadioGroup options={["家具移動あり","家具移動なし"]}
+              value={v.kanyi_kagu||""} onChange={val=>u({kanyi_kagu:val})} />
           </SubSection>
+          {v.kanyi_kagu==="家具移動あり"&&(
+            <SubSection title="🪑 家具移動 - 重量物">
+              <RadioGroup options={["重量物あり","重量物なし"]}
+                value={v.kanyi_heavy||""} onChange={val=>u({kanyi_heavy:val})} />
+            </SubSection>
+          )}
         </>
       )}
       {hasHouse&&(
