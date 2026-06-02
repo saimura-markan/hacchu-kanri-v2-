@@ -44,4 +44,4 @@ CREATE POLICY "users_upsert_own_profile"
 -- 管理者: 全プロフィールを読める
 CREATE POLICY "admins_read_all_profiles"
   ON profiles FOR SELECT
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');

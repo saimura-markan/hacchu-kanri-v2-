@@ -18,19 +18,19 @@ CREATE POLICY "read_active_companies"
 -- 4. 管理者: 有効・無効問わず全企業 SELECT（管理画面の一覧表示用）
 CREATE POLICY "admins_read_all_companies"
   ON companies FOR SELECT
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- 5. 管理者: 新規企業 INSERT
 CREATE POLICY "admins_insert_companies"
   ON companies FOR INSERT
-  WITH CHECK ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- 6. 管理者: is_active 切り替え等の UPDATE
 CREATE POLICY "admins_update_companies"
   ON companies FOR UPDATE
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- 7. 管理者: 企業レコード DELETE（このポリシーがないと削除が無音で失敗する）
 CREATE POLICY "admins_delete_companies"
   ON companies FOR DELETE
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');

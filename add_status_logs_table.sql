@@ -24,4 +24,4 @@ create policy "status_logs_select" on public.status_logs
 -- admin/manager: INSERT可
 create policy "status_logs_insert" on public.status_logs
   for insert to authenticated
-  with check ((auth.jwt() -> 'user_metadata' ->> 'role') in ('admin', 'manager'));
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') in ('admin', 'manager'));

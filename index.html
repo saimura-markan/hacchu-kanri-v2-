@@ -524,7 +524,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
     setLoading(true);
     const { data, error } = await sb.auth.signInWithPassword({ email: email.toLowerCase(), password });
     if (error) { setLoading(false); setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
-    const role = data.user?.user_metadata?.role ?? "user";
+    const role = data.user?.app_metadata?.role ?? "user";
     const { data: profile } = await sb.from('profiles').select('name, company_id').eq('id', data.user.id).maybeSingle();
     // name が空の場合はメールアドレスの @ 前を仮名として自動設定
     if (!profile?.name) {
@@ -1903,7 +1903,7 @@ function SanpaiDetail({ details, detail, onChange }) {
 function SoujiDetail({ details, detail, onChange }) {
   const v=detail||{
     kanyi_yousei:"",kanyi_heavy:"",kanyi_workers:"",
-    house_size:"",house_furniture:"",house_water:"",house_corner:false,house_vacancy:"",house_plan:"",
+    house_yousei:"",house_size:"",house_furniture:"",house_water:"",house_corner:false,house_vacancy:"",house_plan:"",
     ac_normal:0,ac_smart:0,ac_tencase:0,ac_tentsu:0,
     ac_normal_model:"",ac_smart_model:"",ac_model_input:"",
     other_types:[],
@@ -1931,13 +1931,14 @@ function SoujiDetail({ details, detail, onChange }) {
             <RadioGroup options={["重量物あり","重量物なし"]}
               value={v.kanyi_heavy||""} onChange={val=>u({kanyi_heavy:val})} />
           </SubSection>
-          <SubSection title="👷 作業者数（2人まで）">
-            <WorkersSelect value={v.kanyi_workers||""} onChange={val=>u({kanyi_workers:val})} max={2} />
-          </SubSection>
         </>
       )}
       {hasHouse&&(
         <>
+          <SubSection title="🧹 ハウスクリーニング - 養生撤去処分">
+            <RadioGroup options={["養生撤去処分あり","養生撤去処分なし"]}
+              value={v.house_yousei||""} onChange={val=>u({house_yousei:val})} />
+          </SubSection>
           <SubSection title="🏠 ハウスクリーニング - 広さ">
             <RadioGroup options={HOUSE_SIZES} value={v.house_size||""} onChange={val=>u({house_size:val})} cols />
           </SubSection>
@@ -2117,7 +2118,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
   const errDate=showErrors&&!sch.date;
   const errStart=showErrors&&!sch.startTime;
   const errEnd=showErrors&&!sch.endTime;
-  const errWorkers=showErrors&&!sch.workers&&needsWorkers(serviceId);
+  const errWorkers=showErrors&&!sch.workers&&needsWorkers(serviceId)&&serviceId!=="souji";
   const hasAnyErr=errDate||errStart||errEnd||errWorkers;
   const kd=sch.serviceDetail||{};
   const errKaitaiDays=showErrors&&serviceId==="kaitai"&&!kd.days;
@@ -2189,7 +2190,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
         <SoujiDetail details={sch.details||[]} detail={sch.serviceDetail}
           onChange={v=>onChange({...sch,serviceDetail:v})} />
       )}
-      {needsWorkers(serviceId) && !(serviceId==="souji" && (sch.details||[]).length > 0 && (sch.details||[]).every(d => d==="ハウスクリーニング")) && (
+      {needsWorkers(serviceId) && serviceId!=="souji" && (
         <div style={{ marginTop:14, marginBottom:4 }}>
           <div style={{ fontSize:13, color:errWorkers?C.red:C.gray, marginBottom:8, fontWeight:600 }}>
             作業者数{errWorkers?" ⚠️ 必須":""}
@@ -2308,7 +2309,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     if (!schedules[0].date)          errs.push("日程1の日付を選択してください");
     if (!schedules[0].startTime)     errs.push("日程1の開始時間を選択してください");
     if (!schedules[0].endTime)       errs.push("日程1の終了時間を選択してください");
-    if (needsWorkers(serviceId)&&!schedules[0].workers&&!(serviceId==="souji"&&(schedules[0].details||[]).length>0&&(schedules[0].details||[]).every(d=>d==="ハウスクリーニング"))) errs.push("日程1の作業者数を選択してください");
+    if (needsWorkers(serviceId)&&serviceId!=="souji"&&!schedules[0].workers) errs.push("日程1の作業者数を選択してください");
     if (serviceId==="kaitai") {
       if (!schedules[0].serviceDetail?.days)    errs.push("工事日数を選択してください");
       if (!schedules[0].serviceDetail?.offDays) errs.push("作業に入れない日を入力してください");
@@ -2606,6 +2607,12 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
           <ConfRow label="現場担当者"   value={formData.siteContactName} />
           <ConfRow label="担当者電話番号" value={formData.siteContactPhone} />
           <ConfRow label="担当者"   value={personName || "…"} />
+          {formData.keyInfo&&(formData.keyInfo.noKey||formData.keyInfo.key)&&(
+            <ConfRow label="🔑 鍵" value={formData.keyInfo.noKey?"在宅のため鍵なし":formData.keyInfo.key} />
+          )}
+          {formData.keyInfo&&formData.keyInfo.parking&&(
+            <ConfRow label="🚗 駐車場" value={formData.keyInfo.parking} />
+          )}
         </div>
       </Card>
       {formData.schedules.map((sch,i)=>(
@@ -6971,7 +6978,7 @@ function AdminApp({ role, onLogout }) {
     let channel;
     const init = async () => {
       const { data: { session } } = await sb.auth.getSession();
-      if (!session || !["admin","manager","staff"].includes(session.user.user_metadata?.role)) { onLogout(); return; }
+      if (!session || !["admin","manager","staff"].includes(session.user.app_metadata?.role)) { onLogout(); return; }
       await fetchOrders();
       channel = sb.channel('admin-orders')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
@@ -7385,7 +7392,7 @@ function AdminApp({ role, onLogout }) {
             // パスワード再設定完了画面は維持（ユーザーが手動で「ログイン画面へ」を押すまで）
             setScreen(prev => prev === "resetpassword" ? prev : "login");
           } else {
-            const role = session.user.user_metadata?.role ?? "user";
+            const role = session.user.app_metadata?.role ?? "user";
             setUserRole(role);
             // 初期ロードまたはログイン画面のときだけ遷移（操作中の画面は維持）
             setScreen(prev =>

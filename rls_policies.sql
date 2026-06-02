@@ -22,7 +22,7 @@ CREATE POLICY "users_read_own_orders"
 -- 管理者: 全注文を読める
 CREATE POLICY "admins_read_all_orders"
   ON orders FOR SELECT
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ユーザー: 自分の注文として登録できる（user_id を強制）
 CREATE POLICY "users_insert_own_orders"
@@ -32,7 +32,7 @@ CREATE POLICY "users_insert_own_orders"
 -- 管理者: ステータス等を更新できる
 CREATE POLICY "admins_update_orders"
   ON orders FOR UPDATE
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ----------------------------------------------------------------
 -- 3. schedules テーブル（orders に紐づく）
@@ -52,7 +52,7 @@ CREATE POLICY "users_read_own_schedules"
 -- 管理者: 全スケジュールを読める
 CREATE POLICY "admins_read_all_schedules"
   ON schedules FOR SELECT
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ユーザー/管理者: スケジュール登録（自分の注文に紐づくもののみ）
 CREATE POLICY "insert_schedules_for_own_orders"
@@ -63,7 +63,7 @@ CREATE POLICY "insert_schedules_for_own_orders"
       WHERE orders.id = schedules.order_id
         AND orders.user_id = auth.uid()
     )
-    OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
 
 -- ----------------------------------------------------------------
@@ -84,7 +84,7 @@ CREATE POLICY "users_read_own_messages"
 -- 管理者: 全メッセージを読める
 CREATE POLICY "admins_read_all_messages"
   ON messages FOR SELECT
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ユーザー: 自分の注文にメッセージを送れる
 CREATE POLICY "users_insert_own_messages"
@@ -95,7 +95,7 @@ CREATE POLICY "users_insert_own_messages"
       WHERE orders.id = messages.order_id
         AND orders.user_id = auth.uid()
     )
-    OR (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
+    OR (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
 
 -- ----------------------------------------------------------------

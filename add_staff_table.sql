@@ -21,14 +21,14 @@ alter table public.staff enable row level security;
 create policy "staff_admin_all" on public.staff
   for all
   to authenticated
-  using  ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin')
-  with check ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  using  ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  with check ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- staff: 自分のメールに一致する行のみ読み取り可能
 create policy "staff_self_select" on public.staff
   for select
   to authenticated
   using (
-    (auth.jwt() -> 'user_metadata' ->> 'role') = 'staff'
+    (auth.jwt() -> 'app_metadata' ->> 'role') = 'staff'
     and email = auth.email()
   );

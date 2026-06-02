@@ -43,12 +43,12 @@ CREATE POLICY "users_read_own_schedule_history"
 CREATE POLICY "admins_read_all_schedule_history"
   ON schedule_history FOR SELECT
   USING (
-    (auth.jwt() -> 'user_metadata' ->> 'role') IN ('admin', 'staff')
+    (auth.jwt() -> 'app_metadata' ->> 'role') IN ('admin', 'staff')
   );
 
 -- 管理者・スタッフ: 変更履歴を登録できる
 CREATE POLICY "admins_insert_schedule_history"
   ON schedule_history FOR INSERT
   WITH CHECK (
-    (auth.jwt() -> 'user_metadata' ->> 'role') IN ('admin', 'staff')
+    (auth.jwt() -> 'app_metadata' ->> 'role') IN ('admin', 'staff')
   );

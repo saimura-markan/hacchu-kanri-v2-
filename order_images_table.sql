@@ -29,7 +29,7 @@ CREATE POLICY "users_read_own_images"
 -- 管理者: 全画像を読める
 CREATE POLICY "admins_read_all_images"
   ON order_images FOR SELECT
-  USING ((auth.jwt() -> 'user_metadata' ->> 'role') = 'admin');
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ユーザー: 自分の注文に画像を追加できる
 CREATE POLICY "users_insert_own_images"
