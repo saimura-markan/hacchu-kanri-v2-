@@ -3561,6 +3561,15 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [reschedDate, setReschedDate] = useState("");
   const [reschedTime, setReschedTime] = useState("");
   const [reschedErr,  setReschedErr]  = useState("");
+  const [expandedSch,   setExpandedSch]   = useState(0);
+  const [showAddForm,   setShowAddForm]   = useState(false);
+  const [addDate,       setAddDate]       = useState("");
+  const [addStart,      setAddStart]      = useState("");
+  const [addEnd,        setAddEnd]        = useState("");
+  const [addDetails,    setAddDetails]    = useState("");
+  const [addMemo,       setAddMemo]       = useState("");
+  const [addSending,    setAddSending]    = useState(false);
+  const [addDone,       setAddDone]       = useState(false);
 
   const [siteData, setSiteData] = useState({
     key_info:'', parking_info:'',
@@ -3778,6 +3787,52 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     }
   };
 
+  const handleAddRequest = async () => {
+    if (!addDate) return;
+    setAddSending(true);
+    try {
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) { setAddSending(false); return; }
+      let activeCid = cid;
+      if (!activeCid) {
+        const { data: prof } = await sb.from('profiles').select('company_id').eq('id', user.id).maybeSingle();
+        if (prof?.company_id) activeCid = prof.company_id;
+      }
+      const { data: newOrder, error } = await sb.from('orders').insert({
+        user_id:    user.id,
+        company_id: activeCid || null,
+        service:    order.service || '',
+        site:       order.site    || '',
+        address:    order.address || '',
+        note:       addMemo       || '',
+        status:     '調整中',
+      }).select('id').single();
+      if (error) throw error;
+      await sb.from('schedules').insert({
+        order_id:   newOrder.id,
+        work_date:  addDate,
+        start_time: addStart,
+        end_time:   addEnd,
+        details:    addDetails ? [addDetails] : [],
+        sort_order: 0,
+      });
+      await sb.from('messages').insert({
+        order_id:  newOrder.id,
+        from_role: 'eli',
+        text:      `追加日程依頼を受け付けました！\n元の受付番号：${order.id}\n24時間以内に担当者よりご連絡いたします。`,
+      });
+      setAddDone(true);
+      setTimeout(() => {
+        setShowAddForm(false); setAddDone(false);
+        setAddDate(""); setAddStart(""); setAddEnd(""); setAddDetails(""); setAddMemo("");
+      }, 2000);
+    } catch(e) {
+      console.error('[handleAddRequest]', e);
+    } finally {
+      setAddSending(false);
+    }
+  };
+
   const nowStr = () => {
     const t = new Date();
     return `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
@@ -3882,6 +3937,93 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         </BottomSheet>
       )}
 
+      {showAddForm && (
+        <BottomSheet>
+          {addDone ? (
+            <div style={{ textAlign:"center", padding:"24px 0" }}>
+              <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
+              <div style={{ fontSize:17, fontWeight:800, color:C.navy }}>追加依頼を受け付けました！</div>
+              <div style={{ fontSize:13, color:C.gray, marginTop:8 }}>24時間以内に担当者よりご連絡いたします</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ marginBottom:18 }}>
+                <div style={{ fontSize:17, fontWeight:800, color:C.navy, marginBottom:4 }}>＋ 作業日を追加依頼する</div>
+                <div style={{ fontSize:13, color:C.gray }}>追加したい作業日程を入力してください</div>
+              </div>
+              <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>現場名</div>
+                  <input readOnly value={order.site||""} style={{ width:"100%", padding:"10px 12px", borderRadius:10,
+                    border:"2px solid "+C.grayL, fontSize:13, background:"#f4f4f6", color:"#aaa",
+                    fontFamily:"inherit", outline:"none", boxSizing:"border-box" }} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>受付番号</div>
+                  <input readOnly value={order.id||""} style={{ width:"100%", padding:"10px 12px", borderRadius:10,
+                    border:"2px solid "+C.grayL, fontSize:13, background:"#f4f4f6", color:"#aaa",
+                    fontFamily:"inherit", outline:"none", boxSizing:"border-box" }} />
+                </div>
+              </div>
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>追加日程 <span style={{ color:C.red }}>*</span></div>
+                <input type="date" value={addDate} min={new Date().toISOString().split("T")[0]}
+                  onChange={e=>setAddDate(e.target.value)}
+                  style={{ width:"100%", padding:"11px 14px", borderRadius:10,
+                    border:"2px solid "+(addDate?C.grayL:C.grayL), fontSize:15,
+                    fontFamily:"inherit", outline:"none", color:C.navy, boxSizing:"border-box" }} />
+              </div>
+              <div style={{ display:"flex", gap:10, marginBottom:14 }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>開始時間</div>
+                  <input type="time" value={addStart} onChange={e=>setAddStart(e.target.value)}
+                    style={{ width:"100%", padding:"11px 14px", borderRadius:10,
+                      border:"2px solid "+C.grayL, fontSize:15, fontFamily:"inherit",
+                      outline:"none", color:C.navy, boxSizing:"border-box" }} />
+                </div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>終了時間</div>
+                  <input type="time" value={addEnd} onChange={e=>setAddEnd(e.target.value)}
+                    style={{ width:"100%", padding:"11px 14px", borderRadius:10,
+                      border:"2px solid "+C.grayL, fontSize:15, fontFamily:"inherit",
+                      outline:"none", color:C.navy, boxSizing:"border-box" }} />
+                </div>
+              </div>
+              <div style={{ marginBottom:14 }}>
+                <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>作業内容</div>
+                <input value={addDetails} onChange={e=>setAddDetails(e.target.value)}
+                  placeholder="例：養生・ハウスクリーニングなど"
+                  style={{ width:"100%", padding:"11px 14px", borderRadius:10,
+                    border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
+                    outline:"none", color:C.navy, boxSizing:"border-box" }} />
+              </div>
+              <div style={{ marginBottom:20 }}>
+                <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>メモ</div>
+                <textarea value={addMemo} onChange={e=>setAddMemo(e.target.value)}
+                  placeholder="連絡事項・特記事項があれば入力..." rows={2}
+                  style={{ width:"100%", padding:"11px 14px", borderRadius:10,
+                    border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
+                    outline:"none", color:C.navy, boxSizing:"border-box", resize:"none" }} />
+              </div>
+              <button onClick={handleAddRequest} disabled={!addDate||addSending}
+                style={{ display:"block", width:"100%",
+                  background:!addDate||addSending?"#ccc":"linear-gradient(135deg,#c89010,#d4a017)",
+                  color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
+                  padding:"16px 0", cursor:!addDate||addSending?"default":"pointer",
+                  fontFamily:"inherit", marginBottom:10 }}>
+                {addSending ? "送信中..." : "この内容で追加依頼する"}
+              </button>
+              <button onClick={()=>{ setShowAddForm(false); setAddDate(""); setAddStart(""); setAddEnd(""); setAddDetails(""); setAddMemo(""); }}
+                style={{ display:"block", width:"100%", background:C.grayPale, color:C.navy,
+                  border:"2px solid "+C.grayL, borderRadius:14, fontSize:15, fontWeight:700,
+                  padding:"14px 0", cursor:"pointer", fontFamily:"inherit" }}>
+                キャンセル
+              </button>
+            </>
+          )}
+        </BottomSheet>
+      )}
+
       <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
         padding:"14px 20px", display:"flex", alignItems:"center", gap:12,
         boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
@@ -3981,187 +4123,192 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               </div>
             )}
 
-            {order.schedules.map((sch, i) => (
-              <div key={i} style={{ background:C.white, borderRadius:18, border:"1px solid "+(sch.history&&sch.history.length>0?"#b090e8":C.grayL),
-                boxShadow:"0 2px 12px rgba(10,31,92,0.07)", marginBottom:14 }}>
-                <div style={{ fontSize:15, fontWeight:800, color:C.navy, display:"flex", alignItems:"center", justifyContent:"space-between",
-                  borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px" }}>
-                  <span>📅 日程 {i+1}</span>
-                  {sch.history && sch.history.length > 0 && (
-                    <span style={{ background:"#f3eeff", color:"#6930c3", borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:800 }}>変更あり</span>
-                  )}
-                </div>
-                <div style={{ padding:"14px 18px" }}>
-                  {[['日付',sch.date],['時間',sch.start+"〜"+sch.end],
-                    ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers]].map(([label,value])=>
-                    !value ? null : (
-                      <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
-                        <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
-                        <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>
-                          {sch.history && sch.history.length > 0 && (label==="日付"||label==="時間") ? (
-                            <span>{value}<span style={{ marginLeft:7, fontSize:11, color:"#6930c3", fontWeight:700, background:"#f3eeff", borderRadius:4, padding:"1px 7px" }}>変更後</span></span>
-                          ) : value}
+            {/* ③ 作業日詳細 アコーディオン */}
+            <div style={{ background:"#0a1f5c", borderRadius:14, padding:"12px 18px",
+              marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ background:"rgba(255,255,255,0.15)", borderRadius:8,
+                padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>📅</div>
+              <div style={{ fontSize:15, fontWeight:800, color:C.white }}>作業日詳細</div>
+            </div>
+
+            {order.schedules.map((sch, i) => {
+              const isExp = expandedSch === i;
+              const summaryDetails = (sch.details||[]).slice(0,2).join("・") || order.service || "";
+              return (
+                <div key={i} style={{ background:C.white, borderRadius:14,
+                  border:"1px solid "+(sch.history&&sch.history.length>0?"#b090e8":C.grayL),
+                  boxShadow:"0 2px 8px rgba(10,31,92,0.06)", marginBottom:10, overflow:"hidden" }}>
+                  <button onClick={()=>setExpandedSch(isExp?-1:i)}
+                    style={{ width:"100%", background:"transparent", border:"none",
+                      padding:"13px 16px", display:"flex", alignItems:"center",
+                      justifyContent:"space-between", cursor:"pointer", fontFamily:"inherit",
+                      gap:8 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, minWidth:0 }}>
+                      <span style={{ fontSize:13, fontWeight:800, color:C.navy,
+                        flexShrink:0 }}>日程 {i+1}</span>
+                      {sch.date && <span style={{ fontSize:13, color:C.gray, flexShrink:0 }}>{sch.date}</span>}
+                      {summaryDetails && (
+                        <span style={{ fontSize:12, color:"#555", overflow:"hidden",
+                          textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{summaryDetails}</span>
+                      )}
+                      {sch.history&&sch.history.length>0&&(
+                        <span style={{ background:"#f3eeff", color:"#6930c3", borderRadius:6,
+                          padding:"2px 8px", fontSize:11, fontWeight:800, flexShrink:0 }}>変更あり</span>
+                      )}
+                    </div>
+                    <span style={{ fontSize:12, color:C.gray, flexShrink:0 }}>{isExp?"▲":"▼"}</span>
+                  </button>
+                  {isExp && (
+                    <div style={{ padding:"4px 16px 14px", borderTop:"1px solid "+C.grayL }}>
+                      {[['日付',sch.date],['時間',sch.start&&sch.end?sch.start+"〜"+sch.end:""],
+                        ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers]].map(([label,value])=>
+                        !value ? null : (
+                          <div key={label} style={{ display:"flex", gap:10, padding:"8px 0",
+                            borderBottom:"1px solid #f0f0f5" }}>
+                            <div style={{ fontSize:12, color:C.gray, minWidth:72, flexShrink:0 }}>{label}</div>
+                            <div style={{ fontSize:14, fontWeight:600, color:C.navy, flex:1 }}>
+                              {sch.history&&sch.history.length>0&&(label==="日付"||label==="時間") ? (
+                                <span>{value}<span style={{ marginLeft:6, fontSize:11, color:"#6930c3",
+                                  fontWeight:700, background:"#f3eeff", borderRadius:4,
+                                  padding:"1px 6px" }}>変更後</span></span>
+                              ) : value}
+                            </div>
+                          </div>
+                        )
+                      )}
+                      {sch.serviceDetail&&(()=>{
+                        const sd=sch.serviceDetail;
+                        const corner=sd.house_corner?"角部屋":"";
+                        const asbStr=(()=>{ const ad=sd.asbestosDetail; if(!ad||!(ad.types||[]).length) return null;
+                          const pts=(ad.types||[]).filter(t=>t!=="その他");
+                          if((ad.types||[]).includes("その他")&&ad.other) pts.push(ad.other);
+                          return pts.join("・")||null; })();
+                        const rows=[['養生の場所',sd.location],['リフォーム内容',sd.reform],
+                          ['広さ',sd.house_size],['家具の有無',sd.house_furniture],
+                          ['水回り設備',sd.house_water],
+                          ['その他条件',[corner,sd.house_vacancy].filter(Boolean).join('・')||null],
+                          ['工事日数',sd.days?sd.days+"日":null],['入れない日',sd.offDays],
+                          ['フロア面積',sd.floorSize],['アスベスト',asbStr],
+                          ['廃材量',sd.wasteSize],
+                          ['廃材種別',Array.isArray(sd.wasteTypes)&&sd.wasteTypes.length?sd.wasteTypes.join("・"):null],
+                          ['図面',sd.house_plan]];
+                        return rows.map(([label,value])=>!value?null:(
+                          <div key={label} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:"1px solid #f0f0f5" }}>
+                            <div style={{ fontSize:12, color:C.gray, minWidth:72, flexShrink:0 }}>{label}</div>
+                            <div style={{ fontSize:14, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
+                          </div>
+                        ));
+                      })()}
+                      {sch.memo&&(
+                        <div style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:"1px solid #f0f0f5" }}>
+                          <div style={{ fontSize:12, color:C.gray, minWidth:72, flexShrink:0 }}>メモ</div>
+                          <div style={{ fontSize:14, fontWeight:600, color:C.navy, flex:1, whiteSpace:"pre-wrap" }}>{sch.memo}</div>
                         </div>
-                      </div>
-                    )
-                  )}
-                  {sch.serviceDetail && (() => {
-                    const sd = sch.serviceDetail;
-                    const corner = sd.house_corner ? "角部屋" : "";
-                    const asbStr = (() => {
-                      const ad = sd.asbestosDetail;
-                      if (!ad || !(ad.types||[]).length) return null;
-                      const pts = (ad.types||[]).filter(t=>t!=="その他");
-                      if ((ad.types||[]).includes("その他") && ad.other) pts.push(ad.other);
-                      return pts.join("・") || null;
-                    })();
-                    const rows = [
-                      ['養生の場所',  sd.location],
-                      ['リフォーム内容', sd.reform],
-                      ['広さ',        sd.house_size],
-                      ['家具の有無',  sd.house_furniture],
-                      ['水回り設備',  sd.house_water],
-                      ['その他条件',  [corner, sd.house_vacancy].filter(Boolean).join('・') || null],
-                      ['工事日数',    sd.days ? sd.days + "日" : null],
-                      ['入れない日',  sd.offDays],
-                      ['フロア面積',  sd.floorSize],
-                      ['アスベスト',  asbStr],
-                      ['廃材量',      sd.wasteSize],
-                      ['廃材種別',    Array.isArray(sd.wasteTypes) && sd.wasteTypes.length ? sd.wasteTypes.join("・") : null],
-                      ['図面',        sd.house_plan],
-                    ];
-                    return rows.map(([label,value]) => !value ? null : (
-                      <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
-                        <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
-                        <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
-                      </div>
-                    ));
-                  })()}
-                  {sch.memo && (
-                    <div style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
-                      <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>メモ</div>
-                      <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1, whiteSpace:"pre-wrap" }}>{sch.memo}</div>
+                      )}
+                      {sch.history&&sch.history.length>0&&(
+                        <div style={{ marginTop:10, padding:"10px 14px", background:"#faf5ff",
+                          borderRadius:10, border:"1px solid #d8b4fe" }}>
+                          <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:6 }}>📋 変更履歴</div>
+                          {[...sch.history].reverse().map((h,hi)=>(
+                            <div key={hi} style={{ fontSize:12, color:"#555", lineHeight:1.8 }}>
+                              変更前：{h.prevDate} {h.prevStart}〜{h.prevEnd}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
-                  {sch.history && sch.history.length > 0 && (
-                    <div style={{ marginTop:10, padding:"10px 14px", background:"#faf5ff", borderRadius:10, border:"1px solid #d8b4fe" }}>
-                      <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:6 }}>📋 変更履歴</div>
-                      {[...sch.history].reverse().map((h, hi) => (
-                        <div key={hi} style={{ fontSize:12, color:"#555", lineHeight:1.8 }}>
-                          変更前：{h.prevDate} {h.prevStart}〜{h.prevEnd}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
+              );
+            })}
+
+            {/* ④ 追加依頼ボタン */}
+            <button onClick={()=>setShowAddForm(true)}
+              style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10,
+                width:"100%", background:"linear-gradient(135deg,#c89010,#d4a017)",
+                border:"none", borderRadius:14, padding:"15px 20px", cursor:"pointer",
+                fontFamily:"inherit", marginBottom:20,
+                boxShadow:"0 4px 14px rgba(212,160,23,0.35)" }}>
+              <span style={{ fontSize:20, color:C.white, fontWeight:300 }}>＋</span>
+              <span style={{ fontSize:15, fontWeight:800, color:C.white }}>作業日を追加依頼する</span>
+            </button>
+
+            {/* ⑤ 案件情報セクション */}
+            <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
+              marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+                padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
+              <div style={{ fontSize:15, fontWeight:800, color:C.white }}>案件情報</div>
+            </div>
+
+            <SiteInfoCard icon="🏠" label="現場名">
+              <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>{siteName||'—'}</div>
+            </SiteInfoCard>
+            <SiteInfoCard icon="📍" label="住所">
+              <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>
+                {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
               </div>
-            ))}
-          </>
-        )}
-
-        <div style={{ display:"flex", alignItems:"center", gap:8,
-          borderTop:"2px solid "+C.grayL, paddingTop:20, marginTop:8, marginBottom:16 }}>
-          <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>🏗️ 基本情報</div>
-        </div>
-
-        <SiteInfoCard icon="🏠" label="現場名">
-          <div style={{ fontSize:17, fontWeight:800, color:C.navy }}>{siteName || '—'}</div>
-        </SiteInfoCard>
-
-        <SiteInfoCard icon="📍" label="住所">
-          <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>
-            {[order.address, order.addressNum, order.addressBldg].filter(Boolean).join(' ') || '—'}
-          </div>
-        </SiteInfoCard>
-
-        {order.key && viewOnly && (
-          <SiteInfoCard icon="🔑" label="鍵情報">
-            <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.key}</div>
-          </SiteInfoCard>
-        )}
-
-        {order.parking && viewOnly && (
-          <SiteInfoCard icon="🚗" label="駐車場">
-            <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.parking}</div>
-          </SiteInfoCard>
-        )}
-
-        {order.note && viewOnly && (
-          <SiteInfoCard icon="📝" label="備考">
-            <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.note}</div>
-          </SiteInfoCard>
-        )}
-
-        {viewOnly && order.images && order.images.length > 0 && (
-          <SiteInfoCard icon="📷" label={`添付写真（${order.images.length}枚）`}>
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:6 }}>
-              {order.images.map((path, i) => (
-                <SignedImage key={i} path={path}
-                  onClickUrl={url => window.open(url, '_blank')}
-                  style={{ width:90, height:90, objectFit:"cover", borderRadius:8,
-                    cursor:"pointer", border:"1px solid "+C.grayL }} />
-              ))}
-            </div>
-          </SiteInfoCard>
-        )}
-
-        {viewOnly && (siteData.key_info || imagePaths.key_images.length > 0 ||
-          siteData.parking_info || imagePaths.parking_images.length > 0 ||
-          siteData.contact_name || siteData.contact_phone ||
-          siteData.memo || imagePaths.images.length > 0 ||
-          siteData.entry_info || imagePaths.entry_images.length > 0 ||
-          siteData.yosei_info || imagePaths.yosei_images.length > 0) && (
-          <>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16,
-              borderTop:"2px solid "+C.grayL, paddingTop:20, marginTop:8 }}>
-              <div style={{ fontSize:18, fontWeight:900, color:C.navy }}>🏗️ 現場情報</div>
-            </div>
-
-            {(siteData.key_info || imagePaths.key_images.length > 0) && (
-              <SiteInfoCard icon="🔑" label="鍵の情報">
-                {siteData.key_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.key_info}</div>}
+            </SiteInfoCard>
+            {order.key&&<SiteInfoCard icon="🔑" label="鍵情報">
+              <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.key}</div>
+            </SiteInfoCard>}
+            {order.parking&&<SiteInfoCard icon="🚗" label="駐車場">
+              <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.parking}</div>
+            </SiteInfoCard>}
+            {order.note&&<SiteInfoCard icon="📝" label="備考">
+              <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.note}</div>
+            </SiteInfoCard>}
+            {order.images&&order.images.length>0&&(
+              <SiteInfoCard icon="📷" label={`添付写真（${order.images.length}枚）`}>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:6 }}>
+                  {order.images.map((path,i)=>(
+                    <SignedImage key={i} path={path}
+                      onClickUrl={url=>window.open(url,'_blank')}
+                      style={{ width:90, height:90, objectFit:"cover", borderRadius:8,
+                        cursor:"pointer", border:"1px solid "+C.grayL }} />
+                  ))}
+                </div>
+              </SiteInfoCard>
+            )}
+            {(siteData.key_info||imagePaths.key_images.length>0)&&(
+              <SiteInfoCard icon="🔑" label="鍵の情報（現場登録）">
+                {siteData.key_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.key_info}</div>}
                 <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
-
-            {(siteData.parking_info || imagePaths.parking_images.length > 0) && (
-              <SiteInfoCard icon="🚗" label="駐車場情報">
-                {siteData.parking_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.parking_info}</div>}
+            {(siteData.parking_info||imagePaths.parking_images.length>0)&&(
+              <SiteInfoCard icon="🚗" label="駐車場情報（現場登録）">
+                {siteData.parking_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.parking_info}</div>}
                 <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
-
-            {(siteData.contact_name || siteData.contact_phone) && (
+            {(siteData.contact_name||siteData.contact_phone)&&(
               <SiteInfoCard icon="👤" label="担当者様">
-                {siteData.contact_name && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>{siteData.contact_name}</div>}
-                {siteData.contact_phone && (
+                {siteData.contact_name&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>{siteData.contact_name}</div>}
+                {siteData.contact_phone&&(
                   <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>
-                    <a href={"tel:"+siteData.contact_phone}
-                      style={{ color:C.blue, textDecoration:"none", fontWeight:700 }}>
+                    <a href={"tel:"+siteData.contact_phone} style={{ color:C.blue, textDecoration:"none", fontWeight:700 }}>
                       📞 {siteData.contact_phone}
                     </a>
                   </div>
                 )}
               </SiteInfoCard>
             )}
-
-            {(siteData.memo || imagePaths.images.length > 0) && (
+            {(siteData.memo||imagePaths.images.length>0)&&(
               <SiteInfoCard icon="⚠️" label="現場注意事項">
-                {siteData.memo && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.memo}</div>}
+                {siteData.memo&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.memo}</div>}
                 <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
-
-            {(siteData.entry_info || imagePaths.entry_images.length > 0) && (
+            {(siteData.entry_info||imagePaths.entry_images.length>0)&&(
               <SiteInfoCard icon="🚪" label="入館情報">
-                {siteData.entry_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.entry_info}</div>}
+                {siteData.entry_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.entry_info}</div>}
                 <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
-
-            {(siteData.yosei_info || imagePaths.yosei_images.length > 0) && (
+            {(siteData.yosei_info||imagePaths.yosei_images.length>0)&&(
               <SiteInfoCard icon="📦" label="養生範囲">
-                {siteData.yosei_info && <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.yosei_info}</div>}
+                {siteData.yosei_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{siteData.yosei_info}</div>}
                 <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
@@ -4170,7 +4317,16 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
         {!viewOnly && (
           <>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16 }}>
+            <SiteInfoCard icon="🏠" label="現場名">
+              <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>{siteName||'—'}</div>
+            </SiteInfoCard>
+            <SiteInfoCard icon="📍" label="住所">
+              <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>
+                {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
+              </div>
+            </SiteInfoCard>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16,
+              borderTop:"2px solid "+C.grayL, paddingTop:16, marginTop:4 }}>
               <div style={{ fontSize:16, fontWeight:900, color:C.navy }}>🏗️ 現場情報</div>
               <div style={{ fontSize:12, color:C.gray }}>入力は自動保存されます</div>
             </div>
