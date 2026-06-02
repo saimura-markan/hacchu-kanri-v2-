@@ -1516,10 +1516,10 @@ function OrTopBar({ title, onBack }) {
   );
 }
 
-function EliTalk({ children, size=70 }) {
+function EliTalk({ children, size=70, imgHeight=100 }) {
   return (
     <div style={{ display:"flex", alignItems:"flex-end", gap:12, margin:"16px 0 20px" }}>
-      <img src={ELI_IMG} className="libot-float" style={{ height:100, width:"auto", flexShrink:0,
+      <img src={ELI_IMG} className="libot-float" style={{ height:imgHeight, width:"auto", flexShrink:0,
         filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.15))" }} />
       <div style={{ background:C.grayPale, borderRadius:"4px 18px 18px 18px",
         padding:"12px 16px", fontSize:15, color:C.navy, fontWeight:700,
@@ -2217,7 +2217,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
 function StepService({ onSelect, doneServices, onBack }) {
   return (
     <div style={{ padding:"0 16px 32px" }}>
-      <EliTalk>
+      <EliTalk imgHeight={150}>
         {doneServices.length>0
           ? <>他に作業はありますか？<br />追加する作業をえらんでください😊</>
           : <>どんな作業をご依頼ですか？<br />タップしてえらんでください😊</>}
@@ -3249,11 +3249,10 @@ function HiBigBtn({ children, onClick, color, disabled }) {
 }
 
 // ── LiBotのメッセージ ─────────────────────────────
-function EliMessage({ orders, chats }) {
+function EliMessage({ orders, totalUnread=0 }) {
   const adjCount    = orders.filter(o=>o.status==="調整中").length;
   const soudanCount = orders.filter(o=>o.status==="日程相談中").length;
-  const unreadCount = orders.reduce((acc,o)=>
-    acc + (chats[o.id]||[]).filter(m=>m.from==="staff"&&!m.read).length, 0);
+  const unreadCount = totalUnread;
 
   let msgs = [];
   if (unreadCount>0) msgs.push({ color:C.red,
@@ -4282,7 +4281,7 @@ function ChatScreen({ role, order, onBack }) {
       .then(({ data }) => { if (data) setMessages(data.map(mapChat)); });
   }, [order.id]);
 
-  // ユーザー側：担当者メッセージを既読にする
+  // ユーザー側：担当者メッセージを既読にする（is_read）
   useEffect(() => {
     if (isAdminRole) return;
     sb.from('messages')
@@ -4295,6 +4294,26 @@ function ChatScreen({ role, order, onBack }) {
         ));
       });
   }, [order.id, isAdminRole]);
+
+  // read_by に現在ユーザーIDを追加（未読バッジ解消）
+  useEffect(() => {
+    const markReadBy = async () => {
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) return;
+      const uid = user.id;
+      const { data: unread } = await sb.from('messages')
+        .select('id, read_by')
+        .eq('order_id', order.id)
+        .not('read_by', 'cs', `{${uid}}`);
+      if (!unread || !unread.length) return;
+      await Promise.all(unread.map(msg =>
+        sb.from('messages')
+          .update({ read_by: [...(msg.read_by || []), uid] })
+          .eq('id', msg.id)
+      ));
+    };
+    markReadBy();
+  }, [order.id]);
 
   useEffect(() => {
     const oid = order.id;
@@ -4600,12 +4619,16 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
   const [, setTick]                = useState(0);
   const [loading,    setLoading]   = useState(true);
   const [dbError,    setDbError]   = useState(null);
-  const [showPicker,   setShowPicker]   = useState(false);
-  const [pickerSearch, setPickerSearch] = useState("");
+  const [showPicker,      setShowPicker]      = useState(false);
+  const [pickerSearch,    setPickerSearch]    = useState("");
+  const [userId,          setUserId]          = useState(null);
+  const [unreadCounts,    setUnreadCounts]    = useState({});
+  const [showUnreadBubble,setShowUnreadBubble]= useState(false);
 
   const fetchOrders = async () => {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) { setLoading(false); return; }
+    setUserId(user.id);
     const { data, error } = await sb
       .from('orders')
       .select('*, schedules(*, schedule_history(*)), order_images(*)')
@@ -4613,8 +4636,22 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (error) { setDbError(error.message); setLoading(false); return; }
-    setOrders((data || []).map(mapOrder));
+    const mapped = (data || []).map(mapOrder);
+    setOrders(mapped);
     setLoading(false);
+    const orderIds = mapped.map(o => o.id);
+    if (orderIds.length) {
+      const { data: unread } = await sb.from('messages')
+        .select('order_id')
+        .in('order_id', orderIds)
+        .not('read_by', 'cs', `{${user.id}}`);
+      if (unread) {
+        const counts = {};
+        unread.forEach(m => { counts[m.order_id] = (counts[m.order_id] || 0) + 1; });
+        setUnreadCounts(counts);
+        setShowUnreadBubble(Object.values(counts).some(c => c > 0));
+      }
+    }
   };
 
   useEffect(() => { fetchOrders(); }, []);
@@ -4692,7 +4729,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
       <div className="hi-main-content">
 
         {/* LiBotのメッセージ */}
-        <EliMessage orders={orders} chats={{}} />
+        <EliMessage orders={orders} totalUnread={Object.values(unreadCounts).reduce((a,b)=>a+b,0)} />
 
         {/* フィルター */}
         <div style={{ display:"flex", gap:8, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
@@ -4724,10 +4761,10 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         {/* 一覧 */}
         {filtered.map(order=>(
           <HiOrderCard key={order.id} role={role} order={order}
-            unreadCount={0}
+            unreadCount={unreadCounts[order.id]||0}
             onClick={()=>onGoDetailView(order)}
             onDetail={()=>onGoDetail(order)}
-            onChat={()=>onGoChat(order)} />
+            onChat={()=>{ setUnreadCounts(prev=>({...prev,[order.id]:0})); onGoChat(order); }} />
         ))}
 
         {/* 案件ピッカーシート */}
@@ -4837,6 +4874,24 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
             </a>
           </div>
         </div>
+      </div>
+
+      {/* 右下固定LiBot ＋ 未読吹き出し */}
+      <div style={{ position:"fixed", bottom:24, right:16, zIndex:100,
+        display:"flex", flexDirection:"column", alignItems:"flex-end", pointerEvents:"none" }}>
+        {showUnreadBubble&&(
+          <div onClick={()=>setShowUnreadBubble(false)}
+            style={{ background:C.white, border:"2px solid "+C.red,
+              borderRadius:"12px 12px 4px 12px", padding:"8px 14px",
+              fontSize:13, fontWeight:700, color:C.red, marginBottom:8,
+              cursor:"pointer", boxShadow:"0 2px 12px rgba(230,57,70,0.2)",
+              whiteSpace:"nowrap", pointerEvents:"auto" }}>
+            新しいメッセージがあるよ！🔔
+          </div>
+        )}
+        <img src={ELI_IMG} alt="LiBot" className="libot-float"
+          style={{ height:64, width:"auto", pointerEvents:"none",
+            filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.18))" }} />
       </div>
     </div>
   );
