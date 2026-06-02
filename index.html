@@ -2175,7 +2175,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
         <SoujiDetail details={sch.details||[]} detail={sch.serviceDetail}
           onChange={v=>onChange({...sch,serviceDetail:v})} />
       )}
-      {needsWorkers(serviceId)&&(
+      {needsWorkers(serviceId) && !(serviceId==="souji" && (sch.details||[]).includes("ハウスクリーニング")) && (
         <div style={{ marginTop:14, marginBottom:4 }}>
           <div style={{ fontSize:13, color:errWorkers?C.red:C.gray, marginBottom:8, fontWeight:600 }}>
             作業者数{errWorkers?" ⚠️ 必須":""}
@@ -2286,7 +2286,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     if (!schedules[0].date)          errs.push("日程1の日付を選択してください");
     if (!schedules[0].startTime)     errs.push("日程1の開始時間を選択してください");
     if (!schedules[0].endTime)       errs.push("日程1の終了時間を選択してください");
-    if (needsWorkers(serviceId)&&!schedules[0].workers) errs.push("日程1の作業者数を選択してください");
+    if (needsWorkers(serviceId)&&!schedules[0].workers&&!(serviceId==="souji"&&(schedules[0].details||[]).includes("ハウスクリーニング"))) errs.push("日程1の作業者数を選択してください");
     if (serviceId==="kaitai") {
       if (!schedules[0].serviceDetail?.days)    errs.push("工事日数を選択してください");
       if (!schedules[0].serviceDetail?.offDays) errs.push("作業に入れない日を入力してください");
@@ -3936,6 +3936,29 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                       </div>
                     )
                   )}
+                  {sch.serviceDetail && (() => {
+                    const sd = sch.serviceDetail;
+                    const corner = sd.house_corner ? "角部屋" : "";
+                    const rows = [
+                      ['広さ',        sd.house_size],
+                      ['家具の有無',  sd.house_furniture],
+                      ['水回り設備',  sd.house_water],
+                      ['その他条件',  [corner, sd.house_vacancy].filter(Boolean).join('・')],
+                      ['図面',        sd.house_plan],
+                    ];
+                    return rows.map(([label,value]) => !value ? null : (
+                      <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
+                        <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
+                        <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1 }}>{value}</div>
+                      </div>
+                    ));
+                  })()}
+                  {sch.memo && (
+                    <div style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
+                      <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>メモ</div>
+                      <div style={{ fontSize:15, fontWeight:600, color:C.navy, flex:1, whiteSpace:"pre-wrap" }}>{sch.memo}</div>
+                    </div>
+                  )}
                   {sch.history && sch.history.length > 0 && (
                     <div style={{ marginTop:10, padding:"10px 14px", background:"#faf5ff", borderRadius:10, border:"1px solid #d8b4fe" }}>
                       <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:6 }}>📋 変更履歴</div>
@@ -5234,6 +5257,7 @@ const AD_SVC_ICON = {
 
 function mapOrder(row) {
   const schRows = (row.schedules || []).sort((a,b) => (a.sort_order||0) - (b.sort_order||0));
+  const sdSchedules = row.service_detail?.schedules || [];
   const schedules = schRows.map(s => ({
     id:      s.id,
     date:    s.work_date   || '',
@@ -5241,6 +5265,8 @@ function mapOrder(row) {
     end:     s.end_time    || '',
     workers: s.workers     || '',
     details: Array.isArray(s.details) ? s.details : [],
+    memo:          sdSchedules[s.sort_order]?.memo          || '',
+    serviceDetail: sdSchedules[s.sort_order]?.serviceDetail || null,
     history: (s.schedule_history || [])
       .sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at))
       .map(h => ({
