@@ -2283,6 +2283,13 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     setZipCode(site.zip_code          || "");
     setSiteContactName(site.site_contact_name  || "");
     setSiteContactPhone(site.site_contact_phone || "");
+    if (site.key_info || site.parking_info) {
+      setKeyInfo({
+        noKey:   site.key_info === "在宅",
+        key:     site.key_info === "在宅" ? "" : (site.key_info || ""),
+        parking: site.parking_info || "",
+      });
+    }
     setAddrOk(true);
     setErrors([]);
   };
@@ -2936,7 +2943,7 @@ function OrderApp({ onDone, onBack }) {
           if (data?.company_id) {
             setCompanyId(data.company_id);
             sb.from('sites')
-              .select('site_name, address, address_num, address_bldg, zip_code, site_contact_name, site_contact_phone')
+              .select('site_name, address, address_num, address_bldg, zip_code, site_contact_name, site_contact_phone, key_info, parking_info')
               .eq('company_id', data.company_id)
               .order('site_name')
               .then(({ data: sites }) => { if (sites) setSitesCache(sites); });
