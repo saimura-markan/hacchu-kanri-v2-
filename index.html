@@ -3974,6 +3974,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                       return pts.join("・") || null;
                     })();
                     const rows = [
+                      ['養生の場所',  sd.location],
+                      ['リフォーム内容', sd.reform],
                       ['広さ',        sd.house_size],
                       ['家具の有無',  sd.house_furniture],
                       ['水回り設備',  sd.house_water],
