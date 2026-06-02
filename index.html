@@ -2595,6 +2595,8 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
           <ConfRow label="住所"     value={formData.address} />
           <ConfRow label="番地"     value={formData.addrNum} />
           <ConfRow label="建物名"   value={formData.addrBldg} />
+          <ConfRow label="現場担当者"   value={formData.siteContactName} />
+          <ConfRow label="担当者電話番号" value={formData.siteContactPhone} />
           <ConfRow label="担当者"   value={personName || "…"} />
         </div>
       </Card>
@@ -2609,6 +2611,13 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
               <>
                 <ConfRow label="工事日数"   value={sch.serviceDetail.days?sch.serviceDetail.days+"日":""} />
                 <ConfRow label="入れない日" value={sch.serviceDetail.offDays} />
+                {(()=>{
+                  const ad=sch.serviceDetail.asbestosDetail;
+                  if (!ad||(ad.types||[]).length===0) return null;
+                  const pts=(ad.types||[]).filter(t=>t!=="その他");
+                  if ((ad.types||[]).includes("その他")&&ad.other) pts.push(ad.other);
+                  return pts.length ? <ConfRow label="アスベスト箇所" value={pts.join("・")} /> : null;
+                })()}
                 <ConfRow label="図面"       value={sch.serviceDetail.house_plan} />
               </>
             )}
