@@ -2047,7 +2047,7 @@ function YouseiDetail({ details, detail, onChange }) {
     <div>
       {hasYousei&&(
         <SubSection title="🛗 養生 - 場所">
-          <RadioGroup options={["共用部","室内","両方"]} value={v.location||""} onChange={val=>u({location:val})} />
+          <RadioGroup options={["共用部","室内","共用部＋室内"]} value={v.location||""} onChange={val=>u({location:val})} />
           <div style={{ marginTop:10 }}>
             <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:6 }}>リフォーム内容</div>
             <TextArea value={v.reform||""} onChange={e=>u({reform:e.target.value})}
@@ -2089,7 +2089,19 @@ function needsWorkers(serviceId) {
 function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, showErrors }) {
   const toggleDetail=t=>{
     const d=sch.details||[];
-    onChange({...sch,details:d.includes(t)?d.filter(x=>x!==t):[...d,t]});
+    const removing=d.includes(t);
+    const newDetails=removing?d.filter(x=>x!==t):[...d,t];
+    if (removing && sch.serviceDetail) {
+      const sd={...sch.serviceDetail};
+      if (t==="養生")     { sd.location=""; sd.reform=""; }
+      if (t==="家具移動") { sd.heavy=""; }
+      if (t==="荷上げ")   { sd.niage=""; }
+      const youseiItems=["養生","家具移動","荷上げ"];
+      if (youseiItems.includes(t) && !newDetails.some(x=>youseiItems.includes(x))) sd.house_plan="";
+      onChange({...sch,details:newDetails,serviceDetail:sd});
+    } else {
+      onChange({...sch,details:newDetails});
+    }
   };
   const KAITAI_ITEMS=["フロアめくり","建具","間仕切り","天井","内壁","キッチン","トイレ","洗面台","UB","在来風呂","アスベストあり"];
   const SANPAI_ITEMS=["廃材回収","バッカン"];
