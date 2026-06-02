@@ -2066,17 +2066,19 @@ function YouseiDetail({ details, detail, onChange }) {
             placeholder="例：2Fへ資材10箱の荷上げ" rows={2} />
         </SubSection>
       )}
-      <SubSection title="📄 図面">
-        <RadioGroup options={["図面なし","図面あり"]} value={v.house_plan||""} onChange={val=>u({house_plan:val})} />
-        {v.house_plan==="図面あり"&&(
-          <div style={{ marginTop:10, background:"#eef3ff", borderRadius:10,
-            padding:"12px 14px", border:"1px solid "+C.blue }}>
-            <div style={{ fontSize:14, color:C.blue, fontWeight:700 }}>
-              📷 次のページで図面の写真添付をお願いします
+      {hasYousei&&(
+        <SubSection title="📄 図面">
+          <RadioGroup options={["図面なし","図面あり"]} value={v.house_plan||""} onChange={val=>u({house_plan:val})} />
+          {v.house_plan==="図面あり"&&(
+            <div style={{ marginTop:10, background:"#eef3ff", borderRadius:10,
+              padding:"12px 14px", border:"1px solid "+C.blue }}>
+              <div style={{ fontSize:14, color:C.blue, fontWeight:700 }}>
+                📷 次のページで図面の写真添付をお願いします
+              </div>
             </div>
-          </div>
-        )}
-      </SubSection>
+          )}
+        </SubSection>
+      )}
     </div>
   );
 }
