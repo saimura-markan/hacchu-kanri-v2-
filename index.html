@@ -3299,15 +3299,6 @@ function HiOrderCard({ role, order, unreadCount, onClick, onDetail, onChat }) {
         : "0 2px 12px rgba(10,31,92,0.07)",
       marginBottom:12, position:"relative" }}>
 
-      {unreadCount>0 && (
-        <div style={{ position:"absolute", top:-8, right:-8,
-          background:C.red, color:C.white, borderRadius:"50%",
-          width:26, height:26, display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:13, fontWeight:900, boxShadow:"0 2px 8px rgba(230,57,70,0.5)",
-          animation:"pulse 1.5s ease-in-out infinite", zIndex:1 }}>
-          {unreadCount}
-        </div>
-      )}
 
       {/* タイマーバナー */}
       {timer && (
@@ -4409,25 +4400,23 @@ function ChatScreen({ role, order, onBack }) {
   return (
     <div style={{ height:"100vh", display:"flex", flexDirection:"column",
       fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
-      <style>{HI_CSS}</style>
-
-      {/* ヘッダー */}
-      <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
-        padding:"12px 16px", display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
-        <button onClick={onBack} style={{ background:"rgba(255,255,255,0.15)", border:"none",
-          color:C.white, borderRadius:10, padding:"8px 14px", fontSize:14,
-          fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
-          ← もどる
-        </button>
-        <img src={ELI_IMG} className="libot-float" style={{ height:50, width:"auto", flexShrink:0 }} />
-        <div style={{ flex:1, minWidth:0 }}>
-          <div style={{ fontSize:14, fontWeight:900, color:C.white,
-            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-            {order.site}
-          </div>
-          <div style={{ marginTop:2 }}><HiStatusBadge status={order.status} /></div>
-        </div>
-      </div>
+      <style>{HI_CSS}{`
+        .chat-layout{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+        .chat-sidebar{display:none}
+        .chat-main{display:flex;flex-direction:column;flex:1;min-height:0}
+        @media(min-width:769px){
+          .chat-layout{flex-direction:row}
+          .chat-sidebar{display:flex;flex-direction:column;width:260px;flex-shrink:0;
+            background:#0a1f5c;overflow-y:auto;border-right:1px solid rgba(255,255,255,0.1)}
+          .chat-main{flex:1;min-width:0}
+          .chat-header-back-text::before{content:"← もどる"}
+          .chat-header-back-text{font-size:14px}
+        }
+        @media(max-width:768px){
+          .chat-header-back-text::before{content:"←"}
+          .chat-header-back-text{font-size:18px}
+        }
+      `}</style>
 
       {/* 固定コンテキストメニュー */}
       {activeMenuId && activeMsg && (
@@ -4439,7 +4428,6 @@ function ChatScreen({ role, order, onBack }) {
             background:C.navy, borderRadius:12, padding:"6px 8px",
             display:"flex", flexDirection:"column", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
             onClick={e=>e.stopPropagation()}>
-            {/* スタンプ行 */}
             <div style={{ display:"flex", gap:2, paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.2)" }}>
               {['👍','✅','👀','🙏','😊'].map(emoji=>(
                 <button key={emoji} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", padding:"2px 4px", borderRadius:6,
@@ -4449,7 +4437,6 @@ function ChatScreen({ role, order, onBack }) {
                 </button>
               ))}
             </div>
-            {/* アクションボタン */}
             <div style={{ display:"flex", gap:4 }}>
               <button style={MENU_BTN} onClick={()=>{ setReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
               <button style={MENU_BTN} onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
@@ -4462,152 +4449,265 @@ function ChatScreen({ role, order, onBack }) {
         </>
       )}
 
-      {/* メッセージ一覧 */}
-      <div style={{ flex:1, overflowY:"auto", padding:"16px", background:C.bg }}>
-        <div style={{ maxWidth:500, margin:"0 auto" }}>
-          <div style={{ textAlign:"center", marginBottom:16 }}>
-            <span style={{ background:C.grayPale, color:C.gray, fontSize:12,
-              fontWeight:600, borderRadius:99, padding:"4px 14px", border:"1px solid "+C.grayL }}>
-              受付番号：{order.id}
-            </span>
+      <div className="chat-layout">
+
+        {/* ─── サイドバー（PC: 769px〜） ─── */}
+        <div className="chat-sidebar">
+          <div style={{ padding:"16px 14px 12px", borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
+            <button onClick={onBack} style={{ background:"rgba(255,255,255,0.1)", border:"none",
+              color:"rgba(255,255,255,0.85)", borderRadius:8, padding:"9px 14px",
+              fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
+              width:"100%", textAlign:"left" }}>
+              ← 一覧にもどる
+            </button>
           </div>
-
-          {messages.map((msg,i)=>{
-            const isOwn = isAdminRole ? msg.from==="staff" : msg.from==="user";
-            const quoted = msg.replyToId ? messages.find(m => m.id === msg.replyToId) : null;
-            const prevMsg = i > 0 ? messages[i-1] : null;
-            const showDate = msg.dateStr && msg.dateStr !== prevMsg?.dateStr;
-            const displayName = msg.from==="staff" ? (msg.senderName || '担当者') : null;
-            return (
-              <React.Fragment key={msg.id||i}>
-                {/* 日付区切り */}
-                {showDate && (
-                  <div style={{ textAlign:"center", margin:"12px 0", display:"flex",
-                    alignItems:"center", gap:8 }}>
-                    <div style={{ flex:1, height:1, background:C.grayL }} />
-                    <span style={{ fontSize:11, color:C.gray, fontWeight:600,
-                      background:C.bg, padding:"0 8px", whiteSpace:"nowrap" }}>
-                      {msg.dateStr}
-                    </span>
-                    <div style={{ flex:1, height:1, background:C.grayL }} />
-                  </div>
-                )}
-                <div style={{
-                  display:"flex", flexDirection:isOwn?"row-reverse":"row",
-                  alignItems:"flex-end", gap:8, marginBottom:16, animation:"msgIn 0.3s ease" }}>
-                  {!isOwn && (
-                    msg.from==="staff"
-                      ? <div style={{ width:36, height:36, background:C.navy, borderRadius:"50%",
-                          display:"flex", alignItems:"center", justifyContent:"center",
-                          fontSize:18, flexShrink:0 }}>👷</div>
-                      : <img src={ELI_IMG} className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
-                  )}
-                  {/* メッセージ本体 */}
-                  <div style={{ maxWidth:"78%",
-                    WebkitUserSelect: touching ? "none" : "auto",
-                    userSelect:       touching ? "none" : "auto" }}
-                    onContextMenu={msg.from !== 'eli' ? e=>{ e.preventDefault();
-                      const vw = window.innerWidth, vh = window.innerHeight;
-                      const mx = Math.min(e.clientX, vw - 200);
-                      const my = Math.min(e.clientY, vh - 80);
-                      setMenuPos({ x:mx, y:my }); setActiveMenuId(msg.id); } : undefined}
-                    onTouchStart={msg.from !== 'eli' ? ()=>{ setTouching(true);
-                      touchTimer.current = setTimeout(()=>{
-                        const el = document.documentElement;
-                        setMenuPos({ x: el.clientWidth/2 - 80, y: el.clientHeight/2 - 30 });
-                        setActiveMenuId(msg.id);
-                      }, 500); } : undefined}
-                    onTouchEnd={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
-                    onTouchMove={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
-                  >
-                    {/* 送信者名 */}
-                    {!isOwn && msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>LiBot</div>}
-                    {!isOwn && msg.from==="staff" && <div style={{ fontSize:11, color:C.blue, marginBottom:3, fontWeight:600 }}>👷 {displayName}</div>}
-                    {!isOwn && msg.from==="user" && isAdminRole && <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 お客様</div>}
-                    {/* 引用 */}
-                    {quoted && (
-                      <div style={{ background:"rgba(0,0,0,0.06)", borderLeft:"3px solid "+C.gray,
-                        padding:"3px 8px", marginBottom:4, borderRadius:4,
-                        fontSize:11, color:C.gray, overflow:"hidden", maxHeight:34 }}>
-                        {quoted.text.slice(0,50)}{quoted.text.length>50?"…":""}
-                      </div>
-                    )}
-                    <div style={{
-                      background: isOwn ? "linear-gradient(135deg,#2952c8,#0a1f5c)"
-                        : msg.from==="staff" ? "#eef3ff" : C.white,
-                      color: isOwn ? C.white : C.navy,
-                      borderRadius: isOwn ? "20px 4px 20px 20px" : "4px 20px 20px 20px",
-                      padding:"13px 17px", fontSize:16, fontWeight:500, lineHeight:1.7,
-                      boxShadow: isOwn ? "0 4px 14px rgba(10,31,92,0.2)" : "0 4px 14px rgba(10,31,92,0.07)",
-                      border: !isOwn ? `1px solid ${C.grayL}` : "none",
-                      whiteSpace:"pre-wrap",
-                    }}>
-                      {renderMentions(msg.text)}
-                    </div>
-                    <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:4,
-                      justifyContent:isOwn?"flex-end":"flex-start" }}>
-                      <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
-                    </div>
-                    {/* リアクション表示 */}
-                    {Object.keys(msg.reactions||{}).filter(e=>(msg.reactions[e]||[]).length>0).length>0 && (
-                      <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4,
-                        justifyContent:isOwn?"flex-end":"flex-start" }}>
-                        {Object.entries(msg.reactions||{}).filter(([,arr])=>arr.length>0).map(([emoji,arr])=>(
-                          <button key={emoji} onClick={()=>handleReaction(msg.id, emoji)}
-                            style={{ background:"rgba(255,255,255,0.9)", border:`1px solid ${C.grayL}`,
-                              borderRadius:99, padding:"1px 7px", fontSize:13, cursor:"pointer",
-                              display:"flex", alignItems:"center", gap:3, boxShadow:"0 1px 4px rgba(0,0,0,0.08)" }}>
-                            {emoji}<span style={{ fontSize:11, color:C.navy, fontWeight:700 }}>{arr.length}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </React.Fragment>
-            );
-          })}
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
-      {/* 入力エリア */}
-      <div style={{ background:C.white, borderTop:`2px solid ${C.grayL}`, padding:"12px 16px", flexShrink:0 }}>
-        <div style={{ maxWidth:500, margin:"0 auto" }}>
-          {replyTo && (
-            <div style={{ background:"#eef3ff", borderLeft:`3px solid ${C.blue}`,
-              padding:"5px 10px", marginBottom:8, borderRadius:8,
-              display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-              <div style={{ fontSize:12, color:C.navy, overflow:"hidden",
-                textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
-                ↩ {replyTo.text.slice(0,40)}{replyTo.text.length>40?"…":""}
+          <div style={{ padding:"12px 14px 8px" }}>
+            <input placeholder="現場名で検索..." readOnly
+              style={{ width:"100%", padding:"8px 12px", borderRadius:8,
+                border:"1px solid rgba(255,255,255,0.15)", background:"rgba(255,255,255,0.07)",
+                color:"rgba(255,255,255,0.5)", fontSize:12, fontFamily:"inherit",
+                outline:"none", boxSizing:"border-box" }} />
+          </div>
+          <div style={{ padding:"4px 10px", flex:1 }}>
+            <div style={{ padding:"10px 12px", borderRadius:10,
+              background:"rgba(255,255,255,0.13)", marginBottom:6 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:C.white,
+                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {order.site}
               </div>
-              <button onClick={()=>setReplyTo(null)}
-                style={{ background:"none", border:"none", cursor:"pointer",
-                  color:C.gray, fontSize:14, flexShrink:0 }}>✕</button>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:2 }}>{order.id}</div>
+              <div style={{ marginTop:6 }}><HiStatusBadge status={order.status} /></div>
             </div>
-          )}
-          <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
-            <textarea value={input} onChange={e=>setInput(e.target.value)}
-              onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ return; } if(e.key==="Enter"&&e.shiftKey){ e.preventDefault(); handleSend(); } }}
-              placeholder="メッセージを入力... (Shift+Enterで送信)" rows={1}
-              style={{ flex:1, fontSize:16, padding:"13px 16px", borderRadius:14,
-                border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
-                color:C.navy, resize:"none", lineHeight:1.5, maxHeight:100, overflowY:"auto", outline:"none" }}
-              onInput={e=>{ e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,100)+"px"; }}
-            />
-            <button onClick={handleSend} style={{
-              width:50, height:50, borderRadius:"50%", border:"none",
-              background:input.trim()?"linear-gradient(135deg,#2952c8,#0a1f5c)":C.grayL,
-              color:input.trim()?C.white:C.gray, fontSize:20, cursor:input.trim()?"pointer":"default",
-              display:"flex", alignItems:"center", justifyContent:"center",
-              flexShrink:0, transition:"all 0.15s" }}>✈️</button>
           </div>
-          <div style={{ textAlign:"center", marginTop:6, fontSize:12, color:C.gray }}>
-            📞 緊急の場合は 06-6392-3882 まで
+          <div style={{ padding:"14px 16px", borderTop:"1px solid rgba(255,255,255,0.1)",
+            fontSize:11, color:"rgba(255,255,255,0.35)", textAlign:"center", lineHeight:1.6 }}>
+            LiBot 工事受発注システム
           </div>
         </div>
-      </div>
+
+        {/* ─── チャットメインエリア ─── */}
+        <div className="chat-main">
+
+          {/* ヘッダー */}
+          <div style={{ background:"#0a1f5c", padding:"10px 14px",
+            display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
+            <button onClick={onBack} style={{ background:"rgba(255,255,255,0.1)", border:"none",
+              color:C.white, borderRadius:8, padding:"8px 10px",
+              fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, lineHeight:1 }}>
+              <span className="chat-header-back-text" />
+            </button>
+            <img src={ELI_IMG} className="libot-float"
+              style={{ height:38, width:"auto", flexShrink:0 }} />
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:900, color:C.white,
+                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {order.site}
+              </div>
+              <div style={{ marginTop:2 }}><HiStatusBadge status={order.status} /></div>
+            </div>
+            <button style={{ background:"rgba(255,255,255,0.1)", border:"none",
+              color:C.white, borderRadius:8, padding:"8px 12px",
+              fontSize:17, cursor:"pointer", fontFamily:"inherit", flexShrink:0,
+              letterSpacing:1, lineHeight:1 }}>
+              ···
+            </button>
+          </div>
+
+          {/* メッセージ一覧 */}
+          <div style={{ flex:1, overflowY:"auto", padding:"14px 12px", background:"#eef1f6" }}>
+            <div style={{ maxWidth:600, margin:"0 auto" }}>
+
+              {/* 受付番号ピル */}
+              <div style={{ textAlign:"center", marginBottom:18 }}>
+                <span style={{ background:"rgba(0,0,0,0.09)", color:"#666",
+                  fontSize:11, fontWeight:600, borderRadius:99, padding:"4px 14px" }}>
+                  受付番号：{order.id}
+                </span>
+              </div>
+
+              {messages.map((msg,i)=>{
+                const isOwn   = isAdminRole ? msg.from==="staff" : msg.from==="user";
+                const isEli   = msg.from==="eli";
+                const isStaff = msg.from==="staff";
+                const quoted  = msg.replyToId ? messages.find(m => m.id === msg.replyToId) : null;
+                const prevMsg = i > 0 ? messages[i-1] : null;
+                const showDate = msg.dateStr && msg.dateStr !== prevMsg?.dateStr;
+                const displayName = isStaff ? (msg.senderName || '担当者') : null;
+                const initials = displayName ? displayName.charAt(0) : '担';
+                return (
+                  <React.Fragment key={msg.id||i}>
+
+                    {/* 日付区切りピル */}
+                    {showDate && (
+                      <div style={{ textAlign:"center", margin:"14px 0 10px" }}>
+                        <span style={{ background:"rgba(0,0,0,0.09)", color:"#666",
+                          fontSize:11, fontWeight:600, borderRadius:99, padding:"4px 14px" }}>
+                          {msg.dateStr}
+                        </span>
+                      </div>
+                    )}
+
+                    <div style={{
+                      display:"flex", flexDirection:isOwn?"row-reverse":"row",
+                      alignItems:"flex-end", gap:8, marginBottom:14,
+                      animation:"msgIn 0.3s ease" }}>
+
+                      {/* アバター */}
+                      {!isOwn && (
+                        isEli
+                          ? <img src={ELI_IMG} className="libot-float"
+                              style={{ width:34, height:34, borderRadius:"50%",
+                                objectFit:"cover", flexShrink:0 }} />
+                          : <div style={{ width:34, height:34, background:"#2952c8",
+                              borderRadius:"50%", display:"flex", alignItems:"center",
+                              justifyContent:"center", fontSize:14, fontWeight:800,
+                              color:C.white, flexShrink:0 }}>
+                              {initials}
+                            </div>
+                      )}
+
+                      {/* メッセージ本体 */}
+                      <div style={{ maxWidth:"78%",
+                        WebkitUserSelect: touching ? "none" : "auto",
+                        userSelect:       touching ? "none" : "auto" }}
+                        onContextMenu={msg.from !== 'eli' ? e=>{ e.preventDefault();
+                          const vw = window.innerWidth, vh = window.innerHeight;
+                          const mx = Math.min(e.clientX, vw - 200);
+                          const my = Math.min(e.clientY, vh - 80);
+                          setMenuPos({ x:mx, y:my }); setActiveMenuId(msg.id); } : undefined}
+                        onTouchStart={msg.from !== 'eli' ? ()=>{ setTouching(true);
+                          touchTimer.current = setTimeout(()=>{
+                            const el = document.documentElement;
+                            setMenuPos({ x: el.clientWidth/2 - 80, y: el.clientHeight/2 - 30 });
+                            setActiveMenuId(msg.id);
+                          }, 500); } : undefined}
+                        onTouchEnd={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
+                        onTouchMove={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
+                      >
+                        {/* 送信者ラベル */}
+                        {isEli && (
+                          <div style={{ fontSize:10, color:"#9a8730", marginBottom:3,
+                            fontWeight:700, letterSpacing:0.3 }}>LiBot 自動通知</div>
+                        )}
+                        {!isOwn && isStaff && (
+                          <div style={{ fontSize:11, color:C.blue, marginBottom:3,
+                            fontWeight:700 }}>👷 {displayName}</div>
+                        )}
+                        {!isOwn && msg.from==="user" && isAdminRole && (
+                          <div style={{ fontSize:11, color:C.gray, marginBottom:3 }}>👤 お客様</div>
+                        )}
+
+                        {/* 引用 */}
+                        {quoted && (
+                          <div style={{ background:"rgba(0,0,0,0.06)",
+                            borderLeft:"3px solid "+C.gray,
+                            padding:"3px 8px", marginBottom:4, borderRadius:4,
+                            fontSize:11, color:C.gray, overflow:"hidden", maxHeight:34 }}>
+                            {quoted.text.slice(0,50)}{quoted.text.length>50?"…":""}
+                          </div>
+                        )}
+
+                        {/* バブル */}
+                        <div style={{
+                          background: isOwn ? "#0a1f5c"
+                            : isEli ? "#fffbea"
+                            : "#ffffff",
+                          color: isOwn ? C.white : C.navy,
+                          borderRadius: isOwn ? "18px 4px 18px 18px"
+                            : "4px 18px 18px 18px",
+                          padding:"11px 15px", fontSize:15, fontWeight:500,
+                          lineHeight:1.75,
+                          boxShadow: isOwn ? "0 2px 8px rgba(10,31,92,0.22)"
+                            : "0 1px 4px rgba(0,0,0,0.08)",
+                          border: isEli ? "1px solid #e8d97a"
+                            : !isOwn ? "1px solid #e2e8f0" : "none",
+                          whiteSpace:"pre-wrap",
+                        }}>
+                          {renderMentions(msg.text)}
+                        </div>
+
+                        {/* 時刻・既読 */}
+                        <div style={{ display:"flex", gap:4, alignItems:"center",
+                          marginTop:3, justifyContent:isOwn?"flex-end":"flex-start" }}>
+                          {isOwn && msg.read && (
+                            <span style={{ fontSize:10, color:"#7a8fb5", fontWeight:600 }}>✓ 既読</span>
+                          )}
+                          <span style={{ fontSize:10, color:"#9ca3af" }}>{msg.time}</span>
+                        </div>
+
+                        {/* リアクション */}
+                        {Object.keys(msg.reactions||{}).filter(e=>(msg.reactions[e]||[]).length>0).length>0 && (
+                          <div style={{ display:"flex", gap:4, flexWrap:"wrap",
+                            marginTop:4, justifyContent:isOwn?"flex-end":"flex-start" }}>
+                            {Object.entries(msg.reactions||{}).filter(([,arr])=>arr.length>0).map(([emoji,arr])=>(
+                              <button key={emoji} onClick={()=>handleReaction(msg.id, emoji)}
+                                style={{ background:"rgba(255,255,255,0.9)",
+                                  border:`1px solid ${C.grayL}`, borderRadius:99,
+                                  padding:"1px 7px", fontSize:13, cursor:"pointer",
+                                  display:"flex", alignItems:"center", gap:3,
+                                  boxShadow:"0 1px 4px rgba(0,0,0,0.08)" }}>
+                                {emoji}<span style={{ fontSize:11, color:C.navy, fontWeight:700 }}>{arr.length}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+
+          {/* 入力エリア */}
+          <div style={{ background:C.white, borderTop:"1px solid #e2e8f0",
+            padding:"10px 12px", flexShrink:0 }}>
+            <div style={{ maxWidth:600, margin:"0 auto" }}>
+              {replyTo && (
+                <div style={{ background:"#eef3ff", borderLeft:`3px solid ${C.blue}`,
+                  padding:"5px 10px", marginBottom:8, borderRadius:8,
+                  display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                  <div style={{ fontSize:12, color:C.navy, overflow:"hidden",
+                    textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
+                    ↩ {replyTo.text.slice(0,40)}{replyTo.text.length>40?"…":""}
+                  </div>
+                  <button onClick={()=>setReplyTo(null)}
+                    style={{ background:"none", border:"none", cursor:"pointer",
+                      color:C.gray, fontSize:14, flexShrink:0 }}>✕</button>
+                </div>
+              )}
+              <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
+                <button style={{ width:40, height:40, borderRadius:"50%",
+                  border:"1px solid #e2e8f0", background:C.white,
+                  color:"#9ca3af", fontSize:22, cursor:"pointer",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  flexShrink:0, fontWeight:300 }}>＋</button>
+                <textarea value={input} onChange={e=>setInput(e.target.value)}
+                  onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ return; } if(e.key==="Enter"&&e.shiftKey){ e.preventDefault(); handleSend(); } }}
+                  placeholder="メッセージを入力..." rows={1}
+                  style={{ flex:1, fontSize:15, padding:"10px 14px", borderRadius:22,
+                    border:"1px solid #e2e8f0", background:"#f6f8fc", fontFamily:"inherit",
+                    color:C.navy, resize:"none", lineHeight:1.5, maxHeight:100,
+                    overflowY:"auto", outline:"none" }}
+                  onInput={e=>{ e.target.style.height="auto"; e.target.style.height=Math.min(e.target.scrollHeight,100)+"px"; }}
+                />
+                <button onClick={handleSend} style={{
+                  width:42, height:42, borderRadius:"50%", border:"none",
+                  background:input.trim()?"#0a1f5c":"#e2e8f0",
+                  color:input.trim()?C.white:"#9ca3af", fontSize:17,
+                  cursor:input.trim()?"pointer":"default",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  flexShrink:0, transition:"all 0.15s" }}>✈</button>
+              </div>
+              <div style={{ textAlign:"center", marginTop:6, fontSize:11, color:"#b0b8c8" }}>
+                緊急の場合は 06-6392-3882 まで
+              </div>
+            </div>
+          </div>
+
+        </div>{/* /chat-main */}
+      </div>{/* /chat-layout */}
     </div>
   );
 }
@@ -4886,7 +4986,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
               fontSize:13, fontWeight:700, color:C.red, marginBottom:8,
               cursor:"pointer", boxShadow:"0 2px 12px rgba(230,57,70,0.2)",
               whiteSpace:"nowrap", pointerEvents:"auto" }}>
-            新しいメッセージがあるよ！🔔
+            新しいメッセージがあるよ！
           </div>
         )}
         <img src={ELI_IMG} alt="LiBot" className="libot-float"
