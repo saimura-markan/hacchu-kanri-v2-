@@ -2277,19 +2277,20 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
   const refSchedule0=useRef(null);
 
   const handleSiteSelect = site => {
+    console.log('[handleSiteSelect] site:', site);
     setAddress(site.address           || "");
     setAddrNum(site.address_num       || "");
     setAddrBldg(site.address_bldg     || "");
     setZipCode(site.zip_code          || "");
     setSiteContactName(site.site_contact_name  || "");
     setSiteContactPhone(site.site_contact_phone || "");
-    if (site.key_info || site.parking_info) {
-      setKeyInfo({
-        noKey:   site.key_info === "在宅",
-        key:     site.key_info === "在宅" ? "" : (site.key_info || ""),
-        parking: site.parking_info || "",
-      });
-    }
+    const nextKeyInfo = {
+      noKey:   site.key_info === "在宅",
+      key:     site.key_info === "在宅" ? "" : (site.key_info || ""),
+      parking: site.parking_info || "",
+    };
+    console.log('[handleSiteSelect] setKeyInfo:', nextKeyInfo);
+    setKeyInfo(nextKeyInfo);
     setAddrOk(true);
     setErrors([]);
   };
