@@ -2175,7 +2175,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
         <SoujiDetail details={sch.details||[]} detail={sch.serviceDetail}
           onChange={v=>onChange({...sch,serviceDetail:v})} />
       )}
-      {needsWorkers(serviceId) && !(serviceId==="souji" && (sch.details||[]).includes("ハウスクリーニング")) && (
+      {needsWorkers(serviceId) && !(serviceId==="souji" && (sch.details||[]).length > 0 && (sch.details||[]).every(d => d==="ハウスクリーニング")) && (
         <div style={{ marginTop:14, marginBottom:4 }}>
           <div style={{ fontSize:13, color:errWorkers?C.red:C.gray, marginBottom:8, fontWeight:600 }}>
             作業者数{errWorkers?" ⚠️ 必須":""}
@@ -2286,7 +2286,7 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     if (!schedules[0].date)          errs.push("日程1の日付を選択してください");
     if (!schedules[0].startTime)     errs.push("日程1の開始時間を選択してください");
     if (!schedules[0].endTime)       errs.push("日程1の終了時間を選択してください");
-    if (needsWorkers(serviceId)&&!schedules[0].workers&&!(serviceId==="souji"&&(schedules[0].details||[]).includes("ハウスクリーニング"))) errs.push("日程1の作業者数を選択してください");
+    if (needsWorkers(serviceId)&&!schedules[0].workers&&!(serviceId==="souji"&&(schedules[0].details||[]).length>0&&(schedules[0].details||[]).every(d=>d==="ハウスクリーニング"))) errs.push("日程1の作業者数を選択してください");
     if (serviceId==="kaitai") {
       if (!schedules[0].serviceDetail?.days)    errs.push("工事日数を選択してください");
       if (!schedules[0].serviceDetail?.offDays) errs.push("作業に入れない日を入力してください");
@@ -3496,7 +3496,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
   const [siteData, setSiteData] = useState({
     key_info:'', parking_info:'',
-    contact_name:'', contact_phone:'',
+    contact_name:  order.siteContactName  || '',
+    contact_phone: order.siteContactPhone || '',
     memo:'', entry_info:'', yosei_info:'',
   });
   const [imagePaths, setImagePaths] = useState({
@@ -3548,8 +3549,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         setSiteData({
           key_info:     data.key_info     || '',
           parking_info: data.parking_info || '',
-          contact_name: data.contact_name || '',
-          contact_phone:data.contact_phone|| '',
+          contact_name: data.contact_name  || order.siteContactName  || '',
+          contact_phone:data.contact_phone || order.siteContactPhone || '',
           memo:         data.memo         || '',
           entry_info:   data.entry_info   || '',
           yosei_info:   data.yosei_info   || '',
@@ -3939,11 +3940,23 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                   {sch.serviceDetail && (() => {
                     const sd = sch.serviceDetail;
                     const corner = sd.house_corner ? "角部屋" : "";
+                    const asbStr = (() => {
+                      const ad = sd.asbestosDetail;
+                      if (!ad || !(ad.types||[]).length) return null;
+                      const pts = (ad.types||[]).filter(t=>t!=="その他");
+                      if ((ad.types||[]).includes("その他") && ad.other) pts.push(ad.other);
+                      return pts.join("・") || null;
+                    })();
                     const rows = [
                       ['広さ',        sd.house_size],
                       ['家具の有無',  sd.house_furniture],
                       ['水回り設備',  sd.house_water],
-                      ['その他条件',  [corner, sd.house_vacancy].filter(Boolean).join('・')],
+                      ['その他条件',  [corner, sd.house_vacancy].filter(Boolean).join('・') || null],
+                      ['工事日数',    sd.days ? sd.days + "日" : null],
+                      ['入れない日',  sd.offDays],
+                      ['フロア面積',  sd.floorSize],
+                      ['アスベスト',  asbStr],
+                      ['廃材種別',    Array.isArray(sd.wasteTypes) && sd.wasteTypes.length ? sd.wasteTypes.join("・") : null],
                       ['図面',        sd.house_plan],
                     ];
                     return rows.map(([label,value]) => !value ? null : (
@@ -5292,6 +5305,8 @@ function mapOrder(row) {
     address:        row.address    || '',
     addressNum:     row.service_detail?.addrNum  || '',
     addressBldg:    row.service_detail?.addrBldg || '',
+    siteContactName:  row.site_contact_name  || '',
+    siteContactPhone: row.site_contact_phone || '',
     schedules,
     key:            row.key_info   || '',
     parking:        row.parking    || '',
