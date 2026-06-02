@@ -3566,6 +3566,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [addDate,       setAddDate]       = useState("");
   const [addStart,      setAddStart]      = useState("");
   const [addEnd,        setAddEnd]        = useState("");
+  const [addCategory,   setAddCategory]   = useState("");
   const [addDetails,    setAddDetails]    = useState("");
   const [addMemo,       setAddMemo]       = useState("");
   const [addSending,    setAddSending]    = useState(false);
@@ -3801,7 +3802,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       const { data: newOrder, error } = await sb.from('orders').insert({
         user_id:    user.id,
         company_id: activeCid || null,
-        service:    order.service || '',
+        service:    addCategory || order.service || '',
         site:       order.site    || '',
         address:    order.address || '',
         note:       addMemo       || '',
@@ -3824,7 +3825,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       setAddDone(true);
       setTimeout(() => {
         setShowAddForm(false); setAddDone(false);
-        setAddDate(""); setAddStart(""); setAddEnd(""); setAddDetails(""); setAddMemo("");
+        setAddCategory(""); setAddDate(""); setAddStart(""); setAddEnd(""); setAddDetails(""); setAddMemo("");
       }, 2000);
     } catch(e) {
       console.error('[handleAddRequest]', e);
@@ -3947,10 +3948,40 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             </div>
           ) : (
             <>
-              <div style={{ marginBottom:18 }}>
+              <div style={{ marginBottom:16 }}>
                 <div style={{ fontSize:17, fontWeight:800, color:C.navy, marginBottom:4 }}>＋ 作業日を追加依頼する</div>
                 <div style={{ fontSize:13, color:C.gray }}>追加したい作業日程を入力してください</div>
               </div>
+
+              {/* 作業区分選択 */}
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:8 }}>
+                  作業区分を選んでください <span style={{ color:C.red }}>*</span>
+                </div>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                  {["清掃","解体","産廃","養生","家具移動・荷上げ"].map(cat=>{
+                    const sel = addCategory===cat;
+                    return (
+                      <button key={cat} onClick={()=>setAddCategory(cat)}
+                        style={{ padding:"9px 16px", borderRadius:99, fontSize:14, fontWeight:700,
+                          border:"2px solid "+(sel?"#0a1f5c":C.grayL),
+                          background:sel?"#0a1f5c":C.white,
+                          color:sel?C.white:C.navy,
+                          cursor:"pointer", fontFamily:"inherit", transition:"all 0.15s" }}>
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                {addCategory&&(
+                  <div style={{ marginTop:10, background:"#eef3ff", borderRadius:8,
+                    padding:"7px 14px", fontSize:13, color:"#2952c8", fontWeight:700,
+                    display:"inline-block" }}>
+                    ✓ {addCategory}
+                  </div>
+                )}
+              </div>
+
               <div style={{ display:"flex", gap:10, marginBottom:14 }}>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>現場名</div>
@@ -4005,15 +4036,15 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                     border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
                     outline:"none", color:C.navy, boxSizing:"border-box", resize:"none" }} />
               </div>
-              <button onClick={handleAddRequest} disabled={!addDate||addSending}
+              <button onClick={handleAddRequest} disabled={!addDate||!addCategory||addSending}
                 style={{ display:"block", width:"100%",
-                  background:!addDate||addSending?"#ccc":"linear-gradient(135deg,#c89010,#d4a017)",
+                  background:!addDate||!addCategory||addSending?"#ccc":"#0a1f5c",
                   color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
-                  padding:"16px 0", cursor:!addDate||addSending?"default":"pointer",
+                  padding:"16px 0", cursor:!addDate||!addCategory||addSending?"default":"pointer",
                   fontFamily:"inherit", marginBottom:10 }}>
                 {addSending ? "送信中..." : "この内容で追加依頼する"}
               </button>
-              <button onClick={()=>{ setShowAddForm(false); setAddDate(""); setAddStart(""); setAddEnd(""); setAddDetails(""); setAddMemo(""); }}
+              <button onClick={()=>{ setShowAddForm(false); setAddCategory(""); setAddDate(""); setAddStart(""); setAddEnd(""); setAddDetails(""); setAddMemo(""); }}
                 style={{ display:"block", width:"100%", background:C.grayPale, color:C.navy,
                   border:"2px solid "+C.grayL, borderRadius:14, fontSize:15, fontWeight:700,
                   padding:"14px 0", cursor:"pointer", fontFamily:"inherit" }}>
@@ -4124,6 +4155,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             )}
 
             {/* ③ 作業日詳細 アコーディオン */}
+            <div style={{ background:"#f0f4ff", borderRadius:16, padding:"14px", marginBottom:14 }}>
             <div style={{ background:"#0a1f5c", borderRadius:14, padding:"12px 18px",
               marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
               <div style={{ background:"rgba(255,255,255,0.15)", borderRadius:8,
@@ -4221,19 +4253,21 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                 </div>
               );
             })}
+            </div>{/* /f0f4ff wrapper */}
 
             {/* ④ 追加依頼ボタン */}
             <button onClick={()=>setShowAddForm(true)}
               style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10,
-                width:"100%", background:"linear-gradient(135deg,#c89010,#d4a017)",
+                width:"100%", background:"#0a1f5c",
                 border:"none", borderRadius:14, padding:"15px 20px", cursor:"pointer",
                 fontFamily:"inherit", marginBottom:20,
-                boxShadow:"0 4px 14px rgba(212,160,23,0.35)" }}>
+                boxShadow:"0 4px 14px rgba(10,31,92,0.25)" }}>
               <span style={{ fontSize:20, color:C.white, fontWeight:300 }}>＋</span>
               <span style={{ fontSize:15, fontWeight:800, color:C.white }}>作業日を追加依頼する</span>
             </button>
 
             {/* ⑤ 案件情報セクション */}
+            <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px" }}>
             <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
               marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
               <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
@@ -4312,6 +4346,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                 <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
               </SiteInfoCard>
             )}
+            </div>{/* /fdf6ee wrapper */}
           </>
         )}
 
