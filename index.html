@@ -2082,7 +2082,7 @@ function YouseiDetail({ details, detail, onChange }) {
 }
 
 function needsWorkers(serviceId) {
-  return serviceId==="yousei"||serviceId==="kaitai";
+  return serviceId==="yousei"||serviceId==="kaitai"||serviceId==="souji";
 }
 
 // ── 日程カード ───────────────────────────────────────────
@@ -3924,7 +3924,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                 </div>
                 <div style={{ padding:"14px 18px" }}>
                   {[['日付',sch.date],['時間',sch.start+"〜"+sch.end],
-                    ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers]].map(([label,value])=>
+                    ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers||"—"]].map(([label,value])=>
                     !value ? null : (
                       <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
                         <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
@@ -3964,6 +3964,24 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         <SiteInfoCard icon="📍" label="住所">
           <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>{order.address || '—'}</div>
         </SiteInfoCard>
+
+        {order.key && viewOnly && (
+          <SiteInfoCard icon="🔑" label="鍵情報">
+            <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.key}</div>
+          </SiteInfoCard>
+        )}
+
+        {order.parking && viewOnly && (
+          <SiteInfoCard icon="🚗" label="駐車場">
+            <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.parking}</div>
+          </SiteInfoCard>
+        )}
+
+        {order.note && viewOnly && (
+          <SiteInfoCard icon="📝" label="備考">
+            <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.note}</div>
+          </SiteInfoCard>
+        )}
 
         {viewOnly && (siteData.key_info || imagePaths.key_images.length > 0 ||
           siteData.parking_info || imagePaths.parking_images.length > 0 ||
