@@ -2082,7 +2082,7 @@ function YouseiDetail({ details, detail, onChange }) {
 }
 
 function needsWorkers(serviceId) {
-  return serviceId==="yousei"||serviceId==="kaitai"||serviceId==="souji";
+  return serviceId==="yousei"||serviceId==="kaitai"||serviceId==="souji"||serviceId==="sanpai";
 }
 
 // ── 日程カード ───────────────────────────────────────────
@@ -2946,9 +2946,11 @@ function OrderApp({ onDone, onBack }) {
         service:        svc.label,
         site:           d.siteName  || '',
         address:        d.address   || '',
-        key_info:       d.keyInfo?.noKey ? '在宅' : (d.keyInfo?.key || ''),
-        parking:        d.keyInfo?.parking || '',
-        note:           d.note      || '',
+        key_info:            d.keyInfo?.noKey ? '在宅' : (d.keyInfo?.key || ''),
+        parking:             d.keyInfo?.parking || '',
+        note:                d.note      || '',
+        site_contact_name:   d.siteContactName  || '',
+        site_contact_phone:  d.siteContactPhone || '',
         service_detail: d,
       }).select('id').single();
       if (error) throw error;
@@ -3925,7 +3927,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                 </div>
                 <div style={{ padding:"14px 18px" }}>
                   {[['日付',sch.date],['時間',sch.start+"〜"+sch.end],
-                    ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers||"—"]].map(([label,value])=>
+                    ['作業内容',(sch.details||[]).join("・")],['作業者数',sch.workers]].map(([label,value])=>
                     !value ? null : (
                       <div key={label} style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
                         <div style={{ fontSize:13, color:C.gray, minWidth:80, flexShrink:0 }}>{label}</div>
@@ -3956,6 +3958,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                       ['入れない日',  sd.offDays],
                       ['フロア面積',  sd.floorSize],
                       ['アスベスト',  asbStr],
+                      ['廃材量',      sd.wasteSize],
                       ['廃材種別',    Array.isArray(sd.wasteTypes) && sd.wasteTypes.length ? sd.wasteTypes.join("・") : null],
                       ['図面',        sd.house_plan],
                     ];
@@ -5305,8 +5308,8 @@ function mapOrder(row) {
     address:        row.address    || '',
     addressNum:     row.service_detail?.addrNum  || '',
     addressBldg:    row.service_detail?.addrBldg || '',
-    siteContactName:  row.site_contact_name  || '',
-    siteContactPhone: row.site_contact_phone || '',
+    siteContactName:  row.site_contact_name  || row.service_detail?.siteContactName  || '',
+    siteContactPhone: row.site_contact_phone || row.service_detail?.siteContactPhone || '',
     schedules,
     key:            row.key_info   || '',
     parking:        row.parking    || '',
