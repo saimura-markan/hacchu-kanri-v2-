@@ -3785,7 +3785,15 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         yosei_images:   imagePaths.yosei_images,
       }, { onConflict: 'company_id,site_name' });
       if (error) { console.error('[handleSave upsert]', error.message); }
-      else { setSavedMsg(true); setTimeout(() => setSavedMsg(false), 2000); }
+      else {
+        setSavedMsg(true);
+        setSiteData({ key_info:'', parking_info:'',
+          contact_name: order.siteContactName||'',
+          contact_phone: order.siteContactPhone||'',
+          memo:'', entry_info:'', yosei_info:'' });
+        setImagePaths({ key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[] });
+        setTimeout(() => setSavedMsg(false), 2000);
+      }
     } finally {
       setManualSaving(false);
     }
@@ -4363,23 +4371,30 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
         {!viewOnly && (
           <>
-            {/* 現場名・住所（読み取り専用） */}
-            <div style={{ background:C.white, borderRadius:12, border:"1px solid "+C.grayL,
-              overflow:"hidden", marginBottom:14 }}>
-              <div style={{ display:"flex", gap:12, padding:"12px 16px",
-                borderBottom:"1px solid #f0f0f5", alignItems:"flex-start" }}>
-                <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>🏠</div>
-                <div>
-                  <div style={{ fontSize:11, color:C.gray, fontWeight:700, marginBottom:2 }}>現場名</div>
-                  <div style={{ fontSize:15, fontWeight:700, color:C.navy }}>{siteName||'—'}</div>
-                </div>
+            {/* 現場名・住所（読み取り専用）- 案件情報と同じゴールドデザイン */}
+            <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px", marginBottom:14 }}>
+              <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
+                marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+                  padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
+                <div style={{ fontSize:15, fontWeight:800, color:C.white }}>案件情報</div>
               </div>
-              <div style={{ display:"flex", gap:12, padding:"12px 16px", alignItems:"flex-start" }}>
-                <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📍</div>
-                <div>
-                  <div style={{ fontSize:11, color:C.gray, fontWeight:700, marginBottom:2 }}>住所</div>
-                  <div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>
-                    {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
+              <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
+                <div style={{ display:"flex", gap:12, padding:"12px 16px",
+                  borderBottom:"1px solid #f0ebe0", alignItems:"flex-start" }}>
+                  <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>🏠</div>
+                  <div>
+                    <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>現場名</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:C.navy }}>{siteName||'—'}</div>
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:12, padding:"12px 16px", alignItems:"flex-start" }}>
+                  <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📍</div>
+                  <div>
+                    <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>住所</div>
+                    <div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>
+                      {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
+                    </div>
                   </div>
                 </div>
               </div>
