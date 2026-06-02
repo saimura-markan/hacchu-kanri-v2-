@@ -3962,7 +3962,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         </SiteInfoCard>
 
         <SiteInfoCard icon="📍" label="住所">
-          <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>{order.address || '—'}</div>
+          <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>
+            {[order.address, order.addressNum, order.addressBldg].filter(Boolean).join(' ') || '—'}
+          </div>
         </SiteInfoCard>
 
         {order.key && viewOnly && (
@@ -3980,6 +3982,19 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         {order.note && viewOnly && (
           <SiteInfoCard icon="📝" label="備考">
             <div style={{ fontSize:14, color:C.navy, lineHeight:1.8, whiteSpace:"pre-wrap" }}>{order.note}</div>
+          </SiteInfoCard>
+        )}
+
+        {viewOnly && order.images && order.images.length > 0 && (
+          <SiteInfoCard icon="📷" label={`添付写真（${order.images.length}枚）`}>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:6 }}>
+              {order.images.map((path, i) => (
+                <SignedImage key={i} path={path}
+                  onClickUrl={url => window.open(url, '_blank')}
+                  style={{ width:90, height:90, objectFit:"cover", borderRadius:8,
+                    cursor:"pointer", border:"1px solid "+C.grayL }} />
+              ))}
+            </div>
           </SiteInfoCard>
         )}
 
@@ -5249,6 +5264,8 @@ function mapOrder(row) {
     status:         row.status     || '調整中',
     site:           row.site       || '',
     address:        row.address    || '',
+    addressNum:     row.service_detail?.addrNum  || '',
+    addressBldg:    row.service_detail?.addrBldg || '',
     schedules,
     key:            row.key_info   || '',
     parking:        row.parking    || '',
