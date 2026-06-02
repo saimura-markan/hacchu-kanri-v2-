@@ -4362,62 +4362,101 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
         {!viewOnly && (
           <>
-            <SiteInfoCard icon="🏠" label="現場名">
-              <div style={{ fontSize:16, fontWeight:800, color:C.navy }}>{siteName||'—'}</div>
-            </SiteInfoCard>
-            <SiteInfoCard icon="📍" label="住所">
-              <div style={{ fontSize:14, color:C.navy, lineHeight:1.8 }}>
-                {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
+            {/* 現場名・住所（読み取り専用） */}
+            <div style={{ background:C.white, borderRadius:12, border:"1px solid "+C.grayL,
+              overflow:"hidden", marginBottom:14 }}>
+              <div style={{ display:"flex", gap:12, padding:"12px 16px",
+                borderBottom:"1px solid #f0f0f5", alignItems:"flex-start" }}>
+                <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>🏠</div>
+                <div>
+                  <div style={{ fontSize:11, color:C.gray, fontWeight:700, marginBottom:2 }}>現場名</div>
+                  <div style={{ fontSize:15, fontWeight:700, color:C.navy }}>{siteName||'—'}</div>
+                </div>
               </div>
-            </SiteInfoCard>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:16,
-              borderTop:"2px solid "+C.grayL, paddingTop:16, marginTop:4 }}>
-              <div style={{ fontSize:16, fontWeight:900, color:C.navy }}>🏗️ 現場情報</div>
-              <div style={{ fontSize:12, color:C.gray }}>入力は自動保存されます</div>
+              <div style={{ display:"flex", gap:12, padding:"12px 16px", alignItems:"flex-start" }}>
+                <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📍</div>
+                <div>
+                  <div style={{ fontSize:11, color:C.gray, fontWeight:700, marginBottom:2 }}>住所</div>
+                  <div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>
+                    {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <SiteInfoCard icon="🔑" label="鍵の情報">
-              <SiteTArea value={siteData.key_info} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
-              <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
-              <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} />
-            </SiteInfoCard>
+            {/* 現場情報セクションヘッダー */}
+            <div style={{ background:"#1a6fb5", borderRadius:14, padding:"12px 18px",
+              marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+              <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+                padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏗️</div>
+              <div style={{ fontSize:15, fontWeight:800, color:C.white, flex:1 }}>現場情報</div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", fontWeight:600 }}>自動保存</div>
+            </div>
 
-            <SiteInfoCard icon="🚗" label="駐車場情報">
-              <SiteTArea value={siteData.parking_info} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
-              <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
-              <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} />
-            </SiteInfoCard>
-
-            <SiteInfoCard icon="👤" label="担当者様">
-              <input value={siteData.contact_name} onChange={e=>handleText('contact_name',e.target.value)}
-                placeholder="担当者名"
-                style={{ width:"100%", padding:"10px 12px", borderRadius:10,
-                  border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
-                  outline:"none", color:C.navy, boxSizing:"border-box", marginBottom:10 }} />
-              <input value={siteData.contact_phone} onChange={e=>handleText('contact_phone',e.target.value)}
-                placeholder="電話番号" type="tel"
-                style={{ width:"100%", padding:"10px 12px", borderRadius:10,
-                  border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
-                  outline:"none", color:C.navy, boxSizing:"border-box" }} />
-            </SiteInfoCard>
-
-            <SiteInfoCard icon="⚠️" label="現場注意事項">
-              <SiteTArea value={siteData.memo} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
-              <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
-              <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} />
-            </SiteInfoCard>
-
-            <SiteInfoCard icon="🚪" label="入館情報">
-              <SiteTArea value={siteData.entry_info} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
-              <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
-              <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} />
-            </SiteInfoCard>
-
-            <SiteInfoCard icon="📦" label="養生範囲">
-              <SiteTArea value={siteData.yosei_info} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
-              <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
-              <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} />
-            </SiteInfoCard>
+            {/* 入力フォーム（繋がったリスト形式） */}
+            <div style={{ background:"#f0f4ff", borderRadius:16, padding:"14px", marginBottom:14 }}>
+              {(()=>{
+                const inp = (value, onChange, placeholder, type="text", extra={}) => (
+                  <input value={value} onChange={onChange} placeholder={placeholder} type={type}
+                    style={{ width:"100%", padding:"10px 12px", borderRadius:10,
+                      border:"1px solid #d0d8ef", fontSize:14, fontFamily:"inherit",
+                      outline:"none", color:C.navy, background:C.white,
+                      boxSizing:"border-box", ...extra }} />
+                );
+                const rows = [
+                  { icon:"🔑", label:"鍵の情報",
+                    content: <>
+                      <SiteTArea value={siteData.key_info} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
+                      <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
+                      <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} />
+                    </> },
+                  { icon:"🚗", label:"駐車場情報",
+                    content: <>
+                      <SiteTArea value={siteData.parking_info} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
+                      <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
+                      <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} />
+                    </> },
+                  { icon:"👤", label:"担当者様",
+                    content: <>
+                      {inp(siteData.contact_name, e=>handleText('contact_name',e.target.value), "担当者名", "text", {marginBottom:8})}
+                      {inp(siteData.contact_phone, e=>handleText('contact_phone',e.target.value), "電話番号", "tel")}
+                    </> },
+                  { icon:"⚠️", label:"現場注意事項",
+                    content: <>
+                      <SiteTArea value={siteData.memo} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
+                      <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
+                      <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} />
+                    </> },
+                  { icon:"🚪", label:"入館情報",
+                    content: <>
+                      <SiteTArea value={siteData.entry_info} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
+                      <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
+                      <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} />
+                    </> },
+                  { icon:"📦", label:"養生範囲",
+                    content: <>
+                      <SiteTArea value={siteData.yosei_info} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
+                      <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
+                      <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} />
+                    </> },
+                ];
+                return (
+                  <div style={{ background:C.white, borderRadius:12,
+                    border:"1px solid #d0d8ef", overflow:"hidden" }}>
+                    {rows.map(({icon,label,content},i)=>(
+                      <div key={label} style={{ padding:"14px 16px",
+                        borderBottom: i<rows.length-1?"1px solid #edf0f8":"none" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                          <span style={{ fontSize:16 }}>{icon}</span>
+                          <span style={{ fontSize:12, color:"#5a7aaa", fontWeight:700 }}>{label}</span>
+                        </div>
+                        {content}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
 
             <button onClick={handleSave} disabled={manualSaving}
               style={{ display:"block", width:"100%",
