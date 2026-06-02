@@ -2579,6 +2579,8 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
           <ConfRow label="作業区分" value={svc.icon+" "+svc.label} />
           <ConfRow label="現場名"   value={formData.siteName} />
           <ConfRow label="住所"     value={formData.address} />
+          <ConfRow label="番地"     value={formData.addrNum} />
+          <ConfRow label="建物名"   value={formData.addrBldg} />
           <ConfRow label="担当者"   value={personName || "…"} />
         </div>
       </Card>
@@ -2593,16 +2595,38 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
               <>
                 <ConfRow label="工事日数"   value={sch.serviceDetail.days?sch.serviceDetail.days+"日":""} />
                 <ConfRow label="入れない日" value={sch.serviceDetail.offDays} />
+                <ConfRow label="図面"       value={sch.serviceDetail.house_plan} />
               </>
             )}
             {serviceId==="sanpai"&&sch.serviceDetail&&(
-              <ConfRow label="補助作業員" value={sch.serviceDetail.haizaiHelper} />
+              <>
+                <ConfRow label="廃材量"     value={sch.serviceDetail.wasteSize} />
+                <ConfRow label="廃材種別"   value={Array.isArray(sch.serviceDetail.wasteTypes)&&sch.serviceDetail.wasteTypes.length?sch.serviceDetail.wasteTypes.join("・"):""} />
+                <ConfRow label="補助作業員" value={sch.serviceDetail.haizaiHelper} />
+                <ConfRow label="バッカン"   value={sch.serviceDetail.baccanType} />
+              </>
+            )}
+            {serviceId==="yousei"&&sch.serviceDetail&&(
+              <>
+                <ConfRow label="養生の場所"     value={sch.serviceDetail.location} />
+                <ConfRow label="リフォーム内容" value={sch.serviceDetail.reform} />
+                <ConfRow label="家具移動重量物" value={sch.serviceDetail.heavy} />
+                <ConfRow label="荷上げ内容"     value={sch.serviceDetail.niage} />
+                <ConfRow label="図面"           value={sch.serviceDetail.house_plan} />
+              </>
             )}
             {sch.workers&&<ConfRow label="作業者数" value={sch.workers} />}
             <ConfRow label="メモ" value={sch.memo} />
           </div>
         </Card>
       ))}
+      {formData.note && (
+        <Card>
+          <div style={{ padding:"14px 18px" }}>
+            <ConfRow label="全体へのご要望" value={formData.note} />
+          </div>
+        </Card>
+      )}
       <OrSubBtn onClick={onEdit}>✏️ この作業の内容を修正する</OrSubBtn>
 
       <Card>
