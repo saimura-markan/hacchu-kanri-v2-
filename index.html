@@ -3547,7 +3547,8 @@ function BottomSheet({ children }) {
     <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.55)",
       display:"flex", alignItems:"flex-end", justifyContent:"center", zIndex:1000 }}>
       <div style={{ background:C.white, borderRadius:"24px 24px 0 0",
-        padding:"28px 24px 48px", width:"100%", maxWidth:480, animation:"msgIn 0.25s ease" }}>
+        padding:"28px 24px 48px", width:"100%", maxWidth:480, animation:"msgIn 0.25s ease",
+        maxHeight:"90vh", overflowY:"auto" }}>
         {children}
       </div>
     </div>
