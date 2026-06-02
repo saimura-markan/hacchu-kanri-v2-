@@ -3572,6 +3572,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [addMemo,       setAddMemo]       = useState("");
   const [addSending,    setAddSending]    = useState(false);
   const [addDone,       setAddDone]       = useState(false);
+  const [addStep,       setAddStep]       = useState(null); // null | "service" | "form"
+  const [addServiceId,  setAddServiceId]  = useState("");
 
   const [siteData, setSiteData] = useState({
     key_info:'', parking_info:'',
@@ -3835,6 +3837,56 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     }
   };
 
+  const handleAddFormSubmit = async (formData) => {
+    setAddSending(true);
+    try {
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) { setAddSending(false); return; }
+      let activeCid = cid;
+      if (!activeCid) {
+        const { data: prof } = await sb.from('profiles').select('company_id').eq('id', user.id).maybeSingle();
+        if (prof?.company_id) activeCid = prof.company_id;
+      }
+      const svc = SERVICES.find(s => s.id === addServiceId);
+      const { data: newOrder, error } = await sb.from('orders').insert({
+        user_id:    user.id,
+        company_id: activeCid || null,
+        service:    svc?.label || addServiceId || '',
+        site:       order.site    || '',
+        address:    order.address || '',
+        note:       formData.note || '',
+        status:     '調整中',
+      }).select('id').single();
+      if (error) throw error;
+      if (formData.schedules?.length) {
+        await sb.from('schedules').insert(
+          formData.schedules.map((sch, i) => ({
+            order_id:   newOrder.id,
+            work_date:  sch.date       || null,
+            start_time: sch.startTime  || '',
+            end_time:   sch.endTime    || '',
+            workers:    sch.workers    || '',
+            details:    sch.details    || [],
+            sort_order: i,
+          }))
+        );
+      }
+      await sb.from('messages').insert({
+        order_id:  newOrder.id,
+        from_role: 'eli',
+        text:      `追加日程依頼を受け付けました！\n元の受付番号：${order.id}\n24時間以内に担当者よりご連絡いたします。`,
+      });
+      setAddDone(true);
+      setTimeout(() => {
+        setAddStep(null); setAddDone(false); setAddServiceId("");
+      }, 2500);
+    } catch(e) {
+      console.error('[handleAddFormSubmit]', e);
+    } finally {
+      setAddSending(false);
+    }
+  };
+
   const nowStr = () => {
     const t = new Date();
     return `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
@@ -3939,115 +3991,64 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         </BottomSheet>
       )}
 
-      {showAddForm && (
-        <BottomSheet>
-          {addDone ? (
-            <div style={{ textAlign:"center", padding:"24px 0" }}>
-              <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
-              <div style={{ fontSize:17, fontWeight:800, color:C.navy }}>追加依頼を受け付けました！</div>
-              <div style={{ fontSize:13, color:C.gray, marginTop:8 }}>24時間以内に担当者よりご連絡いたします</div>
+      {addStep && (
+        <div style={{ position:"fixed", inset:0, background:C.bg, zIndex:500, overflowY:"auto",
+          fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
+          <style>{HI_CSS}</style>
+          {/* ヘッダー */}
+          <div style={{ background:"#0a1f5c", padding:"12px 16px",
+            display:"flex", alignItems:"center", gap:10,
+            position:"sticky", top:0, zIndex:10 }}>
+            <button onClick={()=>{ if(addStep==="form") setAddStep("service"); else { setAddStep(null); setAddServiceId(""); } }}
+              style={{ background:"rgba(255,255,255,0.12)", border:"none", color:C.white,
+                borderRadius:8, padding:"8px 12px", fontSize:16, fontWeight:700,
+                cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>←</button>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:14, fontWeight:900, color:C.white,
+                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                作業日を追加依頼する
+              </div>
+              <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginTop:1 }}>
+                {order.site}　{order.id}
+              </div>
             </div>
+            <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+              {["service","form"].map((s,i)=>(
+                <div key={s} style={{ width:8, height:8, borderRadius:"50%",
+                  background:addStep===s?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.3)" }} />
+              ))}
+            </div>
+          </div>
+
+          {addDone ? (
+            <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
+              justifyContent:"center", minHeight:"60vh", padding:24 }}>
+              <div style={{ fontSize:64, marginBottom:16 }}>✅</div>
+              <div style={{ fontSize:20, fontWeight:800, color:C.navy, marginBottom:8 }}>追加依頼を受け付けました！</div>
+              <div style={{ fontSize:14, color:C.gray }}>24時間以内に担当者よりご連絡いたします</div>
+            </div>
+          ) : addStep === "service" ? (
+            <StepService
+              onSelect={(id) => { if (id) { setAddServiceId(id); setAddStep("form"); } }}
+              doneServices={[]}
+              onBack={() => { setAddStep(null); setAddServiceId(""); }} />
           ) : (
-            <>
-              <div style={{ marginBottom:16 }}>
-                <div style={{ fontSize:17, fontWeight:800, color:C.navy, marginBottom:4 }}>＋ 作業日を追加依頼する</div>
-                <div style={{ fontSize:13, color:C.gray }}>追加したい作業日程を入力してください</div>
-              </div>
-
-              {/* 作業区分選択 */}
-              <div style={{ marginBottom:16 }}>
-                <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:10 }}>
-                  作業区分を選んでください <span style={{ color:C.red }}>*</span>
-                </div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {["清掃","解体","産廃","養生","家具移動・荷上げ"].map(cat=>{
-                    const sel = addCategory===cat;
-                    return (
-                      <button key={cat} onClick={()=>setAddCategory(cat)}
-                        style={{ height:60, borderRadius:12, fontSize:18, fontWeight:800,
-                          border:"2px solid "+(sel?"#0a1f5c":"#d0d5dd"),
-                          background:sel?"#0a1f5c":C.white,
-                          color:sel?C.white:"#444",
-                          cursor:"pointer", fontFamily:"inherit",
-                          transition:"all 0.15s", textAlign:"center" }}>
-                        {cat}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ display:"flex", gap:10, marginBottom:14 }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>現場名</div>
-                  <input readOnly value={order.site||""} style={{ width:"100%", padding:"10px 12px", borderRadius:10,
-                    border:"2px solid "+C.grayL, fontSize:13, background:"#f4f4f6", color:"#aaa",
-                    fontFamily:"inherit", outline:"none", boxSizing:"border-box" }} />
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>受付番号</div>
-                  <input readOnly value={order.id||""} style={{ width:"100%", padding:"10px 12px", borderRadius:10,
-                    border:"2px solid "+C.grayL, fontSize:13, background:"#f4f4f6", color:"#aaa",
-                    fontFamily:"inherit", outline:"none", boxSizing:"border-box" }} />
-                </div>
-              </div>
-              <div style={{ marginBottom:14 }}>
-                <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>追加日程 <span style={{ color:C.red }}>*</span></div>
-                <input type="date" value={addDate} min={new Date().toISOString().split("T")[0]}
-                  onChange={e=>setAddDate(e.target.value)}
-                  style={{ width:"100%", padding:"11px 14px", borderRadius:10,
-                    border:"2px solid "+(addDate?C.grayL:C.grayL), fontSize:15,
-                    fontFamily:"inherit", outline:"none", color:C.navy, boxSizing:"border-box" }} />
-              </div>
-              <div style={{ display:"flex", gap:10, marginBottom:14 }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>開始時間</div>
-                  <input type="time" value={addStart} onChange={e=>setAddStart(e.target.value)}
-                    style={{ width:"100%", padding:"11px 14px", borderRadius:10,
-                      border:"2px solid "+C.grayL, fontSize:15, fontFamily:"inherit",
-                      outline:"none", color:C.navy, boxSizing:"border-box" }} />
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>終了時間</div>
-                  <input type="time" value={addEnd} onChange={e=>setAddEnd(e.target.value)}
-                    style={{ width:"100%", padding:"11px 14px", borderRadius:10,
-                      border:"2px solid "+C.grayL, fontSize:15, fontFamily:"inherit",
-                      outline:"none", color:C.navy, boxSizing:"border-box" }} />
-                </div>
-              </div>
-              <div style={{ marginBottom:14 }}>
-                <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>作業内容</div>
-                <input value={addDetails} onChange={e=>setAddDetails(e.target.value)}
-                  placeholder="例：養生・ハウスクリーニングなど"
-                  style={{ width:"100%", padding:"11px 14px", borderRadius:10,
-                    border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
-                    outline:"none", color:C.navy, boxSizing:"border-box" }} />
-              </div>
-              <div style={{ marginBottom:20 }}>
-                <div style={{ fontSize:12, color:C.gray, fontWeight:700, marginBottom:4 }}>メモ</div>
-                <textarea value={addMemo} onChange={e=>setAddMemo(e.target.value)}
-                  placeholder="連絡事項・特記事項があれば入力..." rows={2}
-                  style={{ width:"100%", padding:"11px 14px", borderRadius:10,
-                    border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
-                    outline:"none", color:C.navy, boxSizing:"border-box", resize:"none" }} />
-              </div>
-              <button onClick={handleAddRequest} disabled={!addDate||!addCategory||addSending}
-                style={{ display:"block", width:"100%",
-                  background:!addDate||!addCategory||addSending?"#ccc":"#0a1f5c",
-                  color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
-                  padding:"16px 0", cursor:!addDate||!addCategory||addSending?"default":"pointer",
-                  fontFamily:"inherit", marginBottom:10 }}>
-                {addSending ? "送信中..." : "この内容で追加依頼する"}
-              </button>
-              <button onClick={()=>{ setShowAddForm(false); setAddCategory(""); setAddDate(""); setAddStart(""); setAddEnd(""); setAddDetails(""); setAddMemo(""); }}
-                style={{ display:"block", width:"100%", background:C.grayPale, color:C.navy,
-                  border:"2px solid "+C.grayL, borderRadius:14, fontSize:15, fontWeight:700,
-                  padding:"14px 0", cursor:"pointer", fontFamily:"inherit" }}>
-                キャンセル
-              </button>
-            </>
+            <StepForm
+              serviceId={addServiceId}
+              savedData={{ siteName:order.site, address:order.address,
+                addrNum:order.addressNum||"", addrBldg:order.addressBldg||"",
+                addrOk:true, zipCode:"",
+                keyInfo:{noKey:false,key:order.key||"",parking:order.parking||""} }}
+              onSubmit={handleAddFormSubmit}
+              onBack={() => setAddStep("service")}
+              isAdditional={true}
+              firstSiteData={{ siteName:order.site, address:order.address, addrOk:true,
+                keyInfo:{noKey:false,key:order.key||"",parking:order.parking||""} }}
+              personName=""
+              personNameLoading={false}
+              sitesCache={[]} />
           )}
-        </BottomSheet>
+        </div>
       )}
 
       <div style={{ background:C.white, borderBottom:"2px solid "+C.grayL,
@@ -4251,7 +4252,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             </div>{/* /f0f4ff wrapper */}
 
             {/* ④ 追加依頼ボタン */}
-            <button onClick={()=>setShowAddForm(true)}
+            <button onClick={()=>setAddStep("service")}
               style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10,
                 width:"100%", background:"#0a1f5c",
                 border:"none", borderRadius:14, padding:"15px 20px", cursor:"pointer",
