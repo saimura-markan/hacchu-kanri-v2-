@@ -4008,8 +4008,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       else {
         setSavedMsg(true);
         setSiteData({ key_info:'', parking_info:'',
-          contact_name: order.siteContactName||'',
-          contact_phone: order.siteContactPhone||'',
+          contact_name: '', contact_phone: '',
           memo:'', entry_info:'', yosei_info:'' });
         setImagePaths({ key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[] });
         setTimeout(() => setSavedMsg(false), 2000);
