@@ -3273,10 +3273,11 @@ function EliMessage({ orders, totalUnread=0 }) {
         {msgs.map((msg,i)=>(
           <div key={i} style={{
             borderRadius:10,
-            padding:"9px 12px", fontSize:14, color:C.navy, fontWeight:500,
+            padding:"9px 12px", fontSize:14, color:C.navy, fontWeight:700,
             lineHeight:1.7, whiteSpace:"pre-wrap",
-            background:"#f8f9fc",
+            background:"#eef3ff",
             borderLeft:`3px solid ${msg.accent}`,
+            boxShadow:"0 2px 8px rgba(10,31,92,0.10)",
             marginBottom:i<msgs.length-1?6:0,
           }}>
             {msg.text}
