@@ -3809,6 +3809,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [manualSaving,   setManualSaving]   = useState(false);
   const [savedMsg,       setSavedMsg]       = useState(false);
   const [uploadingField, setUploadingField] = useState(null);
+  const [relatedOrders,   setRelatedOrders]   = useState([]);
+  const [expandedRelated, setExpandedRelated] = useState({});
   const saveTimer   = useRef(null);
   const blobUrlsRef = useRef({});
 
@@ -3872,6 +3874,34 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   };
 
   useEffect(() => { fetchSiteData(cid); }, [cid, siteName]);
+
+  useEffect(() => {
+    if (!viewOnly || !cid || !siteName) return;
+    sb.from('orders')
+      .select('id,service,status,schedules(work_date,start_time,end_time,workers,details,sort_order)')
+      .eq('company_id', cid)
+      .eq('site', siteName)
+      .neq('id', order.id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error('[relatedOrders]', error.message); return; }
+        if (data) setRelatedOrders(data.map(r => ({
+          id: r.id,
+          service: r.service || '',
+          status:  r.status  || '',
+          schedules: (r.schedules || [])
+            .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
+            .map(s => ({
+              date:    s.work_date   || '',
+              start:   s.start_time  || '',
+              end:     s.end_time    || '',
+              workers: s.workers     || '',
+              details: Array.isArray(s.details) ? s.details : [],
+            })),
+        })));
+      });
+  }, [cid, siteName, viewOnly]);
 
   const handleText = (field, value) => {
     const next = { ...siteData, [field]: value };
@@ -4494,6 +4524,87 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               order={order} siteName={siteName}
               siteData={siteData} imagePaths={imagePaths} blobUrls={blobUrls}
               uploadingField={null} handleText={null} handleUpload={null} />
+
+            {/* ⑥ 関連する作業日程 */}
+            {relatedOrders.length > 0 && (
+              <div style={{ background:"#f0f4ff", borderRadius:16, padding:"14px", marginTop:14 }}>
+                <div style={{ background:"#2952c8", borderRadius:14, padding:"12px 18px",
+                  marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+                    padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>📋</div>
+                  <div style={{ fontSize:15, fontWeight:800, color:C.white }}>関連する作業日程</div>
+                  <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", marginLeft:"auto" }}>
+                    {relatedOrders.length}件
+                  </div>
+                </div>
+                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                  {relatedOrders.map(rel => {
+                    const isExp = !!expandedRelated[rel.id];
+                    const sch0  = rel.schedules[0];
+                    return (
+                      <div key={rel.id} style={{ background:C.white, borderRadius:12,
+                        border:"1px solid #d0d8ef", overflow:"hidden" }}>
+                        <button
+                          onClick={()=>setExpandedRelated(prev=>({...prev,[rel.id]:!prev[rel.id]}))}
+                          style={{ width:"100%", background:"transparent", border:"none",
+                            padding:"12px 14px", display:"flex", alignItems:"center",
+                            justifyContent:"space-between", cursor:"pointer",
+                            fontFamily:"inherit", gap:8 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:8,
+                            minWidth:0, flex:1 }}>
+                            <HiStatusBadge status={rel.status} />
+                            <div style={{ fontSize:13, fontWeight:700, color:C.navy,
+                              overflow:"hidden", textOverflow:"ellipsis",
+                              whiteSpace:"nowrap", flex:1 }}>
+                              {rel.service}
+                            </div>
+                            {sch0?.date&&(
+                              <div style={{ fontSize:12, color:C.gray, flexShrink:0 }}>
+                                {sch0.date}
+                              </div>
+                            )}
+                          </div>
+                          <span style={{ fontSize:12, color:C.gray, flexShrink:0 }}>
+                            {isExp?"▲":"▼"}
+                          </span>
+                        </button>
+                        {isExp&&(
+                          <div style={{ padding:"4px 14px 12px",
+                            borderTop:"1px solid "+C.grayL }}>
+                            <div style={{ fontSize:11, color:C.gray, marginBottom:6 }}>
+                              受付番号: {rel.id}
+                            </div>
+                            {rel.schedules.map((s,si)=>(
+                              <div key={si} style={{ marginBottom:si<rel.schedules.length-1?10:0 }}>
+                                {rel.schedules.length>1&&(
+                                  <div style={{ fontSize:11, fontWeight:800, color:C.navy,
+                                    marginBottom:4 }}>日程 {si+1}</div>
+                                )}
+                                {[['日付',s.date],
+                                  ['時間',s.start&&s.end?fmtTime(s.start)+"〜"+fmtTime(s.end):""],
+                                  ['作業内容',(s.details||[]).join("・")],
+                                  ['作業者数',s.workers]]
+                                  .filter(([,v])=>v)
+                                  .map(([label,value])=>(
+                                    <div key={label} style={{ display:"flex", gap:10,
+                                      padding:"5px 0", borderBottom:"1px solid #f0f0f5" }}>
+                                      <div style={{ fontSize:12, color:C.gray,
+                                        minWidth:72, flexShrink:0 }}>{label}</div>
+                                      <div style={{ fontSize:13, fontWeight:600,
+                                        color:C.navy }}>{value}</div>
+                                    </div>
+                                  ))
+                                }
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
 
