@@ -4692,7 +4692,7 @@ function ChatScreen({ role, order, onBack }) {
         .chat-layout{display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
         .chat-sidebar{display:none}
         .chat-main{display:flex;flex-direction:column;flex:1;min-height:0}
-        @media(min-width:769px){
+        @media(min-width:1025px){
           .chat-layout{flex-direction:row}
           .chat-sidebar{display:flex;flex-direction:column;width:260px;flex-shrink:0;
             background:#0a1f5c;overflow-y:auto;border-right:1px solid rgba(255,255,255,0.1)}
@@ -4700,7 +4700,7 @@ function ChatScreen({ role, order, onBack }) {
           .chat-header-back-text::before{content:"← もどる"}
           .chat-header-back-text{font-size:14px}
         }
-        @media(max-width:768px){
+        @media(max-width:1024px){
           .chat-header-back-text::before{content:"← もどる"}
           .chat-header-back-text{font-size:14px}
           .chat-header-eli-img{display:none}
