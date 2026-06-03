@@ -3022,10 +3022,14 @@ function OrderApp({ onDone, onBack }) {
           ...(keyVal     ? { key_info:     keyVal     } : {}),
           ...(parkingVal ? { parking_info: parkingVal } : {}),
         };
-        const { data: siteData, error: upsertError } = await sb.from('sites')
-          .upsert(siteRow, { onConflict: ['company_id', 'site_name'] })
-          .select('id').single();
+        // upsert と select を分離: single()がUPDATEパスで0行エラーを返す場合があるため
+        const { error: upsertError } = await sb.from('sites')
+          .upsert(siteRow, { onConflict: ['company_id', 'site_name'] });
         if (upsertError) throw upsertError;
+        // site_id の取得は案件作成のみに使用。取得失敗しても処理は継続
+        const { data: siteData } = await sb.from('sites')
+          .select('id').eq('company_id', companyId).eq('site_name', d.siteName)
+          .maybeSingle();
         siteId = siteData?.id || null;
         // ローカルキャッシュも更新
         setSitesCache(prev => {
@@ -3102,11 +3106,13 @@ function OrderApp({ onDone, onBack }) {
           throw new Error(`画像情報の保存に失敗しました: ${dbErr.message}`);
         }
       }
-      await sb.from('messages').insert({
+      const { error: msgError } = await sb.from('messages').insert({
         order_id:  newOrder.id,
         from_role: 'eli',
         text:      '受け付けました！\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。',
+        is_read:   false,
       });
+      if (msgError) console.error('[LiBot自動メッセージ失敗]', msgError.message);
       ids.push(newOrder.id);
     }
     return ids;
