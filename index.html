@@ -3003,6 +3003,55 @@ function OrderApp({ onDone, onBack }) {
       if (profileCreateErr) console.error('[profiles 自動作成]', profileCreateErr.message);
     }
 
+    // ① 現場情報を sites テーブルに upsert → site_id を取得（案件作成に使う）
+    let siteId = null;
+    if (ordersList[0] && companyId) {
+      const d = ordersList[0].data;
+      if (d.siteName) {
+        const keyVal     = d.keyInfo?.noKey ? '在宅' : (d.keyInfo?.key || '');
+        const parkingVal = d.keyInfo?.parking || '';
+        const siteRow = {
+          company_id:          companyId,
+          site_name:           d.siteName,
+          address:             d.address           || '',
+          address_num:         d.addrNum           || '',
+          address_bldg:        d.addrBldg          || '',
+          zip_code:            d.zipCode           || '',
+          site_contact_name:   d.siteContactName   || '',
+          site_contact_phone:  d.siteContactPhone  || '',
+          ...(keyVal     ? { key_info:     keyVal     } : {}),
+          ...(parkingVal ? { parking_info: parkingVal } : {}),
+        };
+        const { data: siteData, error: upsertError } = await sb.from('sites')
+          .upsert(siteRow, { onConflict: ['company_id', 'site_name'] })
+          .select('id').single();
+        if (upsertError) throw upsertError;
+        siteId = siteData?.id || null;
+        // ローカルキャッシュも更新
+        setSitesCache(prev => {
+          const patch = { address:d.address, address_num:d.addrNum, address_bldg:d.addrBldg, zip_code:d.zipCode,
+            site_contact_name:d.siteContactName||'', site_contact_phone:d.siteContactPhone||'',
+            ...(keyVal     ? { key_info:     keyVal     } : {}),
+            ...(parkingVal ? { parking_info: parkingVal } : {}),
+          };
+          const exists = prev.some(s => s.site_name === d.siteName);
+          if (exists) return prev.map(s => s.site_name === d.siteName ? {...s, ...patch} : s);
+          return [...prev, {site_name:d.siteName, ...patch}];
+        });
+      }
+    }
+
+    // ② cases テーブルに案件を作成（同一送信の複数作業区分は1つの案件に紐づく）
+    const caseName = ordersList[0]?.data?.siteName || '';
+    const { data: newCase, error: caseError } = await sb.from('cases').insert({
+      company_id: companyId || null,
+      site_id:    siteId,
+      case_name:  caseName,
+    }).select('id').single();
+    if (caseError) throw caseError;
+    const caseId = newCase.id;
+
+    // ③ orders テーブルに作業を登録（case_id で案件に紐づける）
     const ids = [];
     for (const order of ordersList) {
       const svc = SERVICES.find(s => s.id === order.serviceId);
@@ -3010,6 +3059,7 @@ function OrderApp({ onDone, onBack }) {
       const { data: newOrder, error } = await sb.from('orders').insert({
         user_id:        currentUserId,
         company_id:     companyId        || null,
+        case_id:        caseId,
         person_kana:    personNameKana   || '',
         service:        svc.label,
         site:           d.siteName  || '',
@@ -3058,39 +3108,6 @@ function OrderApp({ onDone, onBack }) {
         text:      '受け付けました！\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。',
       });
       ids.push(newOrder.id);
-    }
-    // 現場情報を sites テーブルに upsert（同企業・同現場名なら更新）
-    if (ordersList[0] && companyId) {
-      const d = ordersList[0].data;
-      if (d.siteName) {
-        const keyVal     = d.keyInfo?.noKey ? '在宅' : (d.keyInfo?.key || '');
-        const parkingVal = d.keyInfo?.parking || '';
-        const siteRow = {
-          company_id:          companyId,
-          site_name:           d.siteName,
-          address:             d.address           || '',
-          address_num:         d.addrNum           || '',
-          address_bldg:        d.addrBldg          || '',
-          zip_code:            d.zipCode           || '',
-          site_contact_name:   d.siteContactName   || '',
-          site_contact_phone:  d.siteContactPhone  || '',
-          ...(keyVal     ? { key_info:     keyVal     } : {}),
-          ...(parkingVal ? { parking_info: parkingVal } : {}),
-        };
-        const { error: upsertError } = await sb.from('sites').upsert(siteRow, { onConflict: ['company_id', 'site_name'] });
-        if (upsertError) throw upsertError;
-        // ローカルキャッシュも更新
-        setSitesCache(prev => {
-          const patch = { address:d.address, address_num:d.addrNum, address_bldg:d.addrBldg, zip_code:d.zipCode,
-            site_contact_name:d.siteContactName||'', site_contact_phone:d.siteContactPhone||'',
-            ...(keyVal     ? { key_info:     keyVal     } : {}),
-            ...(parkingVal ? { parking_info: parkingVal } : {}),
-          };
-          const exists = prev.some(s => s.site_name === d.siteName);
-          if (exists) return prev.map(s => s.site_name === d.siteName ? {...s, ...patch} : s);
-          return [...prev, {site_name:d.siteName, ...patch}];
-        });
-      }
     }
     return ids;
   };
