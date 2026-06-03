@@ -5232,7 +5232,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
       const { data: unread } = await sb.from('messages')
         .select('order_id, sender_id')
         .in('order_id', orderIds)
-        .neq('sender_id', user.id)
+        .or(`sender_id.neq.${user.id},sender_id.is.null`)
         .not('read_by', 'cs', `{${user.id}}`);
       if (unread) {
         const counts = {};
@@ -5244,6 +5244,31 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
   };
 
   useEffect(() => { fetchOrders(); }, []);
+
+  // 未読カウントを定期的に再取得（3秒ポーリング）
+  useEffect(() => {
+    const pollUnread = async () => {
+      const { data: { user } } = await sb.auth.getUser();
+      if (!user) return;
+      const { data: allOrders } = await sb.from('orders')
+        .select('id').eq('user_id', user.id).is('deleted_at', null);
+      const orderIds = (allOrders || []).map(o => o.id);
+      if (!orderIds.length) return;
+      const { data: unread } = await sb.from('messages')
+        .select('order_id, sender_id')
+        .in('order_id', orderIds)
+        .or(`sender_id.neq.${user.id},sender_id.is.null`)
+        .not('read_by', 'cs', `{${user.id}}`);
+      if (unread) {
+        const counts = {};
+        unread.forEach(m => { counts[m.order_id] = (counts[m.order_id] || 0) + 1; });
+        setUnreadCounts(counts);
+        setShowUnreadBubble(Object.values(counts).some(c => c > 0));
+      }
+    };
+    const id = setInterval(pollUnread, 3000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const autoComplete = (os) => {
