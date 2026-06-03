@@ -6071,7 +6071,8 @@ function mapOrder(row) {
   const schRows = (row.schedules || []).sort((a,b) => (a.sort_order||0) - (b.sort_order||0));
   const sdSchedules = row.service_detail?.schedules || [];
   const schedules = schRows.map(s => ({
-    id:      s.id,
+    id:        s.id,
+    sortOrder: s.sort_order || 0,
     date:    s.work_date   || '',
     start:   s.start_time  || '',
     end:     s.end_time    || '',
@@ -6110,6 +6111,7 @@ function mapOrder(row) {
     siteContactName:  row.site_contact_name  || row.service_detail?.siteContactName  || '',
     siteContactPhone: row.site_contact_phone || row.service_detail?.siteContactPhone || '',
     schedules,
+    serviceDetailJson: row.service_detail || {},
     key:            row.key_info   || '',
     parking:        row.parking    || '',
     note:           row.note       || '',
@@ -6570,7 +6572,12 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const startEdit = () => {
     setEditData({
       status: order.status,
-      schedules: order.schedules.map(s => ({ ...s, detailsText: (s.details||[]).join('・') })),
+      schedules: order.schedules.map(s => ({
+        ...s,
+        detailsText: (s.details||[]).join('・'),
+        editServiceDetail: { ...(s.serviceDetail || {}) },
+        editMemo: s.memo || '',
+      })),
     });
     setEditMode(true);
   };
@@ -6583,6 +6590,8 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
         schedules: editData.schedules.map(s => ({
           ...s,
           details: s.detailsText.split(/[・、,\n]/).map(t=>t.trim()).filter(Boolean),
+          serviceDetail: s.editServiceDetail || null,
+          memo: s.editMemo || '',
         })),
       };
       await onEdit(order.id, payload);
@@ -6813,6 +6822,168 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                             border:"1px solid "+C.grayL, width:"100%",
                             fontFamily:"inherit", boxSizing:"border-box" }} />
                       </div>
+
+                      {/* サービス別詳細フィールド */}
+                      {(()=>{
+                        const SVC_MAP={"養生・家具移動・荷上":"yousei","解体":"kaitai","産廃":"sanpai","清掃・家具移動":"souji"};
+                        const svcId=SVC_MAP[order.service];
+                        if(!svcId) return null;
+                        const sd=sch.editServiceDetail||{};
+                        const updSd=patch=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,editServiceDetail:{...(s.editServiceDetail||{}),...patch}}:s)}));
+                        const FS={fontSize:12,color:"#64748b",marginBottom:4,display:"block",fontWeight:700};
+                        const IS={fontSize:13,padding:"8px 10px",borderRadius:8,border:"1px solid #e2e8f0",width:"100%",fontFamily:"inherit",boxSizing:"border-box",color:"#0a1f5c",background:"#fff"};
+                        const TagBtn=({label,active,onClick})=>(
+                          <button type="button" onClick={onClick}
+                            style={{padding:"5px 10px",borderRadius:8,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",
+                              border:"2px solid "+(active?"#2952c8":"#e2e8f0"),
+                              background:active?"#eef3ff":"#fff",color:active?"#2952c8":"#0a1f5c"}}>
+                            {label}
+                          </button>
+                        );
+                        return(
+                          <div style={{marginTop:12,borderTop:"1px solid #e2e8f0",paddingTop:12}}>
+                            <div style={{fontSize:12,fontWeight:800,color:"#0a1f5c",marginBottom:10}}>
+                              📋 作業区分詳細（{order.service}）
+                            </div>
+
+                            {/* 養生 */}
+                            {svcId==="yousei"&&(
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>養生範囲</label>
+                                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                  {["共用部","室内","共用部＋室内"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.location===v} onClick={()=>updSd({location:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 解体 */}
+                            {svcId==="kaitai"&&(<>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>フロア面積</label>
+                                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                  <input type="number" value={sd.area||""} onChange={e=>updSd({area:e.target.value})}
+                                    placeholder="例：45" style={{...IS,flex:1}} />
+                                  <span style={{fontSize:13,fontWeight:700,color:"#0a1f5c",flexShrink:0}}>㎡</span>
+                                </div>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>工事日数</label>
+                                <select value={sd.days||""} onChange={e=>updSd({days:e.target.value})} style={IS}>
+                                  <option value="">選択</option>
+                                  {[1,2,3,4,5,6,7,8,9].map(n=><option key={n} value={String(n)}>{n}日</option>)}
+                                </select>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>入れない日</label>
+                                <textarea value={sd.offDays||""} onChange={e=>updSd({offDays:e.target.value})}
+                                  placeholder="例：土日祝・毎週水曜日" rows={2} style={{...IS,resize:"vertical"}} />
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>アスベスト</label>
+                                <div style={{display:"flex",gap:6}}>
+                                  {["アスベストなし","アスベストあり"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.asbestos===v} onClick={()=>updSd({asbestos:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>図面</label>
+                                <div style={{display:"flex",gap:6}}>
+                                  {["図面なし","図面あり"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.house_plan===v} onClick={()=>updSd({house_plan:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                            </>)}
+
+                            {/* 産廃 */}
+                            {svcId==="sanpai"&&(<>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>廃材量</label>
+                                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                  {["1㎥以下","1〜3㎥","3〜5㎥","5㎥以上"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.wasteSize===v} onClick={()=>updSd({wasteSize:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>廃材種別</label>
+                                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                                  {["キッチン","トイレ","洗面台","浴室","大工解体廃材","内装廃材","床材","梱包材","養生材","アスベストあり"].map(t=>(
+                                    <TagBtn key={t} label={t}
+                                      active={(sd.wasteTypes||[]).includes(t)}
+                                      onClick={()=>{
+                                        const arr=sd.wasteTypes||[];
+                                        updSd({wasteTypes:arr.includes(t)?arr.filter(x=>x!==t):[...arr,t]});
+                                      }} />
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>補助作業員</label>
+                                <div style={{display:"flex",gap:6}}>
+                                  {["搬出補助作業員あり","搬出補助作業員なし"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.haizaiHelper===v} onClick={()=>updSd({haizaiHelper:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>バッカン</label>
+                                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                  {["交換","新規設置","撤収"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.baccanType===v} onClick={()=>updSd({baccanType:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                            </>)}
+
+                            {/* 清掃・家具移動 */}
+                            {svcId==="souji"&&(<>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>広さ</label>
+                                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                  {["30㎡以下","30〜60㎡","60〜80㎡","80〜100㎡","100㎡以上"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.house_size===v} onClick={()=>updSd({house_size:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>家具の有無</label>
+                                <div style={{display:"flex",gap:6}}>
+                                  {["家具あり","家具なし"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.house_furniture===v} onClick={()=>updSd({house_furniture:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>重量物</label>
+                                <div style={{display:"flex",gap:6}}>
+                                  {["重量物あり","重量物なし"].map(v=>(
+                                    <TagBtn key={v} label={v} active={sd.kanyi_heavy===v} onClick={()=>updSd({kanyi_heavy:v})} />
+                                  ))}
+                                </div>
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <label style={FS}>その他条件</label>
+                                <textarea value={sd.house_water||""} onChange={e=>updSd({house_water:e.target.value})}
+                                  placeholder="例：キッチン交換済み・浴室はそのまま" rows={2}
+                                  style={{...IS,resize:"vertical"}} />
+                              </div>
+                            </>)}
+
+                            {/* メモ（全サービス共通） */}
+                            <div style={{marginBottom:4}}>
+                              <label style={FS}>メモ</label>
+                              <textarea value={sch.editMemo||""}
+                                onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,editMemo:e.target.value}:s)}))}
+                                placeholder="メモを入力..." rows={2}
+                                style={{...IS,resize:"vertical"}} />
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                   <div style={{ display:"flex", gap:12 }}>
@@ -8242,7 +8413,19 @@ function AdminApp({ role, onLogout }) {
     const order = orders.find(o => o.id === id);
     const statusChanged = order && order.status !== editData.status;
     const nowMs = Date.now();
-    const orderUpdate = { status: editData.status };
+
+    // service_detail を更新（memo・serviceDetail を各スケジュールに反映）
+    const sdJson = { ...(order.serviceDetailJson || {}) };
+    const sdSchedules = sdJson.schedules ? [...sdJson.schedules] : [];
+    editData.schedules.forEach((sch, i) => {
+      const sortIdx = sch.sortOrder ?? i;
+      if (!sdSchedules[sortIdx]) sdSchedules[sortIdx] = {};
+      sdSchedules[sortIdx].memo          = sch.memo          || '';
+      sdSchedules[sortIdx].serviceDetail = sch.serviceDetail || null;
+    });
+    sdJson.schedules = sdSchedules;
+
+    const orderUpdate = { status: editData.status, service_detail: sdJson };
     if (statusChanged) orderUpdate.status_changed_at = new Date().toISOString();
     await sb.from('orders').update(orderUpdate).eq('id', id);
     if (statusChanged) {
@@ -8281,19 +8464,21 @@ function AdminApp({ role, onLogout }) {
         }).eq('id', sch.id);
       }
     }
-    const updatedSchedules = editData.schedules.map(({ id:sid, date, start, end, workers, details }) => {
+    const updatedSchedules = editData.schedules.map(({ id:sid, date, start, end, workers, details, memo, serviceDetail, sortOrder }) => {
       const orig = order?.schedules.find(s => s.id === sid);
       return { id:sid, date, start, end, workers, details,
+        memo: memo || '', serviceDetail: serviceDetail || null,
+        sortOrder: sortOrder ?? (orig?.sortOrder ?? 0),
         history: newHistoryEntries[sid] !== undefined ? newHistoryEntries[sid] : (orig?.history || []) };
     });
     setOrders(os => os.map(o => {
       if (o.id !== id) return o;
       return { ...o, status:editData.status, schedules:updatedSchedules,
-        statusChangedAt: statusChanged ? nowMs : o.statusChangedAt };
+        serviceDetailJson: sdJson, statusChangedAt: statusChanged ? nowMs : o.statusChangedAt };
     }));
     if (selected?.id === id) {
       setSelected(s => ({ ...s, status:editData.status, schedules:updatedSchedules,
-        statusChangedAt: statusChanged ? nowMs : s.statusChangedAt }));
+        serviceDetailJson: sdJson, statusChangedAt: statusChanged ? nowMs : s.statusChangedAt }));
     }
   };
 
