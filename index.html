@@ -4540,6 +4540,7 @@ function ChatScreen({ role, order, onBack }) {
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [menuPos,     setMenuPos]     = useState({ x:0, y:0 });
   const [touching,    setTouching]    = useState(false);
+  const [sidebarSearch, setSidebarSearch] = useState("");
   const bottomRef   = useRef(null);
   const touchTimer  = useRef(null);
   const isAdminRole = ['admin','manager','staff'].includes(role);
@@ -4700,8 +4701,10 @@ function ChatScreen({ role, order, onBack }) {
           .chat-header-back-text{font-size:14px}
         }
         @media(max-width:768px){
-          .chat-header-back-text::before{content:"←"}
-          .chat-header-back-text{font-size:18px}
+          .chat-header-back-text::before{content:"← もどる"}
+          .chat-header-back-text{font-size:14px}
+          .chat-header-eli-img{display:none}
+          .chat-header-menu-btn{display:none}
         }
       `}</style>
 
@@ -4749,13 +4752,15 @@ function ChatScreen({ role, order, onBack }) {
             </button>
           </div>
           <div style={{ padding:"12px 14px 8px" }}>
-            <input placeholder="現場名で検索..." readOnly
+            <input placeholder="現場名で検索..."
+              value={sidebarSearch} onChange={e=>setSidebarSearch(e.target.value)}
               style={{ width:"100%", padding:"8px 12px", borderRadius:8,
-                border:"1px solid rgba(255,255,255,0.15)", background:"rgba(255,255,255,0.07)",
-                color:"rgba(255,255,255,0.5)", fontSize:12, fontFamily:"inherit",
+                border:"1px solid rgba(255,255,255,0.15)", background:"rgba(255,255,255,0.1)",
+                color:C.white, fontSize:12, fontFamily:"inherit",
                 outline:"none", boxSizing:"border-box" }} />
           </div>
           <div style={{ padding:"4px 10px", flex:1 }}>
+            {(!sidebarSearch || order.site.includes(sidebarSearch)) && (
             <div style={{ padding:"10px 12px", borderRadius:10,
               background:"rgba(255,255,255,0.13)", marginBottom:6 }}>
               <div style={{ fontSize:13, fontWeight:700, color:C.white,
@@ -4765,6 +4770,7 @@ function ChatScreen({ role, order, onBack }) {
               <div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:2 }}>{order.id}</div>
               <div style={{ marginTop:6 }}><HiStatusBadge status={order.status} /></div>
             </div>
+            )}
           </div>
           <div style={{ padding:"14px 16px", borderTop:"1px solid rgba(255,255,255,0.1)",
             fontSize:11, color:"rgba(255,255,255,0.35)", textAlign:"center", lineHeight:1.6 }}>
@@ -4783,7 +4789,7 @@ function ChatScreen({ role, order, onBack }) {
               fontWeight:700, cursor:"pointer", fontFamily:"inherit", flexShrink:0, lineHeight:1 }}>
               <span className="chat-header-back-text" />
             </button>
-            <img src={ELI_IMG} className="libot-float"
+            <img src={ELI_IMG} className="libot-float chat-header-eli-img"
               style={{ height:38, width:"auto", flexShrink:0 }} />
             <div style={{ flex:1, minWidth:0 }}>
               <div style={{ fontSize:14, fontWeight:900, color:C.white,
@@ -4792,7 +4798,8 @@ function ChatScreen({ role, order, onBack }) {
               </div>
               <div style={{ marginTop:2 }}><HiStatusBadge status={order.status} /></div>
             </div>
-            <button style={{ background:"rgba(255,255,255,0.1)", border:"none",
+            <button className="chat-header-menu-btn"
+              style={{ background:"rgba(255,255,255,0.1)", border:"none",
               color:C.white, borderRadius:8, padding:"8px 12px",
               fontSize:17, cursor:"pointer", fontFamily:"inherit", flexShrink:0,
               letterSpacing:1, lineHeight:1 }}>
