@@ -4388,7 +4388,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                     <div style={{ fontSize:15, fontWeight:700, color:C.navy }}>{siteName||'—'}</div>
                   </div>
                 </div>
-                <div style={{ display:"flex", gap:12, padding:"12px 16px", alignItems:"flex-start" }}>
+                <div style={{ display:"flex", gap:12, padding:"12px 16px",
+                  borderBottom: order.note||(order.images?.length>0) ? "1px solid #f0ebe0":"none",
+                  alignItems:"flex-start" }}>
                   <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📍</div>
                   <div>
                     <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>住所</div>
@@ -4397,6 +4399,33 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                     </div>
                   </div>
                 </div>
+                {order.note&&(
+                  <div style={{ display:"flex", gap:12, padding:"12px 16px",
+                    borderBottom: order.images?.length>0 ? "1px solid #f0ebe0":"none",
+                    alignItems:"flex-start" }}>
+                    <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📝</div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>備考</div>
+                      <div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{order.note}</div>
+                    </div>
+                  </div>
+                )}
+                {order.images&&order.images.length>0&&(
+                  <div style={{ display:"flex", gap:12, padding:"12px 16px", alignItems:"flex-start" }}>
+                    <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📷</div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>添付写真（{order.images.length}枚）</div>
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
+                        {order.images.map((path,i)=>(
+                          <SignedImage key={i} path={path}
+                            onClickUrl={url=>window.open(url,'_blank')}
+                            style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
+                              cursor:"pointer", border:"1px solid "+C.grayL }} />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4420,13 +4449,13 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                       boxSizing:"border-box", ...extra }} />
                 );
                 const rows = [
-                  { icon:"🔑", label:"鍵の情報",
+                  { icon:"🔑", label:"鍵情報",
                     content: <>
                       <SiteTArea value={siteData.key_info} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
                       <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
                       <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} />
                     </> },
-                  { icon:"🚗", label:"駐車場情報",
+                  { icon:"🚗", label:"駐車場",
                     content: <>
                       <SiteTArea value={siteData.parking_info} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
                       <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
