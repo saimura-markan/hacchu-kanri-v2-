@@ -3595,7 +3595,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
     },
     {
       id:"key_info", icon:"🔑", label:"鍵情報", source:"site",
-      show: () => viewOnly ? !!(keyText || imagePaths.key_images.length) : true,
+      show: () => !!(keyText || imagePaths.key_images.length),
       viewContent: () => (
         <>{keyText&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{keyText}</div>}
         <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} /></>
@@ -3608,7 +3608,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
     },
     {
       id:"parking_info", icon:"🚗", label:"駐車場", source:"site",
-      show: () => viewOnly ? !!(parkingText || imagePaths.parking_images.length) : true,
+      show: () => !!(parkingText || imagePaths.parking_images.length),
       viewContent: () => (
         <>{parkingText&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{parkingText}</div>}
         <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} /></>
@@ -3621,7 +3621,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
     },
     {
       id:"contact", icon:"👤", label:"担当者様", source:"site",
-      show: () => viewOnly ? !!(siteData.contact_name || siteData.contact_phone) : true,
+      show: () => !!(siteData.contact_name || siteData.contact_phone),
       viewContent: () => (
         <>{siteData.contact_name&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>{siteData.contact_name}</div>}
         {siteData.contact_phone&&(
@@ -3651,7 +3651,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
     },
     {
       id:"memo", icon:"⚠️", label:"現場注意事項", source:"site",
-      show: () => viewOnly ? !!(siteData.memo || imagePaths.images.length) : true,
+      show: () => !!(siteData.memo || imagePaths.images.length),
       viewContent: () => (
         <>{siteData.memo&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.memo}</div>}
         <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} /></>
@@ -3664,7 +3664,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
     },
     {
       id:"entry_info", icon:"🚪", label:"入館情報", source:"site",
-      show: () => viewOnly ? !!(siteData.entry_info || imagePaths.entry_images.length) : true,
+      show: () => !!(siteData.entry_info || imagePaths.entry_images.length),
       viewContent: () => (
         <>{siteData.entry_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.entry_info}</div>}
         <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} /></>
@@ -3677,7 +3677,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
     },
     {
       id:"yosei_info", icon:"📦", label:"養生範囲", source:"site",
-      show: () => viewOnly ? !!(siteData.yosei_info || imagePaths.yosei_images.length) : true,
+      show: () => !!(siteData.yosei_info || imagePaths.yosei_images.length),
       viewContent: () => (
         <>{siteData.yosei_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.yosei_info}</div>}
         <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} /></>
@@ -3731,21 +3731,23 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
     );
   }
 
-  // ── viewOnly=false: ゴールドブロック（order行） + ブルーブロック（site行） ──
-  const orderRows = ROW_DEFS.filter(r => r.source === "order" && r.show());
-  const siteRows  = ROW_DEFS.filter(r => r.source === "site");
+  // ── viewOnly=false: ゴールドブロック（値あり全行・読み取り専用） + ブルーブロック（site行・編集） ──
+  const goldRows = ROW_DEFS.filter(r => r.show());
+  const siteRows = ROW_DEFS.filter(r => r.source === "site");
   return (
     <>
+      {goldRows.length > 0 && (
       <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px", marginBottom:14 }}>
         <GoldHeader />
         <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
-          {orderRows.map((row, i) => (
-            <ViewRow key={row.id} icon={row.icon} label={row.label} isLast={i===orderRows.length-1}>
+          {goldRows.map((row, i) => (
+            <ViewRow key={row.id} icon={row.icon} label={row.label} isLast={i===goldRows.length-1}>
               {row.viewContent()}
             </ViewRow>
           ))}
         </div>
       </div>
+      )}
 
       <div style={{ background:"#1a6fb5", borderRadius:14, padding:"12px 18px",
         marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
