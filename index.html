@@ -3265,11 +3265,8 @@ function EliMessage({ orders, totalUnread=0 }) {
     text:"注文履歴の一覧です😊\nタップして詳細・チャットを確認できます" });
 
   return (
-    <div style={{ background:"#ffffff",
-      borderRadius:16, padding:"14px 16px", marginBottom:20,
-      boxShadow:"0 1px 6px rgba(0,0,0,0.08)",
-      border:"1px solid #e2e8f0",
-      display:"flex", alignItems:"flex-start", gap:12 }}>
+    <div style={{ display:"flex", alignItems:"flex-start", gap:12,
+      padding:"0 0 16px", marginBottom:4 }}>
       <img src={ELI_IMG} alt="LiBot" className="libot-float"
         style={{ height:60, width:"auto", flexShrink:0 }} />
       <div style={{ flex:1, minWidth:0 }}>
@@ -6320,6 +6317,8 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [menuPos,     setMenuPos]     = useState({ x:0, y:0 });
   const [touching,    setTouching]    = useState(false);
+  const [companyName, setCompanyName] = useState("");
+  const [adSiteData,  setAdSiteData]  = useState({});
   const bottomRef  = useRef(null);
   const touchTimer = useRef(null);
   useTimer();
@@ -6350,6 +6349,25 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     });
     onMarkChatRead && onMarkChatRead(order.id);
   }, [tab, order?.id]);
+
+  // 企業IDから会社名を取得
+  useEffect(() => {
+    setCompanyName("");
+    if (!order?.companyId) return;
+    sb.from('companies').select('name').eq('id', order.companyId).maybeSingle()
+      .then(({ data }) => { if (data?.name) setCompanyName(data.name); });
+  }, [order?.companyId]);
+
+  // 現場情報（画像）を取得
+  useEffect(() => {
+    setAdSiteData({});
+    if (!order?.companyId || !order?.site) return;
+    sb.from('sites')
+      .select('key_images,parking_images,memo,images,entry_info,entry_images,yosei_info,yosei_images')
+      .eq('company_id', order.companyId).eq('site_name', order.site)
+      .limit(1)
+      .then(({ data }) => { if (data?.[0]) setAdSiteData(data[0]); });
+  }, [order?.id]);
 
   const startEdit = () => {
     setEditData({
@@ -6627,7 +6645,17 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               </div>
               <div style={{ padding:"4px 18px 12px" }}>
                 <Row label="会社名"   value={order.company}   copy />
-                <Row label="企業ID"   value={order.companyId} copy />
+                {order.companyId && (
+                  <div style={{ display:"flex", gap:12, padding:"9px 0",
+                    borderBottom:"1px solid "+C.grayL, alignItems:"flex-start" }}>
+                    <div style={{ fontSize:13, color:C.gray, minWidth:90, flexShrink:0, paddingTop:1 }}>企業ID</div>
+                    <div style={{ flex:1 }}>
+                      <span style={{ fontSize:14, fontWeight:600, color:C.navy }}>{order.companyId}</span>
+                      {companyName && <span style={{ fontSize:12, color:C.gray, marginLeft:8 }}>（{companyName}）</span>}
+                    </div>
+                    <CopyBtn value={order.companyId} label="コピー" />
+                  </div>
+                )}
                 <Row label="担当者"       value={order.person}     copy />
                 {order.personKana && <Row label="ふりがな" value={order.personKana} copy />}
                 <Row label="電話番号"     value={order.phone}      copy />
@@ -6635,21 +6663,57 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
             </div>
 
             {/* 発注内容 */}
-            <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
-              marginBottom:14, overflow:"hidden" }}>
-              <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
-                padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
-                📋 発注内容
-              </div>
-              <div style={{ padding:"4px 18px 12px" }}>
-                <Row label="作業区分" value={AD_SVC_ICON[order.service]+" "+order.service} />
-                <Row label="現場名"   value={order.site}    copy />
-                <Row label="住所"     value={order.address} copy />
-                <Row label="鍵"       value={order.key} />
-                <Row label="駐車場"   value={order.parking} />
-                {order.note&&<Row label="備考" value={order.note} />}
-              </div>
-            </div>
+            {(()=>{
+              const AdImgs = ({paths})=>{
+                if (!paths?.length) return null;
+                return <div style={{ display:"flex", gap:8, flexWrap:"wrap", padding:"6px 0 10px", marginLeft:102 }}>
+                  {paths.map((path,i)=>{
+                    const url = sb.storage.from('site-images').getPublicUrl(path).data.publicUrl;
+                    return /\.pdf$/i.test(path)
+                      ? <a key={i} href={url} target="_blank" rel="noopener"
+                          style={{ width:80,height:80,border:"1px solid "+C.grayL,borderRadius:8,
+                            display:"flex",flexDirection:"column",alignItems:"center",
+                            justifyContent:"center",gap:3,textDecoration:"none",
+                            background:"#f8f9fc",color:C.gray,fontSize:9,fontWeight:700 }}>
+                          <span style={{ fontSize:24 }}>📄</span>PDF</a>
+                      : <img key={i} src={url}
+                          style={{ width:80,height:80,objectFit:"cover",borderRadius:8,
+                            border:"1px solid "+C.grayL,cursor:"pointer" }}
+                          onClick={()=>setLightboxUrl(url)} />;
+                  })}
+                </div>;
+              };
+              const SiteRow = ({label,text,imgs})=>{
+                if (!text && !imgs?.length) return null;
+                return <div style={{ borderBottom:"1px solid "+C.grayL }}>
+                  <div style={{ display:"flex", gap:12, padding:"9px 0", alignItems:"flex-start" }}>
+                    <div style={{ fontSize:13,color:C.gray,minWidth:90,flexShrink:0,paddingTop:1 }}>{label}</div>
+                    <div style={{ fontSize:14,fontWeight:600,color:C.navy,flex:1,whiteSpace:"pre-wrap" }}>{text||""}</div>
+                  </div>
+                  <AdImgs paths={imgs} />
+                </div>;
+              };
+              return (
+                <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
+                  marginBottom:14, overflow:"hidden" }}>
+                  <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
+                    padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
+                    📋 発注内容
+                  </div>
+                  <div style={{ padding:"4px 18px 12px" }}>
+                    <Row label="作業区分" value={AD_SVC_ICON[order.service]+" "+order.service} />
+                    <Row label="現場名"   value={order.site}    copy />
+                    <Row label="住所"     value={order.address} copy />
+                    <SiteRow label="🔑 鍵"    text={order.key}     imgs={adSiteData.key_images} />
+                    <SiteRow label="🚗 駐車場" text={order.parking} imgs={adSiteData.parking_images} />
+                    <SiteRow label="🚪 入館情報"   text={adSiteData.entry_info} imgs={adSiteData.entry_images} />
+                    <SiteRow label="📋 養生範囲"   text={adSiteData.yosei_info} imgs={adSiteData.yosei_images} />
+                    <SiteRow label="⚠️ 現場注意事項" text={adSiteData.memo}      imgs={adSiteData.images} />
+                    {order.note&&<Row label="備考" value={order.note} />}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* 日程 */}
             {order.schedules.map((sch,i)=>(
