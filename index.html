@@ -4027,17 +4027,14 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     if (manualSaving) return;
     if (!siteName) return;
 
-    // cid が未解決の場合、profilesから再取得してから保存
+    // cid が未解決の場合、profilesから再取得（setCidは呼ばない＝fetchSiteData再発火を防ぐ）
     let activeCid = cid;
     if (!activeCid) {
       const { data: { user } } = await sb.auth.getUser();
       if (user) {
         const { data: prof } = await sb.from('profiles')
           .select('company_id').eq('id', user.id).maybeSingle();
-        if (prof?.company_id) {
-          activeCid = prof.company_id;
-          setCid(activeCid);
-        }
+        if (prof?.company_id) activeCid = prof.company_id;
       }
     }
     if (!activeCid) {
@@ -4045,6 +4042,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       return;
     }
 
+    // 保存前に自動保存タイマーをキャンセル
+    clearTimeout(saveTimer.current);
     setManualSaving(true);
     try {
       const { error } = await sb.from('sites').upsert({
@@ -4066,10 +4065,12 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       if (error) { console.error('[handleSave upsert]', error.message); }
       else {
         setSavedMsg(true);
+        // フォームをクリア（setCidを呼ばないのでfetchSiteDataは再発火しない）
         setSiteData({ key_info:'', parking_info:'',
           contact_name: '', contact_phone: '',
           memo:'', entry_info:'', yosei_info:'' });
         setImagePaths({ key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[] });
+        setBlobUrls({});
         setTimeout(() => setSavedMsg(false), 2000);
       }
     } finally {
