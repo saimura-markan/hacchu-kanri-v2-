@@ -6364,7 +6364,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     setAdSiteData({});
     if (!order?.companyId || !order?.site) return;
     sb.from('sites')
-      .select('key_images,parking_images,memo,images,entry_info,entry_images,yosei_info,yosei_images')
+      .select('key_info,key_images,parking_info,parking_images,contact_name,contact_phone,memo,images,entry_info,entry_images,yosei_info,yosei_images')
       .eq('company_id', order.companyId).eq('site_name', order.site)
       .limit(1)
       .then(({ data }) => { if (data?.[0]) setAdSiteData(data[0]); });
@@ -6663,11 +6663,11 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               </div>
             </div>
 
-            {/* 発注内容 */}
+            {/* 案件情報（黄色ヘッダー） */}
             {(()=>{
               const AdImgs = ({paths})=>{
                 if (!paths?.length) return null;
-                return <div style={{ display:"flex", gap:8, flexWrap:"wrap", padding:"6px 0 10px", marginLeft:102 }}>
+                return <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:8 }}>
                   {paths.map((path,i)=>{
                     const url = sb.storage.from('site-images').getPublicUrl(path).data.publicUrl;
                     return /\.pdf$/i.test(path)
@@ -6684,33 +6684,79 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   })}
                 </div>;
               };
-              const SiteRow = ({label,text,imgs})=>{
-                if (!text && !imgs?.length) return null;
-                return <div style={{ borderBottom:"1px solid "+C.grayL }}>
-                  <div style={{ display:"flex", gap:12, padding:"9px 0", alignItems:"flex-start" }}>
-                    <div style={{ fontSize:13,color:C.gray,minWidth:90,flexShrink:0,paddingTop:1 }}>{label}</div>
-                    <div style={{ fontSize:14,fontWeight:600,color:C.navy,flex:1,whiteSpace:"pre-wrap" }}>{text||""}</div>
+              const VR = ({icon,label,isLast,children})=>(
+                <div style={{ display:"flex", gap:12, padding:"12px 16px",
+                  borderBottom:isLast?"none":"1px solid #f0ebe0", alignItems:"flex-start" }}>
+                  <div style={{ fontSize:18, flexShrink:0, marginTop:1 }}>{icon}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:11, color:"#a08060", fontWeight:700,
+                      marginBottom:3, letterSpacing:0.3 }}>{label}</div>
+                    {children}
                   </div>
-                  <AdImgs paths={imgs} />
-                </div>;
-              };
+                </div>
+              );
+              const keyText     = adSiteData.key_info     || order.key     || "";
+              const parkingText = adSiteData.parking_info || order.parking || "";
+              const addrText    = [order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ');
+              const rows = [
+                { show:true, icon:"🏠", label:"現場名", content:
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <div style={{ fontSize:15,fontWeight:700,color:C.navy,flex:1 }}>{order.site||'—'}</div>
+                    {order.site&&<CopyBtn value={order.site} label="コピー" />}
+                  </div> },
+                { show:true, icon:"⚙️", label:"作業区分", content:
+                  <div style={{ fontSize:14,color:C.navy }}>{AD_SVC_ICON[order.service]} {order.service}</div> },
+                { show:true, icon:"📍", label:"住所", content:
+                  <div style={{ display:"flex", alignItems:"flex-start", gap:8 }}>
+                    <div style={{ fontSize:14,color:C.navy,lineHeight:1.7,flex:1 }}>{addrText||'—'}</div>
+                    {addrText&&<CopyBtn value={addrText} label="コピー" />}
+                  </div> },
+                { show:!!(keyText||adSiteData.key_images?.length), icon:"🔑", label:"鍵情報", content:
+                  <>{keyText&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{keyText}</div>}
+                  <AdImgs paths={adSiteData.key_images} /></> },
+                { show:!!(parkingText||adSiteData.parking_images?.length), icon:"🚗", label:"駐車場", content:
+                  <>{parkingText&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{parkingText}</div>}
+                  <AdImgs paths={adSiteData.parking_images} /></> },
+                { show:!!(adSiteData.contact_name||adSiteData.contact_phone), icon:"👤", label:"担当者様", content:
+                  <>{adSiteData.contact_name&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7 }}>{adSiteData.contact_name}</div>}
+                  {adSiteData.contact_phone&&<a href={"tel:"+adSiteData.contact_phone}
+                    style={{ fontSize:14,color:C.blue,textDecoration:"none",fontWeight:700,display:"block" }}>
+                    📞 {adSiteData.contact_phone}</a>}</> },
+                { show:!!order.note, icon:"📝", label:"備考", content:
+                  <div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{order.note}</div> },
+                { show:!!(adSiteData.memo||adSiteData.images?.length), icon:"⚠️", label:"現場注意事項", content:
+                  <>{adSiteData.memo&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{adSiteData.memo}</div>}
+                  <AdImgs paths={adSiteData.images} /></> },
+                { show:!!(adSiteData.entry_info||adSiteData.entry_images?.length), icon:"🚪", label:"入館情報", content:
+                  <>{adSiteData.entry_info&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{adSiteData.entry_info}</div>}
+                  <AdImgs paths={adSiteData.entry_images} /></> },
+                { show:!!(adSiteData.yosei_info||adSiteData.yosei_images?.length), icon:"📦", label:"養生範囲", content:
+                  <>{adSiteData.yosei_info&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{adSiteData.yosei_info}</div>}
+                  <AdImgs paths={adSiteData.yosei_images} /></> },
+                { show:!!(order.images?.length), icon:"📷",
+                  label:`添付写真${order.images?.length?"（"+order.images.length+"枚）":""}`, content:
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
+                    {(order.images||[]).map((path,i)=>(
+                      <SignedImage key={i} path={path} onClickUrl={url=>window.open(url,'_blank')}
+                        style={{ width:80,height:80,objectFit:"cover",borderRadius:8,
+                          cursor:"pointer",border:"1px solid "+C.grayL }} />
+                    ))}
+                  </div> },
+              ].filter(r=>r.show);
               return (
-                <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
-                  marginBottom:14, overflow:"hidden" }}>
-                  <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
-                    padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
-                    📋 発注内容
+                <div style={{ background:"#fdf6ee", borderRadius:16, padding:14, marginBottom:14 }}>
+                  <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
+                    marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+                      padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
+                    <div style={{ fontSize:15, fontWeight:800, color:C.white }}>案件情報</div>
                   </div>
-                  <div style={{ padding:"4px 18px 12px" }}>
-                    <Row label="作業区分" value={AD_SVC_ICON[order.service]+" "+order.service} />
-                    <Row label="現場名"   value={order.site}    copy />
-                    <Row label="住所"     value={order.address} copy />
-                    <SiteRow label="🔑 鍵"    text={order.key}     imgs={adSiteData.key_images} />
-                    <SiteRow label="🚗 駐車場" text={order.parking} imgs={adSiteData.parking_images} />
-                    <SiteRow label="🚪 入館情報"   text={adSiteData.entry_info} imgs={adSiteData.entry_images} />
-                    <SiteRow label="📋 養生範囲"   text={adSiteData.yosei_info} imgs={adSiteData.yosei_images} />
-                    <SiteRow label="⚠️ 現場注意事項" text={adSiteData.memo}      imgs={adSiteData.images} />
-                    {order.note&&<Row label="備考" value={order.note} />}
+                  <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
+                    {rows.map((row,i)=>(
+                      <VR key={i} icon={row.icon} label={row.label} isLast={i===rows.length-1}>
+                        {row.content}
+                      </VR>
+                    ))}
                   </div>
                 </div>
               );
@@ -6733,6 +6779,27 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   <Row label="時間" value={sch.history&&sch.history.length>0 ? sch.start+"〜"+sch.end+" （変更後）" : sch.start+"〜"+sch.end} />
                   <Row label="作業内容" value={(sch.details||[]).join("・")} />
                   {sch.workers&&<Row label="作業者数" value={sch.workers} />}
+                  {sch.serviceDetail&&(()=>{
+                    const sd=sch.serviceDetail;
+                    const corner=sd.house_corner?"角部屋":"";
+                    const asbStr=(()=>{ const ad=sd.asbestosDetail; if(!ad||!(ad.types||[]).length) return null;
+                      const pts=(ad.types||[]).filter(t=>t!=="その他");
+                      if((ad.types||[]).includes("その他")&&ad.other) pts.push(ad.other);
+                      return pts.join("・")||null; })();
+                    const sdRows=[['養生の場所',sd.location],['リフォーム内容',sd.reform],
+                      ['広さ',sd.house_size],['家具の有無',sd.house_furniture],
+                      ['水回り設備',sd.house_water],
+                      ['その他条件',[corner,sd.house_vacancy].filter(Boolean).join('・')||null],
+                      ['工事日数',sd.days?sd.days+"日":null],['入れない日',sd.offDays],
+                      ['フロア面積',sd.floorSize],['アスベスト',asbStr],
+                      ['廃材量',sd.wasteSize],
+                      ['廃材種別',Array.isArray(sd.wasteTypes)&&sd.wasteTypes.length?sd.wasteTypes.join("・"):null],
+                      ['図面',sd.house_plan]];
+                    return sdRows.map(([label,value])=>!value?null:(
+                      <Row key={label} label={label} value={value} />
+                    ));
+                  })()}
+                  {sch.memo&&<Row label="メモ" value={sch.memo} />}
                   {sch.history && sch.history.length > 0 && (
                     <div style={{ marginTop:8, padding:"10px 14px", background:"#faf5ff", borderRadius:10, border:"1px solid #d8b4fe" }}>
                       <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:6 }}>📋 変更履歴</div>
@@ -6746,25 +6813,6 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 </div>
               </div>
             ))}
-
-            {order.images && order.images.length > 0 && (
-              <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL,
-                marginBottom:14, overflow:"hidden" }}>
-                <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`,
-                  padding:"11px 18px", fontSize:14, fontWeight:800, color:C.white }}>
-                  📷 添付画像（{order.images.length}枚）
-                </div>
-                <div style={{ padding:"12px 16px", display:"flex", gap:8, flexWrap:"wrap" }}>
-                  {order.images.map((path, i) => (
-                    <SignedImage key={i} path={path}
-                      onClickUrl={url => setLightboxUrl(url)}
-                      style={{ width:90, height:90, objectFit:"cover", borderRadius:8,
-                        cursor:"pointer", border:"1px solid "+C.grayL,
-                        transition:"opacity 0.2s" }} />
-                  ))}
-                </div>
-              </div>
-            )}
 
             <div style={{ background:"#fffbe6", border:"2px solid #f5c842",
               borderRadius:14, padding:"16px 18px" }}>
