@@ -7496,6 +7496,19 @@ function CompanyPanel({ onClose }) {
 }
 
 // ── スタッフ管理パネル ──────────────────────────────────
+function StaffField({ label, fkey, placeholder, type='text', form, setForm }) {
+  return (
+    <div style={{ marginBottom:12 }}>
+      <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 }}>{label}</div>
+      <input type={type} value={form[fkey]} placeholder={placeholder}
+        onChange={e => setForm(f => ({ ...f, [fkey]: e.target.value }))}
+        style={{ width:'100%', fontSize:15, padding:'10px 12px', borderRadius:10,
+          border:`1px solid ${C.grayL}`, fontFamily:'inherit', outline:'none',
+          background:C.white, color:C.navy, boxSizing:'border-box' }} />
+    </div>
+  );
+}
+
 function StaffPanel({ onClose }) {
   const ROLES      = ['admin', 'manager', 'staff'];
   const ROLE_LABEL = { admin:'admin', manager:'manager', staff:'staff' };
@@ -7549,16 +7562,6 @@ function StaffPanel({ onClose }) {
     if (editing?.id === s.id) closeForm();
   };
 
-  const Field = ({ label, fkey, placeholder, type = 'text' }) => (
-    <div style={{ marginBottom:12 }}>
-      <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 }}>{label}</div>
-      <input type={type} value={form[fkey]} placeholder={placeholder}
-        onChange={e => setForm(f => ({ ...f, [fkey]: e.target.value }))}
-        style={{ width:'100%', fontSize:15, padding:'10px 12px', borderRadius:10,
-          border:`1px solid ${C.grayL}`, fontFamily:'inherit', outline:'none',
-          background:C.white, color:C.navy, boxSizing:'border-box' }} />
-    </div>
-  );
 
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(10,31,92,0.5)',
@@ -7600,7 +7603,7 @@ function StaffPanel({ onClose }) {
                 {editing === 'new' ? '📝 新規スタッフ登録' : '✏️ スタッフ情報を編集'}
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                <Field label="氏名 ※必須" fkey="name" placeholder="例：田中 太郎" />
+                <StaffField label="氏名 ※必須" fkey="name" placeholder="例：田中 太郎" form={form} setForm={setForm} />
                 <div style={{ marginBottom:12 }}>
                   <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 }}>ロール</div>
                   <select value={form.role} onChange={e => setForm(f => ({ ...f, role:e.target.value }))}
@@ -7610,8 +7613,8 @@ function StaffPanel({ onClose }) {
                     {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                   </select>
                 </div>
-                <Field label="電話番号" fkey="phone" placeholder="例：090-0000-0000" type="tel" />
-                <Field label="メールアドレス" fkey="email" placeholder="例：tanaka@markan.co.jp" type="email" />
+                <StaffField label="電話番号" fkey="phone" placeholder="例：090-0000-0000" type="tel" form={form} setForm={setForm} />
+                <StaffField label="メールアドレス" fkey="email" placeholder="例：tanaka@markan.co.jp" type="email" form={form} setForm={setForm} />
               </div>
               {editing !== 'new' && (
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
