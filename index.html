@@ -5036,8 +5036,9 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
     const orderIds = mapped.map(o => o.id);
     if (orderIds.length) {
       const { data: unread } = await sb.from('messages')
-        .select('order_id')
+        .select('order_id, sender_id')
         .in('order_id', orderIds)
+        .neq('sender_id', user.id)
         .not('read_by', 'cs', `{${user.id}}`);
       if (unread) {
         const counts = {};
