@@ -4798,13 +4798,6 @@ function ChatScreen({ role, order, onBack }) {
               </div>
               <div style={{ marginTop:2 }}><HiStatusBadge status={order.status} /></div>
             </div>
-            <button className="chat-header-menu-btn"
-              style={{ background:"rgba(255,255,255,0.1)", border:"none",
-              color:C.white, borderRadius:8, padding:"8px 12px",
-              fontSize:17, cursor:"pointer", fontFamily:"inherit", flexShrink:0,
-              letterSpacing:1, lineHeight:1 }}>
-              ···
-            </button>
           </div>
 
           {/* メッセージ一覧 */}
@@ -4972,11 +4965,6 @@ function ChatScreen({ role, order, onBack }) {
                 </div>
               )}
               <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
-                <button style={{ width:40, height:40, borderRadius:"50%",
-                  border:"1px solid #e2e8f0", background:C.white,
-                  color:"#9ca3af", fontSize:22, cursor:"pointer",
-                  display:"flex", alignItems:"center", justifyContent:"center",
-                  flexShrink:0, fontWeight:300 }}>＋</button>
                 <textarea value={input} onChange={e=>setInput(e.target.value)}
                   onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ return; } if(e.key==="Enter"&&e.shiftKey){ e.preventDefault(); handleSend(); } }}
                   placeholder="メッセージを入力..." rows={1}
