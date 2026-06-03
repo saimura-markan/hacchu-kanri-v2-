@@ -1820,6 +1820,17 @@ function KaitaiDetail({ details, detail, onChange, showErrors }) {
         </div>
         {showErrors&&!v.days&&<div style={{ color:C.red, fontSize:13, marginTop:6 }}>⚠️ 工事日数を選択してください</div>}
       </SubSection>
+      <SubSection title="📐 解体面積 ※必須">
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <input type="number" min="1" value={v.area||""}
+            onChange={e=>u({area:e.target.value})}
+            placeholder="例：45"
+            style={{ flex:1, padding:"12px 14px", borderRadius:12, fontSize:17,
+              border:"2px solid "+C.grayL, fontFamily:"inherit", outline:"none",
+              color:C.navy, background:C.white, boxSizing:"border-box" }} />
+          <span style={{ fontSize:16, fontWeight:700, color:C.navy, flexShrink:0 }}>㎡</span>
+        </div>
+      </SubSection>
       <SubSection title="🚫 作業に入れない日 ※必須">
         <div style={{ fontSize:13, color:C.gray, marginBottom:8, lineHeight:1.7 }}>例）土日祝・毎週水曜日・6月15日など</div>
         <TextArea value={v.offDays||""} onChange={e=>u({offDays:e.target.value})}
@@ -2631,6 +2642,7 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
             {serviceId==="kaitai"&&sch.serviceDetail&&(
               <>
                 <ConfRow label="工事日数"   value={sch.serviceDetail.days?sch.serviceDetail.days+"日":""} />
+                <ConfRow label="解体面積"   value={sch.serviceDetail.area?sch.serviceDetail.area+"㎡":""} />
                 <ConfRow label="入れない日" value={sch.serviceDetail.offDays} />
                 {(()=>{
                   const ad=sch.serviceDetail.asbestosDetail;
@@ -2703,11 +2715,19 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
 }
 
 function FinalConfirm({ orders, images, onBack, onSubmit, submitting }) {
+  const ConfRow=({label,value})=>value?(
+    <div style={{ display:"flex", gap:12, padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
+      <div style={{ fontSize:13, color:C.gray, minWidth:90, flexShrink:0 }}>{label}</div>
+      <div style={{ fontSize:14, fontWeight:700, color:C.navy, flex:1 }}>{value}</div>
+    </div>
+  ):null;
   return (
     <div style={{ padding:"0 16px 40px" }}>
       <EliTalk size={60}>全ての作業内容です✅<br />問題なければ発注してください！</EliTalk>
       {orders.map((order,oi)=>{
         const svc=SERVICES.find(s=>s.id===order.serviceId);
+        const d=order.data;
+        const fullAddr=[d.address,d.addrNum,d.addrBldg].filter(Boolean).join(' ');
         return (
           <div key={oi} style={{ marginBottom:8 }}>
             <div style={{ fontSize:14, fontWeight:800, color:C.blue, marginBottom:6, marginTop:oi>0?12:0 }}>
@@ -2715,13 +2735,11 @@ function FinalConfirm({ orders, images, onBack, onSubmit, submitting }) {
             </div>
             <Card>
               <div style={{ padding:"12px 18px" }}>
-                {order.data.siteName&&(
-                  <div style={{ display:"flex", gap:12, padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
-                    <div style={{ fontSize:13, color:C.gray, minWidth:80 }}>現場名</div>
-                    <div style={{ fontSize:14, fontWeight:700, color:C.navy }}>{order.data.siteName}</div>
-                  </div>
-                )}
-                {order.data.schedules.map((sch,si)=>(
+                <ConfRow label="現場名"     value={d.siteName} />
+                <ConfRow label="住所"       value={fullAddr} />
+                <ConfRow label="現場担当者" value={d.siteContactName} />
+                <ConfRow label="担当者電話" value={d.siteContactPhone} />
+                {d.schedules.map((sch,si)=>(
                   <div key={si} style={{ padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
                     <div style={{ fontSize:13, color:C.blue, fontWeight:700, marginBottom:2 }}>
                       日程{si+1}：{sch.date} {sch.startTime}〜{sch.endTime}
