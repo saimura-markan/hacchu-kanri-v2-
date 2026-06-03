@@ -3255,25 +3255,33 @@ function EliMessage({ orders, totalUnread=0 }) {
   const unreadCount = totalUnread;
 
   let msgs = [];
-  if (unreadCount>0) msgs.push({ color:C.red,
+  if (unreadCount>0)  msgs.push({ accent:"#ff6b6b",
     text:`新しいメッセージが${unreadCount}件届いています！\nチャットを確認してください📩` });
-  if (soudanCount>0) msgs.push({ color:"#c05000",
+  if (soudanCount>0)  msgs.push({ accent:"#ffa94d",
     text:`日程相談中の案件が${soudanCount}件あります。\nチャットでご確認・ご返答をお願いします💬` });
-  if (adjCount>0) msgs.push({ color:"#b07800",
+  if (adjCount>0)     msgs.push({ accent:"#ffd43b",
     text:`調整中の案件が${adjCount}件あります。\n24時間以内に返答しますのでお待ちください😊` });
-  if (msgs.length===0) msgs.push({ color:C.navy,
+  if (msgs.length===0) msgs.push({ accent:"rgba(255,255,255,0.35)",
     text:"注文履歴の一覧です😊\nタップして詳細・チャットを確認できます" });
 
   return (
-    <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:20 }}>
+    <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+      borderRadius:20, padding:"18px 20px", marginBottom:20,
+      boxShadow:"0 8px 28px rgba(10,31,92,0.28)",
+      display:"flex", alignItems:"flex-start", gap:16 }}>
       <img src={ELI_IMG} alt="LiBot" className="libot-float"
-        style={{ height:100, width:"auto", flexShrink:0 }} />
-      <div style={{ flex:1 }}>
+        style={{ height:80, width:"auto", flexShrink:0 }} />
+      <div style={{ flex:1, minWidth:0 }}>
         {msgs.map((msg,i)=>(
-          <div key={i} style={{ background:C.grayPale,
+          <div key={i} style={{
             borderRadius: i===0?"4px 18px 18px 18px":"18px",
-            padding:"12px 16px", fontSize:15, color:C.navy, fontWeight:700,
-            lineHeight:1.8, border:"1px solid "+C.grayL, marginBottom:i<msgs.length-1?8:0 }}>
+            padding:"12px 16px", fontSize:18, color:C.white, fontWeight:800,
+            lineHeight:1.75, whiteSpace:"pre-wrap",
+            background:"rgba(255,255,255,0.1)",
+            borderLeft:`4px solid ${msg.accent}`,
+            marginBottom:i<msgs.length-1?8:0,
+            animation:"msgIn 0.4s ease",
+          }}>
             {msg.text}
           </div>
         ))}
