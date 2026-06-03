@@ -3555,6 +3555,224 @@ function BottomSheet({ children }) {
   );
 }
 
+// ── 案件情報セクション（viewOnly/edit 共通） ────────────────────
+// 行定義をここで一元管理。項目を追加・削除するにはこの関数内の ROW_DEFS だけ編集する。
+function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, uploadingField, handleText, handleUpload }) {
+
+  const keyText     = siteData.key_info     || order.key     || "";
+  const parkingText = siteData.parking_info || order.parking || "";
+
+  // ── 閲覧用行ラッパー ───────────────────────────────────────
+  const ViewRow = ({ icon, label, isLast, children }) => (
+    <div style={{ display:"flex", gap:12, padding:"12px 16px",
+      borderBottom: isLast ? "none" : "1px solid #f0ebe0", alignItems:"flex-start" }}>
+      <div style={{ fontSize:18, flexShrink:0, marginTop:1 }}>{icon}</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontSize:11, color:"#a08060", fontWeight:700,
+          marginBottom:3, letterSpacing:0.3 }}>{label}</div>
+        {children}
+      </div>
+    </div>
+  );
+
+  // ── 行定義（追加・削除はここだけ） ──────────────────────────
+  // source:"order" → 常に読み取り専用（発注時データ）
+  // source:"site"  → viewOnly=false では編集可（sitesテーブルデータ）
+  const ROW_DEFS = [
+    {
+      id:"site_name", icon:"🏠", label:"現場名", source:"order",
+      show: () => true,
+      viewContent: () => <div style={{ fontSize:15, fontWeight:700, color:C.navy }}>{siteName||'—'}</div>,
+    },
+    {
+      id:"address", icon:"📍", label:"住所", source:"order",
+      show: () => true,
+      viewContent: () => (
+        <div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>
+          {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
+        </div>
+      ),
+    },
+    {
+      id:"key_info", icon:"🔑", label:"鍵情報", source:"site",
+      show: () => viewOnly ? !!(keyText || imagePaths.key_images.length) : true,
+      viewContent: () => (
+        <>{keyText&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{keyText}</div>}
+        <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} /></>
+      ),
+      editContent: () => (
+        <><SiteTArea value={siteData.key_info} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
+        <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
+        <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} /></>
+      ),
+    },
+    {
+      id:"parking_info", icon:"🚗", label:"駐車場", source:"site",
+      show: () => viewOnly ? !!(parkingText || imagePaths.parking_images.length) : true,
+      viewContent: () => (
+        <>{parkingText&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{parkingText}</div>}
+        <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} /></>
+      ),
+      editContent: () => (
+        <><SiteTArea value={siteData.parking_info} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
+        <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
+        <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} /></>
+      ),
+    },
+    {
+      id:"contact", icon:"👤", label:"担当者様", source:"site",
+      show: () => viewOnly ? !!(siteData.contact_name || siteData.contact_phone) : true,
+      viewContent: () => (
+        <>{siteData.contact_name&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>{siteData.contact_name}</div>}
+        {siteData.contact_phone&&(
+          <a href={"tel:"+siteData.contact_phone}
+            style={{ fontSize:14, color:C.blue, textDecoration:"none", fontWeight:700, display:"block" }}>
+            📞 {siteData.contact_phone}
+          </a>
+        )}</>
+      ),
+      editContent: () => (
+        <><input value={siteData.contact_name} onChange={e=>handleText('contact_name',e.target.value)}
+          placeholder="担当者名" type="text"
+          style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #d0d8ef",
+            fontSize:14, fontFamily:"inherit", outline:"none", color:C.navy, background:C.white,
+            boxSizing:"border-box", marginBottom:8 }} />
+        <input value={siteData.contact_phone} onChange={e=>handleText('contact_phone',e.target.value)}
+          placeholder="電話番号" type="tel"
+          style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #d0d8ef",
+            fontSize:14, fontFamily:"inherit", outline:"none", color:C.navy, background:C.white,
+            boxSizing:"border-box" }} /></>
+      ),
+    },
+    {
+      id:"note", icon:"📝", label:"備考", source:"order",
+      show: () => !!order.note,
+      viewContent: () => <div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{order.note}</div>,
+    },
+    {
+      id:"memo", icon:"⚠️", label:"現場注意事項", source:"site",
+      show: () => viewOnly ? !!(siteData.memo || imagePaths.images.length) : true,
+      viewContent: () => (
+        <>{siteData.memo&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.memo}</div>}
+        <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} /></>
+      ),
+      editContent: () => (
+        <><SiteTArea value={siteData.memo} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
+        <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
+        <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} /></>
+      ),
+    },
+    {
+      id:"entry_info", icon:"🚪", label:"入館情報", source:"site",
+      show: () => viewOnly ? !!(siteData.entry_info || imagePaths.entry_images.length) : true,
+      viewContent: () => (
+        <>{siteData.entry_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.entry_info}</div>}
+        <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} /></>
+      ),
+      editContent: () => (
+        <><SiteTArea value={siteData.entry_info} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
+        <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
+        <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} /></>
+      ),
+    },
+    {
+      id:"yosei_info", icon:"📦", label:"養生範囲", source:"site",
+      show: () => viewOnly ? !!(siteData.yosei_info || imagePaths.yosei_images.length) : true,
+      viewContent: () => (
+        <>{siteData.yosei_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.yosei_info}</div>}
+        <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} /></>
+      ),
+      editContent: () => (
+        <><SiteTArea value={siteData.yosei_info} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
+        <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
+        <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} /></>
+      ),
+    },
+    {
+      id:"images", icon:"📷",
+      label: order.images?.length ? `添付写真（${order.images.length}枚）` : "添付写真",
+      source:"order",
+      show: () => !!(order.images?.length),
+      viewContent: () => (
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
+          {(order.images||[]).map((path,i)=>(
+            <SignedImage key={i} path={path} onClickUrl={url=>window.open(url,'_blank')}
+              style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
+                cursor:"pointer", border:"1px solid "+C.grayL }} />
+          ))}
+        </div>
+      ),
+    },
+  ];
+
+  const GoldHeader = () => (
+    <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
+      marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+      <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+        padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
+      <div style={{ fontSize:15, fontWeight:800, color:C.white }}>案件情報</div>
+    </div>
+  );
+
+  // ── viewOnly=true: 全行を1つのゴールドブロックに表示 ──────────
+  if (viewOnly) {
+    const rows = ROW_DEFS.filter(r => r.show());
+    return (
+      <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px" }}>
+        <GoldHeader />
+        <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
+          {rows.map((row, i) => (
+            <ViewRow key={row.id} icon={row.icon} label={row.label} isLast={i===rows.length-1}>
+              {row.viewContent()}
+            </ViewRow>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ── viewOnly=false: ゴールドブロック（order行） + ブルーブロック（site行） ──
+  const orderRows = ROW_DEFS.filter(r => r.source === "order" && r.show());
+  const siteRows  = ROW_DEFS.filter(r => r.source === "site");
+  return (
+    <>
+      <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px", marginBottom:14 }}>
+        <GoldHeader />
+        <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
+          {orderRows.map((row, i) => (
+            <ViewRow key={row.id} icon={row.icon} label={row.label} isLast={i===orderRows.length-1}>
+              {row.viewContent()}
+            </ViewRow>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ background:"#1a6fb5", borderRadius:14, padding:"12px 18px",
+        marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+        <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+          padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏗️</div>
+        <div style={{ fontSize:15, fontWeight:800, color:C.white, flex:1 }}>現場情報</div>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", fontWeight:600 }}>自動保存</div>
+      </div>
+
+      <div style={{ background:"#f0f4ff", borderRadius:16, padding:"14px", marginBottom:14 }}>
+        <div style={{ background:C.white, borderRadius:12, border:"1px solid #d0d8ef", overflow:"hidden" }}>
+          {siteRows.map((row, i) => (
+            <div key={row.id} style={{ padding:"14px 16px",
+              borderBottom: i<siteRows.length-1 ? "1px solid #edf0f8":"none" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                <span style={{ fontSize:16 }}>{row.icon}</span>
+                <span style={{ fontSize:12, color:"#5a7aaa", fontWeight:700 }}>{row.label}</span>
+              </div>
+              {row.editContent()}
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── 詳細画面（現場情報管理） ─────────────────────────────────
 function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat, viewOnly: initViewOnly = false }) {
   const [viewOnly,    setViewOnly]    = useState(initViewOnly);
@@ -4270,238 +4488,21 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               <span style={{ fontSize:15, fontWeight:800, color:C.white }}>作業日を追加依頼する</span>
             </button>
 
-            {/* ⑤ 案件情報セクション */}
-            <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px" }}>
-            <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
-              marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
-                padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
-              <div style={{ fontSize:15, fontWeight:800, color:C.white }}>案件情報</div>
-            </div>
-
-            {(()=>{
-              const keyText     = siteData.key_info     || order.key     || "";
-              const parkingText = siteData.parking_info || order.parking || "";
-              const R = ({icon,label,children}) => (
-                <div style={{ display:"flex", gap:12, padding:"12px 16px",
-                  borderBottom:"1px solid #f0ebe0", alignItems:"flex-start" }}>
-                  <div style={{ fontSize:18, flexShrink:0, marginTop:1 }}>{icon}</div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:11, color:"#a08060", fontWeight:700,
-                      marginBottom:3, letterSpacing:0.3 }}>{label}</div>
-                    {children}
-                  </div>
-                </div>
-              );
-              return (
-                <div style={{ background:C.white, borderRadius:12,
-                  border:"1px solid #ecdcc8", overflow:"hidden" }}>
-                  <R icon="🏠" label="現場名">
-                    <div style={{ fontSize:15, fontWeight:700, color:C.navy }}>{siteName||'—'}</div>
-                  </R>
-                  <R icon="📍" label="住所">
-                    <div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>
-                      {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
-                    </div>
-                  </R>
-                  {keyText&&(
-                    <R icon="🔑" label="鍵情報">
-                      <div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{keyText}</div>
-                      <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
-                    </R>
-                  )}
-                  {parkingText&&(
-                    <R icon="🚗" label="駐車場">
-                      <div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{parkingText}</div>
-                      <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
-                    </R>
-                  )}
-                  {(siteData.contact_name||siteData.contact_phone)&&(
-                    <R icon="👤" label="担当者様">
-                      {siteData.contact_name&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>{siteData.contact_name}</div>}
-                      {siteData.contact_phone&&(
-                        <a href={"tel:"+siteData.contact_phone}
-                          style={{ fontSize:14, color:C.blue, textDecoration:"none", fontWeight:700, display:"block" }}>
-                          📞 {siteData.contact_phone}
-                        </a>
-                      )}
-                    </R>
-                  )}
-                  {order.note&&(
-                    <R icon="📝" label="備考">
-                      <div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{order.note}</div>
-                    </R>
-                  )}
-                  {(siteData.memo||imagePaths.images.length>0)&&(
-                    <R icon="⚠️" label="現場注意事項">
-                      {siteData.memo&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.memo}</div>}
-                      <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
-                    </R>
-                  )}
-                  {(siteData.entry_info||imagePaths.entry_images.length>0)&&(
-                    <R icon="🚪" label="入館情報">
-                      {siteData.entry_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.entry_info}</div>}
-                      <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
-                    </R>
-                  )}
-                  {(siteData.yosei_info||imagePaths.yosei_images.length>0)&&(
-                    <R icon="📦" label="養生範囲">
-                      {siteData.yosei_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.yosei_info}</div>}
-                      <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
-                    </R>
-                  )}
-                  {order.images&&order.images.length>0&&(
-                    <R icon="📷" label={`添付写真（${order.images.length}枚）`}>
-                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
-                        {order.images.map((path,i)=>(
-                          <SignedImage key={i} path={path}
-                            onClickUrl={url=>window.open(url,'_blank')}
-                            style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
-                              cursor:"pointer", border:"1px solid "+C.grayL }} />
-                        ))}
-                      </div>
-                    </R>
-                  )}
-                </div>
-              );
-            })()}
-            </div>{/* /fdf6ee wrapper */}
+            {/* ⑤ 案件情報セクション（SiteInfoSection で一元管理） */}
+            <SiteInfoSection viewOnly={true}
+              order={order} siteName={siteName}
+              siteData={siteData} imagePaths={imagePaths} blobUrls={blobUrls}
+              uploadingField={null} handleText={null} handleUpload={null} />
           </>
         )}
 
         {!viewOnly && (
           <>
-            {/* 現場名・住所（読み取り専用）- 案件情報と同じゴールドデザイン */}
-            <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px", marginBottom:14 }}>
-              <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
-                marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
-                <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
-                  padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
-                <div style={{ fontSize:15, fontWeight:800, color:C.white }}>案件情報</div>
-              </div>
-              <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
-                <div style={{ display:"flex", gap:12, padding:"12px 16px",
-                  borderBottom:"1px solid #f0ebe0", alignItems:"flex-start" }}>
-                  <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>🏠</div>
-                  <div>
-                    <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>現場名</div>
-                    <div style={{ fontSize:15, fontWeight:700, color:C.navy }}>{siteName||'—'}</div>
-                  </div>
-                </div>
-                <div style={{ display:"flex", gap:12, padding:"12px 16px",
-                  borderBottom: order.note||(order.images?.length>0) ? "1px solid #f0ebe0":"none",
-                  alignItems:"flex-start" }}>
-                  <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📍</div>
-                  <div>
-                    <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>住所</div>
-                    <div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>
-                      {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
-                    </div>
-                  </div>
-                </div>
-                {order.note&&(
-                  <div style={{ display:"flex", gap:12, padding:"12px 16px",
-                    borderBottom: order.images?.length>0 ? "1px solid #f0ebe0":"none",
-                    alignItems:"flex-start" }}>
-                    <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📝</div>
-                    <div>
-                      <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>備考</div>
-                      <div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{order.note}</div>
-                    </div>
-                  </div>
-                )}
-                {order.images&&order.images.length>0&&(
-                  <div style={{ display:"flex", gap:12, padding:"12px 16px", alignItems:"flex-start" }}>
-                    <div style={{ fontSize:17, flexShrink:0, marginTop:1 }}>📷</div>
-                    <div>
-                      <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:2 }}>添付写真（{order.images.length}枚）</div>
-                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
-                        {order.images.map((path,i)=>(
-                          <SignedImage key={i} path={path}
-                            onClickUrl={url=>window.open(url,'_blank')}
-                            style={{ width:80, height:80, objectFit:"cover", borderRadius:8,
-                              cursor:"pointer", border:"1px solid "+C.grayL }} />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 現場情報セクションヘッダー */}
-            <div style={{ background:"#1a6fb5", borderRadius:14, padding:"12px 18px",
-              marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
-              <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
-                padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏗️</div>
-              <div style={{ fontSize:15, fontWeight:800, color:C.white, flex:1 }}>現場情報</div>
-              <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", fontWeight:600 }}>自動保存</div>
-            </div>
-
-            {/* 入力フォーム（繋がったリスト形式） */}
-            <div style={{ background:"#f0f4ff", borderRadius:16, padding:"14px", marginBottom:14 }}>
-              {(()=>{
-                const inp = (value, onChange, placeholder, type="text", extra={}) => (
-                  <input value={value} onChange={onChange} placeholder={placeholder} type={type}
-                    style={{ width:"100%", padding:"10px 12px", borderRadius:10,
-                      border:"1px solid #d0d8ef", fontSize:14, fontFamily:"inherit",
-                      outline:"none", color:C.navy, background:C.white,
-                      boxSizing:"border-box", ...extra }} />
-                );
-                const rows = [
-                  { icon:"🔑", label:"鍵情報",
-                    content: <>
-                      <SiteTArea value={siteData.key_info} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
-                      <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
-                      <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} />
-                    </> },
-                  { icon:"🚗", label:"駐車場",
-                    content: <>
-                      <SiteTArea value={siteData.parking_info} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
-                      <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
-                      <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} />
-                    </> },
-                  { icon:"👤", label:"担当者様",
-                    content: <>
-                      {inp(siteData.contact_name, e=>handleText('contact_name',e.target.value), "担当者名", "text", {marginBottom:8})}
-                      {inp(siteData.contact_phone, e=>handleText('contact_phone',e.target.value), "電話番号", "tel")}
-                    </> },
-                  { icon:"⚠️", label:"現場注意事項",
-                    content: <>
-                      <SiteTArea value={siteData.memo} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
-                      <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
-                      <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} />
-                    </> },
-                  { icon:"🚪", label:"入館情報",
-                    content: <>
-                      <SiteTArea value={siteData.entry_info} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
-                      <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
-                      <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} />
-                    </> },
-                  { icon:"📦", label:"養生範囲",
-                    content: <>
-                      <SiteTArea value={siteData.yosei_info} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
-                      <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
-                      <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} />
-                    </> },
-                ];
-                return (
-                  <div style={{ background:C.white, borderRadius:12,
-                    border:"1px solid #d0d8ef", overflow:"hidden" }}>
-                    {rows.map(({icon,label,content},i)=>(
-                      <div key={label} style={{ padding:"14px 16px",
-                        borderBottom: i<rows.length-1?"1px solid #edf0f8":"none" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                          <span style={{ fontSize:16 }}>{icon}</span>
-                          <span style={{ fontSize:12, color:"#5a7aaa", fontWeight:700 }}>{label}</span>
-                        </div>
-                        {content}
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
+            {/* 案件情報・現場情報（SiteInfoSection で一元管理） */}
+            <SiteInfoSection viewOnly={false}
+              order={order} siteName={siteName}
+              siteData={siteData} imagePaths={imagePaths} blobUrls={blobUrls}
+              uploadingField={uploadingField} handleText={handleText} handleUpload={handleUpload} />
 
             <button onClick={handleSave} disabled={manualSaving}
               style={{ display:"block", width:"100%",
