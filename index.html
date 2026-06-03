@@ -3265,22 +3265,22 @@ function EliMessage({ orders, totalUnread=0 }) {
     text:"注文履歴の一覧です😊\nタップして詳細・チャットを確認できます" });
 
   return (
-    <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
-      borderRadius:20, padding:"18px 20px", marginBottom:20,
-      boxShadow:"0 8px 28px rgba(10,31,92,0.28)",
-      display:"flex", alignItems:"flex-start", gap:16 }}>
+    <div style={{ background:"#ffffff",
+      borderRadius:16, padding:"14px 16px", marginBottom:20,
+      boxShadow:"0 1px 6px rgba(0,0,0,0.08)",
+      border:"1px solid #e2e8f0",
+      display:"flex", alignItems:"flex-start", gap:12 }}>
       <img src={ELI_IMG} alt="LiBot" className="libot-float"
-        style={{ height:80, width:"auto", flexShrink:0 }} />
+        style={{ height:60, width:"auto", flexShrink:0 }} />
       <div style={{ flex:1, minWidth:0 }}>
         {msgs.map((msg,i)=>(
           <div key={i} style={{
-            borderRadius: i===0?"4px 18px 18px 18px":"18px",
-            padding:"12px 16px", fontSize:18, color:C.white, fontWeight:800,
-            lineHeight:1.75, whiteSpace:"pre-wrap",
-            background:"rgba(255,255,255,0.1)",
-            borderLeft:`4px solid ${msg.accent}`,
-            marginBottom:i<msgs.length-1?8:0,
-            animation:"msgIn 0.4s ease",
+            borderRadius:10,
+            padding:"9px 12px", fontSize:14, color:C.navy, fontWeight:500,
+            lineHeight:1.7, whiteSpace:"pre-wrap",
+            background:"#f8f9fc",
+            borderLeft:`3px solid ${msg.accent}`,
+            marginBottom:i<msgs.length-1?6:0,
           }}>
             {msg.text}
           </div>
@@ -4814,7 +4814,7 @@ function ChatScreen({ role, order, onBack }) {
         @media(min-width:1025px){
           .chat-layout{flex-direction:row}
           .chat-sidebar{display:flex;flex-direction:column;width:260px;flex-shrink:0;
-            background:#0a1f5c;overflow-y:auto;border-right:1px solid rgba(255,255,255,0.1)}
+            background:#0a1f5c;overflow-y:auto}
           .chat-main{flex:1;min-width:0}
           .chat-header-back-text::before{content:"← もどる"}
           .chat-header-back-text{font-size:14px}
