@@ -4549,14 +4549,26 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                         </div>
                       )}
                       {sch.history&&sch.history.length>0&&(
-                        <div style={{ marginTop:10, padding:"10px 14px", background:"#faf5ff",
+                        <div style={{ marginTop:10, padding:"12px 14px", background:"#faf5ff",
                           borderRadius:10, border:"1px solid #d8b4fe" }}>
-                          <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:6 }}>📋 変更履歴</div>
-                          {[...sch.history].reverse().map((h,hi)=>(
-                            <div key={hi} style={{ fontSize:12, color:"#555", lineHeight:1.8 }}>
-                              変更前：{h.prevDate} {h.prevStart}〜{h.prevEnd}
-                            </div>
-                          ))}
+                          <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:8 }}>📋 変更履歴（{sch.history.length}件）</div>
+                          {[...sch.history].reverse().map((h,hi)=>{
+                            const HDAYS=["日","月","火","水","木","金","土"];
+                            const fmtD=dt=>{ if(!dt) return ""; const [,m,d]=dt.split("-").map(Number); return `${m}月${d}日（${HDAYS[new Date(dt+"T00:00:00").getDay()]}）`; };
+                            const fmtT=t=>{ if(!t) return ""; const [hh,mm]=(t||"").slice(0,5).split(":"); return mm==="00"?`${parseInt(hh)}時`:`${parseInt(hh)}時${mm}分`; };
+                            const changedStr=h.changedAt?new Date(h.changedAt).toLocaleString("ja",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"";
+                            return(
+                              <div key={hi} style={{ fontSize:12, lineHeight:1.9,
+                                borderTop:hi>0?"1px solid #e9d5ff":"none",
+                                paddingTop:hi>0?8:0, marginTop:hi>0?8:0 }}>
+                                {changedStr&&<div style={{ color:"#9333ea", fontWeight:700, marginBottom:2 }}>🕐 {changedStr}</div>}
+                                <div><span style={{ color:"#dc2626", fontWeight:700 }}>変更前：</span>
+                                  {fmtD(h.prevDate)}{h.prevDate&&h.prevStart?" "+fmtT(h.prevStart)+(h.prevEnd?"〜"+fmtT(h.prevEnd):""):""}</div>
+                                {(h.newDate||h.newStart)&&<div><span style={{ color:"#16a34a", fontWeight:700 }}>変更後：</span>
+                                  {fmtD(h.newDate)}{h.newDate&&h.newStart?" "+fmtT(h.newStart)+(h.newEnd?"〜"+fmtT(h.newEnd):""):""}</div>}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
@@ -6084,8 +6096,11 @@ function mapOrder(row) {
       .sort((a, b) => new Date(a.changed_at) - new Date(b.changed_at))
       .map(h => ({
         prevDate:  h.prev_date  || '',
-        prevStart: h.prev_start || '',
-        prevEnd:   h.prev_end   || '',
+        prevStart: (h.prev_start  || '').slice(0,5),
+        prevEnd:   (h.prev_end    || '').slice(0,5),
+        newDate:   h.new_date   || '',
+        newStart:  (h.new_start   || '').slice(0,5),
+        newEnd:    (h.new_end     || '').slice(0,5),
         changedAt: h.changed_at || '',
       })),
   }));
@@ -7184,13 +7199,25 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   })()}
                   {sch.memo&&<Row label="メモ" value={sch.memo} />}
                   {sch.history && sch.history.length > 0 && (
-                    <div style={{ marginTop:8, padding:"10px 14px", background:"#faf5ff", borderRadius:10, border:"1px solid #d8b4fe" }}>
-                      <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:6 }}>📋 変更履歴</div>
-                      {[...sch.history].reverse().map((h, hi) => (
-                        <div key={hi} style={{ fontSize:12, color:"#555", lineHeight:1.8 }}>
-                          変更前：{h.prevDate} {h.prevStart}〜{h.prevEnd}
-                        </div>
-                      ))}
+                    <div style={{ marginTop:8, padding:"12px 14px", background:"#faf5ff", borderRadius:10, border:"1px solid #d8b4fe" }}>
+                      <div style={{ fontSize:12, color:"#6930c3", fontWeight:800, marginBottom:8 }}>📋 変更履歴（{sch.history.length}件）</div>
+                      {[...sch.history].reverse().map((h, hi) => {
+                        const HDAYS=["日","月","火","水","木","金","土"];
+                        const fmtD=dt=>{ if(!dt) return ""; const [,m,d]=dt.split("-").map(Number); return `${m}月${d}日（${HDAYS[new Date(dt+"T00:00:00").getDay()]}）`; };
+                        const fmtT=t=>{ if(!t) return ""; const [hh,mm]=(t||"").slice(0,5).split(":"); return mm==="00"?`${parseInt(hh)}時`:`${parseInt(hh)}時${mm}分`; };
+                        const changedStr=h.changedAt?new Date(h.changedAt).toLocaleString("ja",{year:"numeric",month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"";
+                        return (
+                          <div key={hi} style={{ fontSize:12, lineHeight:1.9,
+                            borderTop:hi>0?"1px solid #e9d5ff":"none",
+                            paddingTop:hi>0?8:0, marginTop:hi>0?8:0 }}>
+                            {changedStr&&<div style={{ color:"#9333ea", fontWeight:700, marginBottom:2 }}>🕐 {changedStr}</div>}
+                            <div><span style={{ color:"#dc2626", fontWeight:700 }}>変更前：</span>
+                              {fmtD(h.prevDate)}{h.prevDate&&h.prevStart?" "+fmtT(h.prevStart)+(h.prevEnd?"〜"+fmtT(h.prevEnd):""):""}</div>
+                            {(h.newDate||h.newStart)&&<div><span style={{ color:"#16a34a", fontWeight:700 }}>変更後：</span>
+                              {fmtD(h.newDate)}{h.newDate&&h.newStart?" "+fmtT(h.newStart)+(h.newEnd?"〜"+fmtT(h.newEnd):""):""}</div>}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -8452,7 +8479,9 @@ function AdminApp({ role, onLogout }) {
           });
           newHistoryEntries[sch.id] = [
             ...(orig.history || []),
-            { prevDate: orig.date, prevStart: orig.start, prevEnd: orig.end, changedAt: nowIso },
+            { prevDate: orig.date, prevStart: (orig.start||'').slice(0,5), prevEnd: (orig.end||'').slice(0,5),
+              newDate: sch.date, newStart: (sch.start||'').slice(0,5), newEnd: (sch.end||'').slice(0,5),
+              changedAt: nowIso },
           ];
         }
         await sb.from('schedules').update({
