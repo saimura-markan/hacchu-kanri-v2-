@@ -3604,7 +3604,8 @@ function BottomSheet({ children }) {
 
 // ── 案件情報セクション（viewOnly/edit 共通） ────────────────────
 // 行定義をここで一元管理。項目を追加・削除するにはこの関数内の ROW_DEFS だけ編集する。
-function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, uploadingField, handleText, handleUpload }) {
+function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, uploadingField, handleText, handleUpload, formData }) {
+  formData = formData || {};
 
   const keyText     = siteData.key_info     || order.key     || "";
   const parkingText = siteData.parking_info || order.parking || "";
@@ -3648,7 +3649,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
         <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} /></>
       ),
       editContent: () => (
-        <><SiteTArea value={siteData.key_info} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
+        <><SiteTArea value={formData.key_info||''} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
         <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} /></>
       ),
@@ -3661,7 +3662,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
         <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} /></>
       ),
       editContent: () => (
-        <><SiteTArea value={siteData.parking_info} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
+        <><SiteTArea value={formData.parking_info||''} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
         <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} /></>
       ),
@@ -3679,12 +3680,12 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
         )}</>
       ),
       editContent: () => (
-        <><input value={siteData.contact_name} onChange={e=>handleText('contact_name',e.target.value)}
+        <><input value={formData.contact_name||''} onChange={e=>handleText('contact_name',e.target.value)}
           placeholder="担当者名" type="text"
           style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #d0d8ef",
             fontSize:14, fontFamily:"inherit", outline:"none", color:C.navy, background:C.white,
             boxSizing:"border-box", marginBottom:8 }} />
-        <input value={siteData.contact_phone} onChange={e=>handleText('contact_phone',e.target.value)}
+        <input value={formData.contact_phone||''} onChange={e=>handleText('contact_phone',e.target.value)}
           placeholder="電話番号" type="tel"
           style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #d0d8ef",
             fontSize:14, fontFamily:"inherit", outline:"none", color:C.navy, background:C.white,
@@ -3704,7 +3705,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
         <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} /></>
       ),
       editContent: () => (
-        <><SiteTArea value={siteData.memo} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
+        <><SiteTArea value={formData.memo||''} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
         <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} /></>
       ),
@@ -3717,7 +3718,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
         <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} /></>
       ),
       editContent: () => (
-        <><SiteTArea value={siteData.entry_info} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
+        <><SiteTArea value={formData.entry_info||''} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
         <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} /></>
       ),
@@ -3730,7 +3731,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
         <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} /></>
       ),
       editContent: () => (
-        <><SiteTArea value={siteData.yosei_info} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
+        <><SiteTArea value={formData.yosei_info||''} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
         <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} /></>
       ),
@@ -3848,6 +3849,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     contact_phone: order.siteContactPhone || '',
     memo:'', entry_info:'', yosei_info:'',
   });
+  const FORM_BLANK = { key_info:'', parking_info:'', contact_name:'', contact_phone:'', memo:'', entry_info:'', yosei_info:'' };
+  const [formData, setFormData] = useState(FORM_BLANK);
   const [imagePaths, setImagePaths] = useState({
     key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[],
   });
@@ -3925,7 +3928,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   useEffect(() => {
     if (!viewOnly || !cid || !siteName) return;
     sb.from('orders')
-      .select('id,service,status,schedules(work_date,start_time,end_time,workers,details,sort_order)')
+      .select('id,service,status,service_detail,schedules(work_date,start_time,end_time,workers,details,sort_order)')
       .eq('company_id', cid)
       .eq('site', siteName)
       .neq('id', order.id)
@@ -3933,26 +3936,31 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       .order('created_at', { ascending: false })
       .then(({ data, error }) => {
         if (error) { console.error('[relatedOrders]', error.message); return; }
-        if (data) setRelatedOrders(data.map(r => ({
-          id: r.id,
-          service: r.service || '',
-          status:  r.status  || '',
-          schedules: (r.schedules || [])
-            .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
-            .map(s => ({
-              date:    s.work_date   || '',
-              start:   s.start_time  || '',
-              end:     s.end_time    || '',
-              workers: s.workers     || '',
-              details: Array.isArray(s.details) ? s.details : [],
-            })),
-        })));
+        if (data) setRelatedOrders(data.map(r => {
+          const sdSchedules = r.service_detail?.schedules || [];
+          return {
+            id: r.id,
+            service: r.service || '',
+            status:  r.status  || '',
+            schedules: (r.schedules || [])
+              .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
+              .map(s => ({
+                date:          s.work_date   || '',
+                start:         s.start_time  || '',
+                end:           s.end_time    || '',
+                workers:       s.workers     || '',
+                details:       Array.isArray(s.details) ? s.details : [],
+                memo:          sdSchedules[s.sort_order]?.memo          || '',
+                serviceDetail: sdSchedules[s.sort_order]?.serviceDetail || null,
+              })),
+          };
+        }));
       });
   }, [cid, siteName, viewOnly]);
 
   const handleText = (field, value) => {
-    const next = { ...siteData, [field]: value };
-    setSiteData(next);
+    const nextForm = { ...formData, [field]: value };
+    setFormData(nextForm);
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       if (!siteName) return;
@@ -3967,19 +3975,22 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       }
       if (!timerCid) return;
       setSaving(true);
-      sb.from('sites').upsert({
+      const merged = { ...siteData };
+      Object.entries(nextForm).forEach(([k,v]) => { if (v !== '') merged[k] = v; });
+      const { error } = await sb.from('sites').upsert({
         company_id:    timerCid,
         site_name:     siteName,
-        key_info:      next.key_info,
-        parking_info:  next.parking_info,
-        contact_name:  next.contact_name,
-        contact_phone: next.contact_phone,
-        memo:          next.memo,
-        entry_info:    next.entry_info,
-        yosei_info:    next.yosei_info,
-      }, { onConflict: 'company_id,site_name' })
-        .then(({ error }) => { if (error) console.error('[handleText upsert]', error.message); setSaving(false); })
-        .catch(e => { console.error('[handleText catch]', e.message); setSaving(false); });
+        key_info:      merged.key_info,
+        parking_info:  merged.parking_info,
+        contact_name:  merged.contact_name,
+        contact_phone: merged.contact_phone,
+        memo:          merged.memo,
+        entry_info:    merged.entry_info,
+        yosei_info:    merged.yosei_info,
+      }, { onConflict: 'company_id,site_name' });
+      if (!error) setSiteData(merged);
+      else console.error('[handleText upsert]', error.message);
+      setSaving(false);
     }, 1000);
   };
 
@@ -4064,31 +4075,29 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     clearTimeout(saveTimer.current);
     setManualSaving(true);
     try {
+      const merged = { ...siteData };
+      Object.entries(formData).forEach(([k,v]) => { if (v !== '') merged[k] = v; });
       const { error } = await sb.from('sites').upsert({
         company_id:     activeCid,
         site_name:      siteName,
-        key_info:       siteData.key_info,
+        key_info:       merged.key_info,
         key_images:     imagePaths.key_images,
-        parking_info:   siteData.parking_info,
+        parking_info:   merged.parking_info,
         parking_images: imagePaths.parking_images,
-        contact_name:   siteData.contact_name,
-        contact_phone:  siteData.contact_phone,
-        memo:           siteData.memo,
+        contact_name:   merged.contact_name,
+        contact_phone:  merged.contact_phone,
+        memo:           merged.memo,
         images:         imagePaths.images,
-        entry_info:     siteData.entry_info,
+        entry_info:     merged.entry_info,
         entry_images:   imagePaths.entry_images,
-        yosei_info:     siteData.yosei_info,
+        yosei_info:     merged.yosei_info,
         yosei_images:   imagePaths.yosei_images,
       }, { onConflict: 'company_id,site_name' });
       if (error) { console.error('[handleSave upsert]', error.message); }
       else {
+        setSiteData(merged);
+        setFormData(FORM_BLANK);
         setSavedMsg(true);
-        // フォームをクリア（setCidを呼ばないのでfetchSiteDataは再発火しない）
-        setSiteData({ key_info:'', parking_info:'',
-          contact_name: '', contact_phone: '',
-          memo:'', entry_info:'', yosei_info:'' });
-        setImagePaths({ key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[] });
-        setBlobUrls({});
         setTimeout(() => setSavedMsg(false), 2000);
       }
     } finally {
@@ -4524,6 +4533,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                           ['フロア面積',sd.floorSize],['アスベスト',asbStr],
                           ['廃材量',sd.wasteSize],
                           ['廃材種別',Array.isArray(sd.wasteTypes)&&sd.wasteTypes.length?sd.wasteTypes.join("・"):null],
+                          ['補助作業員',sd.haizaiHelper],['バッカン',sd.baccanType],
                           ['図面',sd.house_plan]];
                         return rows.map(([label,value])=>!value?null:(
                           <div key={label} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:"1px solid #f0f0f5" }}>
@@ -4643,6 +4653,42 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                                     </div>
                                   ))
                                 }
+                                {s.serviceDetail&&(()=>{
+                                  const sd=s.serviceDetail;
+                                  const corner=sd.house_corner?"角部屋":"";
+                                  const asbStr=(()=>{ const ad=sd.asbestosDetail; if(!ad||!(ad.types||[]).length) return null;
+                                    const pts=(ad.types||[]).filter(t=>t!=="その他");
+                                    if((ad.types||[]).includes("その他")&&ad.other) pts.push(ad.other);
+                                    return pts.join("・")||null; })();
+                                  const rows=[['養生の場所',sd.location],['リフォーム内容',sd.reform],
+                                    ['広さ',sd.house_size],['家具の有無',sd.house_furniture],
+                                    ['水回り設備',sd.house_water],
+                                    ['その他条件',[corner,sd.house_vacancy].filter(Boolean).join('・')||null],
+                                    ['工事日数',sd.days?sd.days+"日":null],['入れない日',sd.offDays],
+                                    ['フロア面積',sd.floorSize],['アスベスト',asbStr],
+                                    ['廃材量',sd.wasteSize],
+                                    ['廃材種別',Array.isArray(sd.wasteTypes)&&sd.wasteTypes.length?sd.wasteTypes.join("・"):null],
+                                    ['補助作業員',sd.haizaiHelper],['バッカン',sd.baccanType],
+                                    ['図面',sd.house_plan]];
+                                  return rows.map(([label,value])=>!value?null:(
+                                    <div key={label} style={{ display:"flex", gap:10,
+                                      padding:"5px 0", borderBottom:"1px solid #f0f0f5" }}>
+                                      <div style={{ fontSize:12, color:C.gray,
+                                        minWidth:72, flexShrink:0 }}>{label}</div>
+                                      <div style={{ fontSize:13, fontWeight:600,
+                                        color:C.navy }}>{value}</div>
+                                    </div>
+                                  ));
+                                })()}
+                                {s.memo&&(
+                                  <div style={{ display:"flex", gap:10,
+                                    padding:"5px 0", borderBottom:"1px solid #f0f0f5" }}>
+                                    <div style={{ fontSize:12, color:C.gray,
+                                      minWidth:72, flexShrink:0 }}>メモ</div>
+                                    <div style={{ fontSize:13, fontWeight:600,
+                                      color:C.navy, whiteSpace:"pre-wrap" }}>{s.memo}</div>
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
@@ -4662,7 +4708,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             <SiteInfoSection viewOnly={false}
               order={order} siteName={siteName}
               siteData={siteData} imagePaths={imagePaths} blobUrls={blobUrls}
-              uploadingField={uploadingField} handleText={handleText} handleUpload={handleUpload} />
+              uploadingField={uploadingField} handleText={handleText} handleUpload={handleUpload}
+              formData={formData} />
 
             <button onClick={handleSave} disabled={manualSaving}
               style={{ display:"block", width:"100%",
@@ -6887,6 +6934,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       ['フロア面積',sd.floorSize],['アスベスト',asbStr],
                       ['廃材量',sd.wasteSize],
                       ['廃材種別',Array.isArray(sd.wasteTypes)&&sd.wasteTypes.length?sd.wasteTypes.join("・"):null],
+                      ['補助作業員',sd.haizaiHelper],['バッカン',sd.baccanType],
                       ['図面',sd.house_plan]];
                     return sdRows.map(([label,value])=>!value?null:(
                       <Row key={label} label={label} value={value} />
