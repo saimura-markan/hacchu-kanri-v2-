@@ -424,3 +424,24 @@ handleStatusChange(id, newStatus)
 - `LoginScreen.handleLogin` を `sb.auth.signInWithPassword` による非同期認証に変更
 - ロールは `data.user.user_metadata.role` から取得
 - 本番デプロイ開始
+
+---
+
+### 2026-06-04 — 管理者画面サイドバー通知バッジ・現場情報更新履歴
+
+#### ①通知バッジ（`AdOrderCard`）
+- お客様の未読チャット件数が赤バッジ「💬 N件未読」としてカード下部に表示（ポーリング3秒）
+- お客様が現場情報を変更・追加すると橙バッジ「📋 現場情報更新」が表示
+- 管理者が案件を開くと現場情報更新バッジは即時消去（`seen_by_admin=true` に更新）
+- チャットを既読にすると未読バッジも即時消去（`markChatRead` 内で `unreadCounts` を即時更新）
+
+#### ②現場情報の変更履歴（`site_history` テーブル）
+- `add_site_history.sql` 追加：`site_history` テーブル定義・RLSポリシー
+  - カラム: `order_id` / `company_id` / `site_name` / `changed_by` / `field_name` / `field_label` / `old_value` / `new_value` / `seen_by_admin` / `changed_at`
+- お客様が「💾 保存する」ボタンを押すと変更フィールドを自動検出してDB記録
+- 写真アップロード時も site_history に記録
+- 管理者の詳細パネル（詳細タブ）に「🔄 現場情報の更新履歴」として表示（降順）
+  - 変更前→変更後の値・項目名・日時を表示
+
+#### Supabase実行SQL
+`add_site_history.sql` を Supabase SQL Editor で実行してください。

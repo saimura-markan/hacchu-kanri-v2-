@@ -4046,6 +4046,26 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       } catch (e) {
         console.error('[sites upsert 失敗]', e.message);
       }
+      // 写真追加を site_history に記録
+      if (order?.id) {
+        const SITE_IMG_FL = {
+          key_images:'鍵情報（写真）', parking_images:'駐車場（写真）',
+          images:'現場注意事項（写真）', entry_images:'入館情報（写真）', yosei_images:'養生範囲（写真）',
+        };
+        sb.auth.getUser().then(({ data: { user } }) => {
+          sb.from('site_history').insert({
+            order_id:    order.id,
+            company_id:  activeCid,
+            site_name:   siteName,
+            changed_by:  user?.email || 'unknown',
+            field_name:  imgField,
+            field_label: SITE_IMG_FL[imgField] || imgField,
+            old_value:   null,
+            new_value:   `写真${savedPaths.length}枚を追加`,
+            seen_by_admin: false,
+          });
+        });
+      }
     }
 
     setUploadingField(null);
@@ -4095,6 +4115,31 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       }, { onConflict: 'company_id,site_name' });
       if (error) { console.error('[handleSave upsert]', error.message); }
       else {
+        // 変更されたフィールドを site_history に記録
+        const SITE_FL = {
+          key_info:'鍵情報', parking_info:'駐車場', contact_name:'担当者名',
+          contact_phone:'担当者電話', memo:'現場注意事項', entry_info:'入館情報', yosei_info:'養生範囲',
+        };
+        const changedFields = Object.keys(SITE_FL).filter(f =>
+          (siteData[f]||'') !== (merged[f]||'') && (merged[f]||'') !== ''
+        );
+        if (changedFields.length > 0 && order?.id) {
+          sb.auth.getUser().then(({ data: { user } }) => {
+            sb.from('site_history').insert(
+              changedFields.map(f => ({
+                order_id:    order.id,
+                company_id:  activeCid,
+                site_name:   siteName,
+                changed_by:  user?.email || 'unknown',
+                field_name:  f,
+                field_label: SITE_FL[f],
+                old_value:   siteData[f] || null,
+                new_value:   merged[f],
+                seen_by_admin: false,
+              }))
+            ).then(({ error: hErr }) => { if (hErr) console.error('[site_history insert]', hErr.message); });
+          });
+        }
         setSiteData(merged);
         setFormData(FORM_BLANK);
         setSavedMsg(true);
@@ -6334,7 +6379,7 @@ function Legend() {
 }
 
 // ── 受注カード ───────────────────────────────────────────
-function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onToggleCheck }) {
+function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onToggleCheck, unreadCount, siteChangeCount }) {
   useTimer();
   const timer = getOrderTimer(order);
 
@@ -6377,6 +6422,23 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
             {timer.label}
           </span>
         )}
+        {(unreadCount > 0 || siteChangeCount > 0) && (
+          <div style={{ display:"flex", gap:4, marginTop:5, flexWrap:"wrap" }}>
+            {unreadCount > 0 && (
+              <span style={{ background:"#e63946", color:"#fff", borderRadius:99,
+                padding:"1px 8px", fontSize:11, fontWeight:800,
+                animation:"urgentPulse 2s ease-in-out infinite" }}>
+                💬 {unreadCount}件未読
+              </span>
+            )}
+            {siteChangeCount > 0 && (
+              <span style={{ background:"#f07800", color:"#fff", borderRadius:99,
+                padding:"1px 8px", fontSize:11, fontWeight:800 }}>
+                📋 現場情報更新
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -6384,7 +6446,7 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
 
 // ── 受注一覧パネル ───────────────────────────────────────
 function OrderList({ role, orders, selected, onSelect, filter, setFilter, search, setSearch,
-                      checkedIds, onToggleCheck, onDeleteSelected }) {
+                      checkedIds, onToggleCheck, onDeleteSelected, unreadCounts, siteChangeCounts }) {
   useTimer();
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
   const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
@@ -6479,7 +6541,9 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
             isChecked={role !== "staff" && checkedIds.includes(order.id)}
             showCheckbox={role !== "staff"}
             onClick={()=>onSelect(order)}
-            onToggleCheck={onToggleCheck} />
+            onToggleCheck={onToggleCheck}
+            unreadCount={unreadCounts?.[order.id]||0}
+            siteChangeCount={siteChangeCounts?.[order.id]||0} />
         ))}
       </div>
     </div>
@@ -6487,7 +6551,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm }) {
+function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm, onSiteHistorySeen }) {
   const [tab, setTab]             = useState("detail");
   const [chatInput, setChatInput]   = useState("");
   const [chatReplyTo, setChatReplyTo] = useState(null);
@@ -6503,6 +6567,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [touching,    setTouching]    = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [adSiteData,  setAdSiteData]  = useState({});
+  const [siteHistory, setSiteHistory] = useState([]);
   const [showSoudanModal,  setShowSoudanModal]  = useState(false);
   const [soudanCandidates, setSoudanCandidates] = useState([{ date:'', time:'' }]);
   const [soudanSending,    setSoudanSending]    = useState(false);
@@ -6582,6 +6647,21 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
       .eq('company_id', order.companyId).eq('site_name', order.site)
       .limit(1)
       .then(({ data }) => { if (data?.[0]) setAdSiteData(data[0]); });
+  }, [order?.id]);
+
+  // 現場情報の更新履歴を取得・既読化
+  useEffect(() => {
+    if (!order?.id) return;
+    setSiteHistory([]);
+    sb.from('site_history').select('*').eq('order_id', order.id)
+      .order('changed_at', { ascending: false })
+      .then(({ data }) => setSiteHistory(data || []));
+    // 未既読レコードを既読にして親に通知
+    sb.from('site_history').update({ seen_by_admin: true })
+      .eq('order_id', order.id).eq('seen_by_admin', false)
+      .then(({ error }) => {
+        if (!error && onSiteHistorySeen) onSiteHistorySeen(order.id);
+      });
   }, [order?.id]);
 
   const startEdit = () => {
@@ -7234,6 +7314,40 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 
             {lightboxUrl && <ImageLightbox url={lightboxUrl} onClose={() => setLightboxUrl(null)} />}
 
+            {siteHistory.length > 0 && (
+              <div style={{ background:C.white, border:"1px solid #f0c080", borderRadius:14,
+                marginTop:16, marginBottom:4, overflow:"hidden" }}>
+                <div style={{ background:"linear-gradient(135deg,#e67e22,#c0632b)",
+                  padding:"10px 18px", fontSize:13, fontWeight:800, color:C.white }}>
+                  🔄 現場情報の更新履歴
+                </div>
+                <div>
+                  {siteHistory.map(h => (
+                    <div key={h.id} style={{ padding:"8px 18px", borderBottom:"1px solid #fde8c8",
+                      display:"flex", gap:8, alignItems:"flex-start", flexWrap:"wrap" }}>
+                      <span style={{ fontSize:12, color:C.gray, flexShrink:0, minWidth:90, marginTop:1 }}>
+                        {new Date(h.changed_at).toLocaleString("ja",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}
+                      </span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <span style={{ fontSize:12, fontWeight:800, color:"#c0632b" }}>
+                          {h.field_label}を{h.old_value ? "更新" : "追加"}
+                        </span>
+                        {h.new_value && (
+                          <div style={{ fontSize:11, color:C.gray, marginTop:2, lineHeight:1.5 }}>
+                            {h.old_value && (
+                              <><span style={{ textDecoration:"line-through", opacity:0.7 }}>{h.old_value.slice(0,40)}{h.old_value.length>40?"…":""}</span>
+                              <span style={{ margin:"0 4px" }}>→</span></>
+                            )}
+                            <span style={{ color:C.navy }}>{h.new_value.slice(0,40)}{h.new_value.length>40?"…":""}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {statusLogs.length > 0 && (
               <div style={{ background:C.white, border:"1px solid "+C.grayL, borderRadius:14,
                 marginTop:16, marginBottom:4, overflow:"hidden" }}>
@@ -7519,17 +7633,18 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
             <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL, padding:"20px" }}>
               <div style={{ fontSize:15, fontWeight:800, color:C.navy, marginBottom:12 }}>🔗 項目ごとにコピー</div>
               {[
-                ["会社名",   order.company],
-                ["担当者",   order.person],
-                ["電話番号", order.phone],
-                ["作業区分", order.service],
-                ["現場名",   order.site],
-                ["住所",     order.address],
+                ["会社名",   order.company||""],
+                ["担当者",   order.person||""],
+                ["電話番号", order.phone||""],
+                ["作業区分", order.service||""],
+                ["現場名",   order.site||""],
+                ["住所",     order.address||""],
                 ["日程",     order.schedules.map(s=>`${s.date} ${s.start}〜${s.end}`).join(" / ")],
                 ["作業内容", order.schedules.map(s=>(s.details||[]).join("・")).join(" / ")],
-                ["作業者数", order.schedules.map(s=>s.workers).filter(Boolean).join(" / ")],
+                ["作業者数", order.schedules.map(s=>s.workers||"").join(" / ")],
                 ["鍵",       order.key||"なし"],
                 ["駐車場",   order.parking||"なし"],
+                ["備考",     order.note||""],
               ].map(([label,value])=>(
                 <div key={label} style={{ display:"flex", alignItems:"center", gap:12,
                   padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
@@ -8231,6 +8346,8 @@ function AdminApp({ role, onLogout }) {
   const [showDeleted, setShowDeleted] = useState(false);
   const [showStaff,   setShowStaff]   = useState(false);
   const [checkedIds,  setCheckedIds]  = useState([]);
+  const [unreadCounts,     setUnreadCounts]     = useState({});
+  const [siteChangeCounts, setSiteChangeCounts] = useState({});
   const pendingDeletes = useRef(new Set());
 
   const fetchOrders = async () => {
@@ -8243,6 +8360,33 @@ function AdminApp({ role, onLogout }) {
     setOrders((data || []).map(mapOrder));
     setLoading(false);
     setDbError(null);
+  };
+
+  const fetchNotifications = async () => {
+    // お客様からの未読メッセージ数（order_id別）
+    const { data: unread } = await sb.from('messages')
+      .select('order_id')
+      .eq('from_role', 'user')
+      .eq('is_read', false);
+    const counts = {};
+    (unread || []).forEach(m => { counts[m.order_id] = (counts[m.order_id] || 0) + 1; });
+    setUnreadCounts(counts);
+
+    // 管理者未確認の現場情報変更数（order_id別）
+    const { data: siteChanges } = await sb.from('site_history')
+      .select('order_id')
+      .eq('seen_by_admin', false);
+    const siteCounts = {};
+    (siteChanges || []).forEach(h => { siteCounts[h.order_id] = (siteCounts[h.order_id] || 0) + 1; });
+    setSiteChangeCounts(siteCounts);
+  };
+
+  const handleSiteHistorySeen = (orderId) => {
+    setSiteChangeCounts(prev => {
+      const next = { ...prev };
+      delete next[orderId];
+      return next;
+    });
   };
 
   useEffect(() => {
@@ -8260,6 +8404,13 @@ function AdminApp({ role, onLogout }) {
       if (!session) onLogout();
     });
     return () => { if (channel) sb.removeChannel(channel); subscription.unsubscribe(); };
+  }, []);
+
+  // 通知（未読チャット・現場情報変更）を定期取得（3秒ポーリング）
+  useEffect(() => {
+    fetchNotifications();
+    const t = setInterval(fetchNotifications, 3000);
+    return () => clearInterval(t);
   }, []);
 
   // 選択案件のメッセージを遅延ロード + Realtime購読
@@ -8575,6 +8726,7 @@ function AdminApp({ role, onLogout }) {
 
   const markChatRead = async (id) => {
     setChats(c => ({ ...c, [id]: (c[id]||[]).map(m => ({ ...m, read: true })) }));
+    setUnreadCounts(prev => { const next = { ...prev }; delete next[id]; return next; });
     const { error } = await sb.from('messages')
       .update({ is_read: true })
       .eq('order_id', id)
@@ -8679,13 +8831,16 @@ function AdminApp({ role, onLogout }) {
           filter={filter} setFilter={setFilter} search={search} setSearch={setSearch}
           checkedIds={checkedIds}
           onToggleCheck={id=>setCheckedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}
-          onDeleteSelected={handleDelete} />
+          onDeleteSelected={handleDelete}
+          unreadCounts={unreadCounts}
+          siteChangeCounts={siteChangeCounts} />
 
         <DetailPanel role={role} order={selected} chats={chats}
           onAddChat={addChat} onStatusChange={handleStatusChange}
           onEdit={handleEdit} onDelete={handleDelete} onDeleteMsg={deleteMsg}
           onMarkChatRead={markChatRead} onUpdateMsg={updateMsg}
-          onRescheduleConfirm={handleRescheduleConfirm} />
+          onRescheduleConfirm={handleRescheduleConfirm}
+          onSiteHistorySeen={handleSiteHistorySeen} />
       </>)}
 
       {showComp  && <CompanyPanel onClose={()=>setShowComp(false)} />}
