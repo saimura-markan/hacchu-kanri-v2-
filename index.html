@@ -4133,6 +4133,15 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             new_value:   `写真${savedPaths.length}枚を追加`,
             seen_by_admin: false,
           });
+          if (user?.id) {
+            sb.from('order_change_logs').insert({
+              order_id:   order.id,
+              changed_by: user.id,
+              field_name: SITE_IMG_FL[imgField] || imgField,
+              old_value:  null,
+              new_value:  `写真${savedPaths.length}枚を追加`,
+            }).then(({ error: logErr }) => { if (logErr) console.error('[order_change_logs photo]', logErr.message); });
+          }
         });
       }
     }
@@ -4209,6 +4218,17 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                 seen_by_admin: false,
               }))
             ).then(({ error: hErr }) => { if (hErr) console.error('[site_history insert]', hErr.message); });
+            if (user?.id) {
+              sb.from('order_change_logs').insert(
+                changedFields.map(f => ({
+                  order_id:   order.id,
+                  changed_by: user.id,
+                  field_name: SITE_FL[f],
+                  old_value:  siteData[f] || null,
+                  new_value:  merged[f],
+                }))
+              ).then(({ error: logErr }) => { if (logErr) console.error('[order_change_logs insert]', logErr.message); });
+            }
           });
         }
         setSiteData(merged);
@@ -6460,7 +6480,7 @@ function Legend() {
 }
 
 // ── 受注カード ───────────────────────────────────────────
-function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onToggleCheck, unreadCount, siteChangeCount }) {
+function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onToggleCheck, unreadCount, siteChangeCount, changeLogCount }) {
   useTimer();
   const timer = getOrderTimer(order);
 
@@ -6518,6 +6538,12 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
                 📋 現場情報更新
               </span>
             )}
+            {changeLogCount > 0 && (
+              <span style={{ background:"#1a5fbf", color:"#fff", borderRadius:99,
+                padding:"1px 8px", fontSize:11, fontWeight:800 }}>
+                🔔 {changeLogCount}件未確認
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -6527,7 +6553,7 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
 
 // ── 受注一覧パネル ───────────────────────────────────────
 function OrderList({ role, orders, selected, onSelect, filter, setFilter, search, setSearch,
-                      checkedIds, onToggleCheck, onDeleteSelected, unreadCounts, siteChangeCounts }) {
+                      checkedIds, onToggleCheck, onDeleteSelected, unreadCounts, siteChangeCounts, changeLogCounts }) {
   useTimer();
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
   const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
@@ -6624,7 +6650,8 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
             onClick={()=>onSelect(order)}
             onToggleCheck={onToggleCheck}
             unreadCount={unreadCounts?.[order.id]||0}
-            siteChangeCount={siteChangeCounts?.[order.id]||0} />
+            siteChangeCount={siteChangeCounts?.[order.id]||0}
+            changeLogCount={changeLogCounts?.[order.id]||0} />
         ))}
       </div>
     </div>
@@ -6632,7 +6659,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm, onSiteHistorySeen }) {
+function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm, onSiteHistorySeen, onChangeLogsConfirm }) {
   const [tab, setTab]             = useState("detail");
   const [chatInput, setChatInput]   = useState("");
   const [chatReplyTo, setChatReplyTo] = useState(null);
@@ -6652,6 +6679,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [adSiteFormData,  setAdSiteFormData]  = useState({});
   const [adSiteSaving,    setAdSiteSaving]    = useState(false);
   const [siteHistory, setSiteHistory] = useState([]);
+  const [changeLogs,  setChangeLogs]  = useState([]);
   const [showSoudanModal,  setShowSoudanModal]  = useState(false);
   const [soudanCandidates, setSoudanCandidates] = useState([{ date:'', time:'' }]);
   const [soudanSending,    setSoudanSending]    = useState(false);
@@ -6747,6 +6775,27 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
         if (!error && onSiteHistorySeen) onSiteHistorySeen(order.id);
       });
   }, [order?.id]);
+
+  // 変更ログを取得
+  useEffect(() => {
+    if (!order?.id) return;
+    setChangeLogs([]);
+    sb.from('order_change_logs').select('*').eq('order_id', order.id)
+      .order('changed_at', { ascending: false })
+      .then(({ data }) => setChangeLogs(data || []));
+  }, [order?.id]);
+
+  const handleConfirmChanges = async () => {
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return;
+    const now = new Date().toISOString();
+    await sb.from('order_change_logs')
+      .update({ confirmed_by: user.id, confirmed_at: now })
+      .eq('order_id', order.id)
+      .is('confirmed_by', null);
+    setChangeLogs(prev => prev.map(l => l.confirmed_by ? l : { ...l, confirmed_by: user.id, confirmed_at: now }));
+    onChangeLogsConfirm && onChangeLogsConfirm(order.id);
+  };
 
   const startEdit = () => {
     setEditData({
@@ -7641,6 +7690,45 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       <span style={{ fontSize:12, fontWeight:700, color:C.navy }}>
                         {log.old_status || "（新規）"} → {log.new_status}
                       </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {changeLogs.length > 0 && (
+              <div style={{ background:C.white, border:"1px solid #a0c0f0", borderRadius:14,
+                marginTop:16, marginBottom:4, overflow:"hidden" }}>
+                <div style={{ background:"linear-gradient(135deg,#1a5fbf,#0a3f8f)",
+                  padding:"10px 18px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:13, fontWeight:800, color:C.white }}>🔔 変更履歴</span>
+                  {changeLogs.some(l=>!l.confirmed_by) && (role==="admin"||role==="manager") && (
+                    <button onClick={handleConfirmChanges}
+                      style={{ fontSize:12, fontWeight:700, color:C.white,
+                        background:"rgba(255,255,255,0.2)", border:"1px solid rgba(255,255,255,0.5)",
+                        borderRadius:6, padding:"4px 10px", cursor:"pointer", fontFamily:"inherit" }}>
+                      ✅ 確認済みにする
+                    </button>
+                  )}
+                </div>
+                <div>
+                  {changeLogs.map(l => (
+                    <div key={l.id} style={{ padding:"9px 18px", borderBottom:"1px solid #ddeeff",
+                      display:"flex", gap:8, alignItems:"flex-start", flexWrap:"wrap" }}>
+                      <span style={{ fontSize:12, color:C.gray, flexShrink:0, minWidth:90, marginTop:1 }}>
+                        {new Date(l.changed_at).toLocaleString("ja",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}
+                      </span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <span style={{ fontSize:12, fontWeight:800, color:"#1a5fbf" }}>{l.field_name}</span>
+                        {l.old_value
+                          ? <span style={{ fontSize:12, color:C.gray }}> {l.old_value} → <span style={{ color:C.navy, fontWeight:600 }}>{l.new_value}</span></span>
+                          : <span style={{ fontSize:12, color:C.navy, fontWeight:600 }}> 追加: {l.new_value}</span>
+                        }
+                      </div>
+                      {l.confirmed_by
+                        ? <span style={{ fontSize:11, color:"#16a34a", fontWeight:700, flexShrink:0 }}>✅ 確認済</span>
+                        : <span style={{ fontSize:11, color:"#f07800", fontWeight:700, flexShrink:0 }}>🔔 未確認</span>
+                      }
                     </div>
                   ))}
                 </div>
@@ -8678,6 +8766,7 @@ function AdminApp({ role, onLogout }) {
   const [checkedIds,  setCheckedIds]  = useState([]);
   const [unreadCounts,     setUnreadCounts]     = useState({});
   const [siteChangeCounts, setSiteChangeCounts] = useState({});
+  const [changeLogCounts,  setChangeLogCounts]  = useState({});
   const pendingDeletes = useRef(new Set());
 
   const fetchOrders = async () => {
@@ -8709,10 +8798,26 @@ function AdminApp({ role, onLogout }) {
     const siteCounts = {};
     (siteChanges || []).forEach(h => { siteCounts[h.order_id] = (siteCounts[h.order_id] || 0) + 1; });
     setSiteChangeCounts(siteCounts);
+
+    // 管理者未確認の変更ログ件数（order_id別）
+    const { data: changeLogs } = await sb.from('order_change_logs')
+      .select('order_id')
+      .is('confirmed_by', null);
+    const logCounts = {};
+    (changeLogs || []).forEach(l => { logCounts[l.order_id] = (logCounts[l.order_id] || 0) + 1; });
+    setChangeLogCounts(logCounts);
   };
 
   const handleSiteHistorySeen = (orderId) => {
     setSiteChangeCounts(prev => {
+      const next = { ...prev };
+      delete next[orderId];
+      return next;
+    });
+  };
+
+  const handleChangeLogsConfirm = (orderId) => {
+    setChangeLogCounts(prev => {
       const next = { ...prev };
       delete next[orderId];
       return next;
@@ -9163,14 +9268,16 @@ function AdminApp({ role, onLogout }) {
           onToggleCheck={id=>setCheckedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}
           onDeleteSelected={handleDelete}
           unreadCounts={unreadCounts}
-          siteChangeCounts={siteChangeCounts} />
+          siteChangeCounts={siteChangeCounts}
+          changeLogCounts={changeLogCounts} />
 
         <DetailPanel role={role} order={selected} chats={chats}
           onAddChat={addChat} onStatusChange={handleStatusChange}
           onEdit={handleEdit} onDelete={handleDelete} onDeleteMsg={deleteMsg}
           onMarkChatRead={markChatRead} onUpdateMsg={updateMsg}
           onRescheduleConfirm={handleRescheduleConfirm}
-          onSiteHistorySeen={handleSiteHistorySeen} />
+          onSiteHistorySeen={handleSiteHistorySeen}
+          onChangeLogsConfirm={handleChangeLogsConfirm} />
       </>)}
 
       {showComp  && <CompanyPanel onClose={()=>setShowComp(false)} />}
