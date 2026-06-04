@@ -2160,9 +2160,9 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
         <input type="date" value={sch.date||""}
           min={new Date().toISOString().split("T")[0]}
           onChange={e=>onChange({...sch,date:e.target.value})}
-          style={{ width:"100%", fontSize:17, padding:"12px 14px", borderRadius:12,
+          style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:12,
             border:"2px solid "+(errDate?C.red:C.grayL), boxSizing:"border-box",
-            fontFamily:"inherit", outline:"none", color:C.navy,
+            outline:"none", color:C.navy, WebkitAppearance:"none", appearance:"none",
             background:errDate?"#fff0f0":C.white, transition:"all 0.2s" }} />
       </div>
       {TIME_PATTERNS[serviceId] ? (
@@ -4342,7 +4342,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               onChange={e=>{ setReschedDate(e.target.value); setReschedErr(""); }}
               style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:10,
                 border:"2px solid "+(reschedErr&&!reschedDate?C.red:C.grayL),
-                fontFamily:"inherit", outline:"none", color:C.navy, boxSizing:"border-box" }} />
+                outline:"none", color:C.navy, boxSizing:"border-box" }} />
           </div>
           <div style={{ marginBottom:reschedErr?8:20 }}>
             <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>変更希望時間</div>
@@ -6893,7 +6893,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                           onChange={e=>setEditData(d=>({...d,schedules:d.schedules.map((s,j)=>j===i?{...s,date:e.target.value}:s)}))}
                           style={{ fontSize:14, padding:"9px 10px", borderRadius:8,
                             border:"1px solid "+C.grayL, width:"100%",
-                            fontFamily:"inherit", boxSizing:"border-box" }} />
+                            boxSizing:"border-box" }} />
                       </div>
                       <div style={{ display:"flex", gap:12, marginBottom:10 }}>
                         <div style={{ flex:1 }}>
@@ -7689,7 +7689,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 <input type="date" value={c.date}
                   onChange={e => setSoudanCandidates(cs => cs.map((x,j) => j===i ? {...x, date:e.target.value} : x))}
                   style={{ flex:1, padding:'9px 10px', borderRadius:8, border:'1px solid '+C.grayL,
-                    fontSize:14, fontFamily:'inherit', outline:'none', color:C.navy, boxSizing:'border-box' }} />
+                    fontSize:14, outline:'none', color:C.navy, boxSizing:'border-box' }} />
                 <input type="time" value={c.time}
                   onChange={e => setSoudanCandidates(cs => cs.map((x,j) => j===i ? {...x, time:e.target.value} : x))}
                   style={{ width:110, padding:'9px 10px', borderRadius:8, border:'1px solid '+C.grayL,
@@ -7766,7 +7766,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   min={new Date().toISOString().split("T")[0]}
                   onChange={e => setScheduleChangeDate(e.target.value)}
                   style={{ width:'100%', padding:'9px 10px', borderRadius:8, border:'1px solid '+C.grayL,
-                    fontSize:14, fontFamily:'inherit', outline:'none', color:C.navy, boxSizing:'border-box' }} />
+                    fontSize:14, outline:'none', color:C.navy, boxSizing:'border-box' }} />
               </div>
               <div style={{ display:'flex', gap:10 }}>
                 <div style={{ flex:1 }}>
