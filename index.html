@@ -6526,7 +6526,7 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
             {timer.label}
           </span>
         )}
-        {(unreadCount > 0 || siteChangeCount > 0) && (
+        {(unreadCount > 0 || siteChangeCount > 0 || changeLogCount > 0) && (
           <div style={{ display:"flex", gap:4, marginTop:5, flexWrap:"wrap" }}>
             {unreadCount > 0 && (
               <span style={{ background:"#e63946", color:"#fff", borderRadius:99,
