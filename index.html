@@ -3128,12 +3128,6 @@ function OrderApp({ onDone, onBack }) {
     const caseId = newCase.id;
 
     // ③ orders テーブルに作業を登録（case_id で案件に紐づける）
-    // 会社名テキストを companies テーブルから取得
-    let companyNameText = '';
-    if (companyId) {
-      const { data: coRow } = await sb.from('companies').select('name').eq('id', companyId).maybeSingle();
-      companyNameText = coRow?.name || '';
-    }
     // 担当者の電話番号を profiles から取得
     const { data: profileRow } = await sb.from('profiles').select('phone').eq('id', currentUserId).maybeSingle();
     const personPhone = profileRow?.phone || '';
@@ -3145,7 +3139,6 @@ function OrderApp({ onDone, onBack }) {
       const { data: newOrder, error } = await sb.from('orders').insert({
         user_id:        currentUserId,
         company_id:     companyId        || null,
-        company:        companyNameText,
         person:         personName       || '',
         person_kana:    personNameKana   || '',
         phone:          personPhone,
