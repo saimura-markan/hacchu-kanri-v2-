@@ -3668,7 +3668,7 @@ function BottomSheet({ children }) {
 
 // ── 案件情報セクション（viewOnly/edit 共通） ────────────────────
 // 行定義をここで一元管理。項目を追加・削除するにはこの関数内の ROW_DEFS だけ編集する。
-function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, uploadingField, handleText, handleUpload, formData }) {
+function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, pendingImages = {}, uploadingField, handleText, handleUpload, formData }) {
   formData = formData || {};
 
   const keyText     = siteData.key_info     || order.key     || "";
@@ -3714,7 +3714,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
       ),
       editContent: () => (
         <><SiteTArea value={formData.key_info||''} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
-        <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} />
+        <SiteAttachments paths={pendingImages.key_images||[]} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} /></>
       ),
     },
@@ -3727,7 +3727,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
       ),
       editContent: () => (
         <><SiteTArea value={formData.parking_info||''} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
-        <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} />
+        <SiteAttachments paths={pendingImages.parking_images||[]} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} /></>
       ),
     },
@@ -3770,7 +3770,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
       ),
       editContent: () => (
         <><SiteTArea value={formData.memo||''} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
-        <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} />
+        <SiteAttachments paths={pendingImages.images||[]} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} /></>
       ),
     },
@@ -3783,7 +3783,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
       ),
       editContent: () => (
         <><SiteTArea value={formData.entry_info||''} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
-        <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} />
+        <SiteAttachments paths={pendingImages.entry_images||[]} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} /></>
       ),
     },
@@ -3796,7 +3796,7 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
       ),
       editContent: () => (
         <><SiteTArea value={formData.yosei_info||''} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
-        <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} />
+        <SiteAttachments paths={pendingImages.yosei_images||[]} blobUrls={blobUrls} />
         <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} /></>
       ),
     },
@@ -3914,14 +3914,17 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     memo:'', entry_info:'', yosei_info:'',
   });
   const FORM_BLANK = { key_info:'', parking_info:'', contact_name:'', contact_phone:'', memo:'', entry_info:'', yosei_info:'' };
+  const PENDING_BLANK = { key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[] };
   const [formData, setFormData] = useState(FORM_BLANK);
   const [imagePaths, setImagePaths] = useState({
     key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[],
   });
+  const [pendingImages,  setPendingImages]  = useState(PENDING_BLANK);
   const [blobUrls,       setBlobUrls]       = useState({}); // アップロード直後のblob URL（セッション中保持）
   const [saving,         setSaving]         = useState(false);
   const [manualSaving,   setManualSaving]   = useState(false);
   const [savedMsg,       setSavedMsg]       = useState(false);
+  const [saveError,      setSaveError]      = useState('');
   const [uploadingField, setUploadingField] = useState(null);
   const [relatedOrders,   setRelatedOrders]   = useState([]);
   const [expandedRelated, setExpandedRelated] = useState({});
@@ -4080,6 +4083,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         setBlobUrls(prev => ({ ...prev, [path]: blobUrl }));
       }
       setImagePaths(prev => ({ ...prev, [imgField]: [...(prev[imgField] || []), path] }));
+      setPendingImages(prev => ({ ...prev, [imgField]: [...(prev[imgField] || []), path] }));
 
       if (!activeCid) { savedPaths.push(path); continue; }
 
@@ -4089,6 +4093,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       if (error) {
         // アップロード失敗時のみ除去
         setImagePaths(prev => ({ ...prev, [imgField]: (prev[imgField] || []).filter(p => p !== path) }));
+        setPendingImages(prev => ({ ...prev, [imgField]: (prev[imgField] || []).filter(p => p !== path) }));
         setBlobUrls(prev => { const n = { ...prev }; delete n[path]; return n; });
         if (blobUrlsRef.current[path]) { URL.revokeObjectURL(blobUrlsRef.current[path]); delete blobUrlsRef.current[path]; }
       } else {
@@ -4177,8 +4182,10 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         yosei_info:     merged.yosei_info,
         yosei_images:   imagePaths.yosei_images,
       }, { onConflict: 'company_id,site_name' });
-      if (error) { console.error('[handleSave upsert]', error.message); }
-      else {
+      if (error) {
+        console.error('[handleSave upsert]', error.message);
+        setSaveError('保存に失敗しました。もう一度お試しください。');
+      } else {
         // 変更されたフィールドを site_history に記録
         const SITE_FL = {
           key_info:'鍵情報', parking_info:'駐車場', contact_name:'担当者名',
@@ -4206,6 +4213,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         }
         setSiteData(merged);
         setFormData(FORM_BLANK);
+        setPendingImages(PENDING_BLANK);
+        setSaveError('');
         setSavedMsg(true);
         setTimeout(() => setSavedMsg(false), 2000);
       }
@@ -4829,9 +4838,17 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             <SiteInfoSection viewOnly={false}
               order={order} siteName={siteName}
               siteData={siteData} imagePaths={imagePaths} blobUrls={blobUrls}
+              pendingImages={pendingImages}
               uploadingField={uploadingField} handleText={handleText} handleUpload={handleUpload}
               formData={formData} />
 
+            {saveError && (
+              <div style={{ color:C.red, fontSize:13, fontWeight:700, marginBottom:8,
+                background:"#fff0f0", border:"1px solid #ffb0b0", borderRadius:10,
+                padding:"10px 14px" }}>
+                ⚠️ {saveError}
+              </div>
+            )}
             <button onClick={handleSave} disabled={manualSaving}
               style={{ display:"block", width:"100%",
                 background: savedMsg ? "linear-gradient(135deg,#2eaa72,#1a7a50)" : "linear-gradient(135deg,#2952c8,#0a1f5c)",
