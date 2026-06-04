@@ -2636,11 +2636,14 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
           <div style={{ padding:"14px 18px" }}>
             <ConfRow label="日付"     value={sch.date} />
             <ConfRow label="時間"     value={sch.startTime&&sch.endTime?sch.startTime+"〜"+sch.endTime:""} />
-            <ConfRow label="作業内容" value={(sch.details||[]).join("・")} />
+            <ConfRow label="作業内容" value={(sch.details||[]).filter(d=>d!=="アスベストあり").join("・")} />
             {serviceId==="kaitai"&&sch.serviceDetail&&(
               <>
                 <ConfRow label="工事日数"   value={sch.serviceDetail.days?sch.serviceDetail.days+"日":""} />
                 <ConfRow label="入れない日" value={sch.serviceDetail.offDays} />
+                {(sch.details||[]).includes("アスベストあり")&&(
+                  <ConfRow label="アスベスト" value="あり" />
+                )}
                 {(()=>{
                   const ad=sch.serviceDetail.asbestosDetail;
                   if (!ad||(ad.types||[]).length===0) return null;
