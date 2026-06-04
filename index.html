@@ -2965,7 +2965,7 @@ function OrderApp({ onDone, onBack }) {
   const [doneServices, setDoneServices] = useState([]);
   const [orders,       setOrders]       = useState([]);
   const [savedForms,   setSavedForms]   = useState({});
-  const firstSiteData = orders[0]?.data||null;
+  const firstSiteData = doneServices.length>0 ? (savedForms[doneServices[0]]||null) : null;
   const [submitting,      setSubmitting]      = useState(false);
   const [savedIds,        setSavedIds]        = useState([]);
   const [personName,      setPersonName]      = useState("");
@@ -3007,9 +3007,13 @@ function OrderApp({ onDone, onBack }) {
   };
 
   const handleFormSubmit=data=>{
-    const finalData=doneServices.length>0&&firstSiteData
+    const finalData=doneServices.length>0&&firstSiteData&&currentSvc!==doneServices[0]
       ? {...data,siteName:firstSiteData.siteName,address:firstSiteData.address,
-          addrOk:firstSiteData.addrOk,keyInfo:firstSiteData.keyInfo}
+          addrNum:firstSiteData.addrNum||"",addrBldg:firstSiteData.addrBldg||"",
+          addrOk:firstSiteData.addrOk,keyInfo:firstSiteData.keyInfo,
+          zipCode:firstSiteData.zipCode||"",
+          siteContactName:firstSiteData.siteContactName||"",
+          siteContactPhone:firstSiteData.siteContactPhone||""}
       : data;
     const newOrders=[...orders.filter(o=>o.serviceId!==currentSvc),{serviceId:currentSvc,data:finalData}];
     setOrders(newOrders);
@@ -3207,8 +3211,12 @@ function OrderApp({ onDone, onBack }) {
           <StepForm serviceId={currentSvc}
             savedData={savedForms[currentSvc]||(doneServices.length>0&&firstSiteData
               ?{siteName:firstSiteData.siteName,address:firstSiteData.address,
-                addrOk:firstSiteData.addrOk,keyInfo:firstSiteData.keyInfo}:{})}
-            isAdditional={doneServices.length>0&&!doneServices.includes(currentSvc)}
+                addrNum:firstSiteData.addrNum||"",addrBldg:firstSiteData.addrBldg||"",
+                addrOk:firstSiteData.addrOk,keyInfo:firstSiteData.keyInfo,
+                zipCode:firstSiteData.zipCode||"",
+                siteContactName:firstSiteData.siteContactName||"",
+                siteContactPhone:firstSiteData.siteContactPhone||""}:{})}
+            isAdditional={doneServices.length>0&&currentSvc!==doneServices[0]}
             firstSiteData={firstSiteData}
             personName={personName}
             personNameLoading={personNameLoading}
