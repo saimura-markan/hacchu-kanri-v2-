@@ -2683,6 +2683,42 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
                 <ConfRow label="図面"           value={sch.serviceDetail.house_plan} />
               </>
             )}
+            {serviceId==="souji"&&sch.serviceDetail&&(()=>{
+              const sd=sch.serviceDetail;
+              const hasKanyi=(sch.details||[]).includes("簡易清掃・家具移動");
+              const hasHouse=(sch.details||[]).includes("ハウスクリーニング");
+              const hasAC=(sch.details||[]).includes("エアコンクリーニング");
+              const hasOther=(sch.details||[]).includes("その他");
+              const cornerVacancy=[sd.house_corner?"角部屋":"",sd.house_vacancy||""].filter(Boolean).join("・");
+              return (
+                <>
+                  {hasKanyi&&(<>
+                    <ConfRow label="簡易清掃 - 養生撤去処分" value={sd.kanyi_yousei} />
+                    <ConfRow label="家具移動"               value={sd.kanyi_kagu} />
+                    {sd.kanyi_kagu==="家具移動あり"&&<ConfRow label="家具移動 - 重量物" value={sd.kanyi_heavy} />}
+                  </>)}
+                  {hasHouse&&(<>
+                    <ConfRow label="ハウスクリーニング - 養生撤去処分" value={sd.house_yousei} />
+                    <ConfRow label="ハウスクリーニング - 広さ"         value={sd.house_size} />
+                    <ConfRow label="家具の有無"                       value={sd.house_furniture} />
+                    <ConfRow label="水回り設備の入替状況"             value={sd.house_water} />
+                    {cornerVacancy&&<ConfRow label="その他の条件"     value={cornerVacancy} />}
+                    <ConfRow label="図面"                             value={sd.house_plan} />
+                  </>)}
+                  {hasAC&&(()=>{
+                    const lines=[];
+                    if(sd.ac_normal>0)   lines.push(`ノーマル ${sd.ac_normal}台`);
+                    if(sd.ac_smart>0)    lines.push(`お掃除機能付き ${sd.ac_smart}台`);
+                    if(sd.ac_tencase>0)  lines.push(`テンカセ ${sd.ac_tencase}台`);
+                    if(sd.ac_tentsu>0)   lines.push(`テンツリ ${sd.ac_tentsu}台`);
+                    return lines.length ? <ConfRow label="エアコンクリーニング" value={lines.join("・")} /> : null;
+                  })()}
+                  {hasOther&&(sd.other_types||[]).length>0&&(
+                    <ConfRow label="その他作業" value={(sd.other_types||[]).join("・")} />
+                  )}
+                </>
+              );
+            })()}
             {sch.workers&&<ConfRow label="作業者数" value={sch.workers} />}
             <ConfRow label="メモ" value={sch.memo} />
           </div>
