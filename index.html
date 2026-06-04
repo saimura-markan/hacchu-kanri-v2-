@@ -15,6 +15,9 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif; }
+    /* iOS Safari: date input の内部テキストが消える問題の修正 */
+    input[type="date"] { -webkit-appearance: textfield; appearance: textfield; }
+    input[type="date"]::-webkit-date-and-time-value { min-height: 1.5em; text-align: left; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #f0f4f9; }
     ::-webkit-scrollbar-thumb { background: #c0cce0; border-radius: 3px; }
@@ -2162,7 +2165,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
           onChange={e=>onChange({...sch,date:e.target.value})}
           style={{ width:"100%", fontSize:16, padding:"12px 14px", borderRadius:12,
             border:"2px solid "+(errDate?C.red:C.grayL), boxSizing:"border-box",
-            outline:"none", color:C.navy, WebkitAppearance:"none", appearance:"none",
+            outline:"none", color:C.navy,
             background:errDate?"#fff0f0":C.white, transition:"all 0.2s" }} />
       </div>
       {TIME_PATTERNS[serviceId] ? (
