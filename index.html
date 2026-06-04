@@ -6238,7 +6238,7 @@ function mapOrder(row) {
     caseId:         row.case_id           || null,
     caseCode:       row.cases?.case_code  || null,
     caseName:       row.cases?.case_name  || null,
-    company:        row.company    || row.companies?.name || '',
+    company:        row.companies?.name || row.company || '',
     companyId:      row.company_id || '',
     person:         row.person      || row.profiles?.name     || '',
     personKana:     row.person_kana || row.profiles?.name_kana || '',
@@ -6865,16 +6865,72 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     onUpdateMsg && onUpdateMsg(order.id, msgId, { reactions: r });
   };
 
-  const prowonText = `【受付番号】${order.id}
-【会社名】${order.company}
-【担当者】${order.person}　${order.phone}
-【作業区分】${order.service}
-【現場名】${order.site}
-【住所】${order.address}
-【日程】${order.schedules.map(s=>`${s.date} ${s.start}〜${s.end} ${s.workers} ${(s.details||[]).join("・")}`).join(" / ")}
-【鍵】${order.key||"なし"}
-【駐車場】${order.parking||"なし"}
-【備考】${order.note||"なし"}`;
+  const SVC_ID = {"養生・家具移動・荷上":"yousei","解体":"kaitai","産廃":"sanpai","清掃・家具移動":"souji"}[order.service]||"";
+  const prowonText = (()=>{
+    const lines = [
+      `【受付番号】${order.id}`,
+      `【会社名】${order.company}`,
+      `【担当者】${order.person}　${order.phone}`,
+      order.personKana ? `【ふりがな】${order.personKana}` : null,
+      `【作業区分】${order.service}`,
+      `【現場名】${order.site}`,
+      `【住所】${[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')}`,
+      (order.siteContactName||order.siteContactPhone) ? `【現場担当者】${[order.siteContactName,order.siteContactPhone].filter(Boolean).join('　')}` : null,
+      `【日程】${order.schedules.map(s=>`${s.date} ${s.start}〜${s.end} ${s.workers} ${(s.details||[]).join("・")}`).join(" / ")}`,
+    ];
+    order.schedules.forEach((sch,si)=>{
+      if (!sch.serviceDetail) return;
+      const sd=sch.serviceDetail;
+      const px=order.schedules.length>1?`日程${si+1}_`:'';
+      const asbStr=(()=>{ const ad=sd.asbestosDetail; if(!ad||!(ad.types||[]).length) return ''; const pts=(ad.types||[]).filter(t=>t!=="その他"); if((ad.types||[]).includes("その他")&&ad.other) pts.push(ad.other); return pts.join("・"); })();
+      if (SVC_ID==='yousei') {
+        if (sd.location) lines.push(`【${px}養生の場所】${sd.location}`);
+        if (sd.reform) lines.push(`【${px}リフォーム内容】${sd.reform}`);
+        if (sd.heavy) lines.push(`【${px}重量物】${sd.heavy}`);
+        if (sd.niage) lines.push(`【${px}荷上げ内容】${sd.niage}`);
+        if (sd.house_plan) lines.push(`【${px}図面】${sd.house_plan}`);
+      } else if (SVC_ID==='kaitai') {
+        if (sd.days) lines.push(`【${px}工事日数】${sd.days}日`);
+        if (sd.offDays) lines.push(`【${px}入れない日】${sd.offDays}`);
+        if (sd.floorSize) lines.push(`【${px}フロア面積】${sd.floorSize}`);
+        if (asbStr) lines.push(`【${px}アスベスト】${asbStr}`);
+        if (sd.house_plan) lines.push(`【${px}図面】${sd.house_plan}`);
+      } else if (SVC_ID==='sanpai') {
+        if (sd.wasteSize) lines.push(`【${px}廃材量】${sd.wasteSize}`);
+        const wt=(Array.isArray(sd.wasteTypes)?sd.wasteTypes:[]).filter(t=>t!=="アスベストあり");
+        if (wt.length) lines.push(`【${px}廃棄物の種類】${wt.join("・")}`);
+        const hasAsb=sd.hasAsbestos===true||(sd.wasteTypes||[]).includes("アスベストあり");
+        if (hasAsb) lines.push(`【${px}アスベスト】あり${asbStr?'（'+asbStr+'）':''}`);
+        if (sd.haizaiHelper) lines.push(`【${px}搬出手間】${sd.haizaiHelper}`);
+        if (sd.baccanType) lines.push(`【${px}バッカン】${sd.baccanType}`);
+      } else if (SVC_ID==='souji') {
+        if (sd.kanyi_yousei) lines.push(`【${px}養生撤去処分（簡易）】${sd.kanyi_yousei}`);
+        if (sd.kanyi_kagu) lines.push(`【${px}家具移動】${sd.kanyi_kagu}`);
+        if (sd.kanyi_heavy) lines.push(`【${px}重量物】${sd.kanyi_heavy}`);
+        if (sd.house_yousei) lines.push(`【${px}養生撤去処分（ハウス）】${sd.house_yousei}`);
+        if (sd.house_size) lines.push(`【${px}広さ】${sd.house_size}`);
+        if (sd.house_furniture) lines.push(`【${px}家具の有無】${sd.house_furniture}`);
+        if (sd.house_water) lines.push(`【${px}水回り設備】${sd.house_water}`);
+        const vacStr=[sd.house_corner?'角部屋':'',sd.house_vacancy].filter(Boolean).join('・');
+        if (vacStr) lines.push(`【${px}その他条件】${vacStr}`);
+        if (sd.house_plan) lines.push(`【${px}図面】${sd.house_plan}`);
+        const acParts=[];
+        if (sd.ac_normal>0) acParts.push(`ノーマル${sd.ac_normal}台${sd.ac_normal_model?'（'+sd.ac_normal_model+'）':''}`);
+        if (sd.ac_smart>0) acParts.push(`お掃除機能付き${sd.ac_smart}台${sd.ac_smart_model?'（'+sd.ac_smart_model+'）':''}`);
+        if (sd.ac_tencase>0) acParts.push(`テンカセ${sd.ac_tencase}台`);
+        if (sd.ac_tentsu>0) acParts.push(`テンツリ${sd.ac_tentsu}台`);
+        if (acParts.length) lines.push(`【${px}エアコン】${acParts.join('・')}`);
+        const otherTypes=sd.other_types||[];
+        if (otherTypes.length) lines.push(`【${px}その他作業】${otherTypes.join('・')}`);
+      }
+    });
+    lines.push(
+      `【鍵】${order.key||"なし"}`,
+      `【駐車場】${order.parking||"なし"}`,
+      `【備考】${order.note||"なし"}`
+    );
+    return lines.filter(Boolean).join('\n');
+  })();
 
   const Row = ({label,value,copy})=>!value?null:(
     <div style={{ display:"flex", gap:12, padding:"9px 0",
@@ -7851,27 +7907,82 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
             </div>
             <div style={{ background:C.white, borderRadius:14, border:"1px solid "+C.grayL, padding:"20px" }}>
               <div style={{ fontSize:15, fontWeight:800, color:C.navy, marginBottom:12 }}>🔗 項目ごとにコピー</div>
-              {[
-                ["会社名",   order.company||""],
-                ["担当者",   order.person||""],
-                ["電話番号", order.phone||""],
-                ["作業区分", order.service||""],
-                ["現場名",   order.site||""],
-                ["住所",     order.address||""],
-                ["日程",     order.schedules.map(s=>`${s.date} ${s.start}〜${s.end}`).join(" / ")],
-                ["作業内容", order.schedules.map(s=>(s.details||[]).join("・")).join(" / ")],
-                ["作業者数", order.schedules.map(s=>s.workers||"").join(" / ")],
-                ["鍵",       order.key||"なし"],
-                ["駐車場",   order.parking||"なし"],
-                ["備考",     order.note||""],
-              ].map(([label,value])=>(
-                <div key={label} style={{ display:"flex", alignItems:"center", gap:12,
-                  padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
-                  <div style={{ fontSize:13, color:C.gray, minWidth:80 }}>{label}</div>
-                  <div style={{ fontSize:14, color:C.navy, fontWeight:600, flex:1 }}>{value}</div>
-                  <CopyBtn value={value} label="コピー" />
-                </div>
-              ))}
+              {(()=>{
+                const PRow = ({label, value}) => !value ? null : (
+                  <div key={label} style={{ display:"flex", alignItems:"center", gap:12,
+                    padding:"8px 0", borderBottom:"1px solid "+C.grayL }}>
+                    <div style={{ fontSize:13, color:C.gray, minWidth:90, flexShrink:0 }}>{label}</div>
+                    <div style={{ fontSize:14, color:C.navy, fontWeight:600, flex:1 }}>{value}</div>
+                    <CopyBtn value={value} label="コピー" />
+                  </div>
+                );
+                const addrFull=[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ');
+                const rows = [
+                  <PRow key="会社名"   label="会社名"   value={order.company} />,
+                  <PRow key="担当者"   label="担当者"   value={order.person} />,
+                  <PRow key="ふりがな" label="ふりがな" value={order.personKana} />,
+                  <PRow key="電話番号" label="電話番号" value={order.phone} />,
+                  <PRow key="作業区分" label="作業区分" value={order.service} />,
+                  <PRow key="現場名"   label="現場名"   value={order.site} />,
+                  <PRow key="住所"     label="住所"     value={addrFull} />,
+                  <PRow key="現場担当者名"  label="現場担当者名"  value={order.siteContactName} />,
+                  <PRow key="現場担当者電話" label="現場担当者電話" value={order.siteContactPhone} />,
+                  <PRow key="日程"     label="日程"     value={order.schedules.map(s=>`${s.date} ${s.start}〜${s.end}`).join(" / ")} />,
+                  <PRow key="作業内容" label="作業内容" value={order.schedules.map(s=>(s.details||[]).join("・")).join(" / ")} />,
+                  <PRow key="作業者数" label="作業者数" value={order.schedules.map(s=>s.workers||"").filter(Boolean).join(" / ")} />,
+                ];
+                order.schedules.forEach((sch,si)=>{
+                  if (!sch.serviceDetail) return;
+                  const sd=sch.serviceDetail;
+                  const px=order.schedules.length>1?`日程${si+1}: `:'';
+                  const asbStr=(()=>{ const ad=sd.asbestosDetail; if(!ad||!(ad.types||[]).length) return ''; const pts=(ad.types||[]).filter(t=>t!=="その他"); if((ad.types||[]).includes("その他")&&ad.other) pts.push(ad.other); return pts.join("・"); })();
+                  if (SVC_ID==='yousei') {
+                    rows.push(<PRow key={px+'養生の場所'}  label={px+'養生の場所'}  value={sd.location} />);
+                    rows.push(<PRow key={px+'リフォーム内容'} label={px+'リフォーム内容'} value={sd.reform} />);
+                    rows.push(<PRow key={px+'重量物'}      label={px+'重量物'}      value={sd.heavy} />);
+                    rows.push(<PRow key={px+'荷上げ内容'}  label={px+'荷上げ内容'}  value={sd.niage} />);
+                    rows.push(<PRow key={px+'図面'}        label={px+'図面'}        value={sd.house_plan} />);
+                  } else if (SVC_ID==='kaitai') {
+                    rows.push(<PRow key={px+'工事日数'}    label={px+'工事日数'}    value={sd.days?sd.days+'日':''} />);
+                    rows.push(<PRow key={px+'入れない日'}  label={px+'入れない日'}  value={sd.offDays} />);
+                    rows.push(<PRow key={px+'フロア面積'}  label={px+'フロア面積'}  value={sd.floorSize} />);
+                    rows.push(<PRow key={px+'アスベスト'}  label={px+'アスベスト'}  value={asbStr} />);
+                    rows.push(<PRow key={px+'図面'}        label={px+'図面'}        value={sd.house_plan} />);
+                  } else if (SVC_ID==='sanpai') {
+                    rows.push(<PRow key={px+'廃材量'}       label={px+'廃材量'}       value={sd.wasteSize} />);
+                    const wt=(Array.isArray(sd.wasteTypes)?sd.wasteTypes:[]).filter(t=>t!=="アスベストあり");
+                    rows.push(<PRow key={px+'廃棄物の種類'} label={px+'廃棄物の種類'} value={wt.join("・")} />);
+                    const hasAsb=sd.hasAsbestos===true||(sd.wasteTypes||[]).includes("アスベストあり");
+                    rows.push(<PRow key={px+'アスベスト'}   label={px+'アスベスト'}   value={hasAsb?'あり'+(asbStr?'（'+asbStr+'）':''):''} />);
+                    rows.push(<PRow key={px+'搬出手間'}     label={px+'搬出手間'}     value={sd.haizaiHelper} />);
+                    rows.push(<PRow key={px+'バッカン'}     label={px+'バッカン'}     value={sd.baccanType} />);
+                  } else if (SVC_ID==='souji') {
+                    rows.push(<PRow key={px+'養生撤去処分（簡易）'} label={px+'養生撤去処分（簡易）'} value={sd.kanyi_yousei} />);
+                    rows.push(<PRow key={px+'家具移動'}    label={px+'家具移動'}    value={sd.kanyi_kagu} />);
+                    rows.push(<PRow key={px+'重量物'}      label={px+'重量物'}      value={sd.kanyi_heavy} />);
+                    rows.push(<PRow key={px+'養生撤去処分（ハウス）'} label={px+'養生撤去処分（ハウス）'} value={sd.house_yousei} />);
+                    rows.push(<PRow key={px+'広さ'}        label={px+'広さ'}        value={sd.house_size} />);
+                    rows.push(<PRow key={px+'家具の有無'}  label={px+'家具の有無'}  value={sd.house_furniture} />);
+                    rows.push(<PRow key={px+'水回り設備'}  label={px+'水回り設備'}  value={sd.house_water} />);
+                    const vacStr=[sd.house_corner?'角部屋':'',sd.house_vacancy].filter(Boolean).join('・');
+                    rows.push(<PRow key={px+'その他条件'}  label={px+'その他条件'}  value={vacStr} />);
+                    rows.push(<PRow key={px+'図面'}        label={px+'図面'}        value={sd.house_plan} />);
+                    const acParts=[];
+                    if (sd.ac_normal>0) acParts.push(`ノーマル${sd.ac_normal}台${sd.ac_normal_model?'（'+sd.ac_normal_model+'）':''}`);
+                    if (sd.ac_smart>0) acParts.push(`お掃除機能付き${sd.ac_smart}台${sd.ac_smart_model?'（'+sd.ac_smart_model+'）':''}`);
+                    if (sd.ac_tencase>0) acParts.push(`テンカセ${sd.ac_tencase}台`);
+                    if (sd.ac_tentsu>0) acParts.push(`テンツリ${sd.ac_tentsu}台`);
+                    rows.push(<PRow key={px+'エアコン'}    label={px+'エアコン'}    value={acParts.join('・')} />);
+                    rows.push(<PRow key={px+'その他作業'}  label={px+'その他作業'}  value={(sd.other_types||[]).join('・')} />);
+                  }
+                });
+                rows.push(
+                  <PRow key="鍵"     label="鍵"     value={order.key||"なし"} />,
+                  <PRow key="駐車場" label="駐車場" value={order.parking||"なし"} />,
+                  <PRow key="備考"   label="備考"   value={order.note} />,
+                );
+                return rows;
+              })()}
             </div>
           </div>
         </div>
