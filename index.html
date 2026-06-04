@@ -2663,6 +2663,13 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
                 {(sch.serviceDetail.hasAsbestos===true||(sch.serviceDetail.wasteTypes||[]).includes("アスベストあり"))&&(
                   <ConfRow label="アスベスト" value="あり" />
                 )}
+                {(()=>{
+                  const ad=sch.serviceDetail.asbestosDetail;
+                  if (!ad||(ad.types||[]).length===0) return null;
+                  const pts=(ad.types||[]).filter(t=>t!=="その他");
+                  if ((ad.types||[]).includes("その他")&&ad.other) pts.push(ad.other);
+                  return pts.length ? <ConfRow label="アスベスト箇所" value={pts.join("・")} /> : null;
+                })()}
                 <ConfRow label="補助作業員" value={sch.serviceDetail.haizaiHelper} />
                 <ConfRow label="バッカン"   value={sch.serviceDetail.baccanType} />
               </>
