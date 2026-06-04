@@ -1255,7 +1255,7 @@ function RgDone({ data, companyId, companyName, onDone }) {
           <div key={k} style={{ display:"flex", gap:10, padding:"6px 0",
             borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
             <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", minWidth:110, flexShrink:0 }}>{k}</div>
-            <div style={{ fontSize:14, fontWeight:700, color:C.white, wordBreak:"break-all", minWidth:0 }}>{v}</div>
+            <div style={{ fontSize:12, fontWeight:700, color:C.white, wordBreak:"break-all", minWidth:0, lineHeight:1.4 }}>{v}</div>
           </div>
         ))}
       </div>
@@ -1360,7 +1360,7 @@ function RegisterApp({ onDone, onBack }) {
           <div style={{ flex:1, padding:"18px 16px", borderRight:"1px solid "+C.grayL,
             display:"flex", flexDirection:"column", justifyContent:"center" }}>
             <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>📞 電話受付</div>
-            <div style={{ fontSize:20, fontWeight:900, color:C.navy }}>06-6392-3882</div>
+            <div style={{ fontSize:16, fontWeight:900, color:C.navy, whiteSpace:"nowrap" }}>06-6392-3882</div>
             <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>平日 9:00〜18:00</div>
           </div>
           <div style={{ flex:1, padding:"18px 16px", display:"flex", flexDirection:"column",
