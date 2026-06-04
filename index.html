@@ -3058,18 +3058,22 @@ function OrderApp({ onDone, onBack }) {
   };
 
   const saveToSupabase = async (ordersList, images) => {
-    // stale closure を避けるため state の userId は使わず直接取得
+    // stale closure を避けるため state の userId・company_id は使わず直接取得
     const { data: { user: currentUser } } = await sb.auth.getUser();
     console.log('[saveToSupabase] userId:', currentUser?.id ?? null);
     if (!currentUser) throw new Error('ログインセッションが切れています。再度ログインしてください。');
     const currentUserId = currentUser.id;
 
+    // profiles から company_id・phone を直接取得（stale closure 対策）
+    const { data: profileData } = await sb.from('profiles')
+      .select('id, company_id, phone').eq('id', currentUserId).maybeSingle();
+    const activeCid = profileData?.company_id || null;
+    console.log('[saveToSupabase] company_id:', activeCid);
+
     // profiles 行が存在しない場合は自動作成（登録時の insert 失敗を補完）
-    const { data: existingProfile } = await sb.from('profiles')
-      .select('id').eq('id', currentUserId).maybeSingle();
-    if (!existingProfile) {
+    if (!profileData) {
       const { error: profileCreateErr } = await sb.from('profiles').upsert(
-        { id: currentUserId, name: personName || '', name_kana: personNameKana || '', company_id: companyId || null, role: 'user' },
+        { id: currentUserId, name: personName || '', name_kana: personNameKana || '', company_id: activeCid || null, role: 'user' },
         { onConflict: 'id', ignoreDuplicates: true }
       );
       if (profileCreateErr) console.error('[profiles 自動作成]', profileCreateErr.message);
@@ -3077,13 +3081,13 @@ function OrderApp({ onDone, onBack }) {
 
     // ① 現場情報を sites テーブルに upsert → site_id を取得（案件作成に使う）
     let siteId = null;
-    if (ordersList[0] && companyId) {
+    if (ordersList[0] && activeCid) {
       const d = ordersList[0].data;
       if (d.siteName) {
         const keyVal     = d.keyInfo?.noKey ? '在宅' : (d.keyInfo?.key || '');
         const parkingVal = d.keyInfo?.parking || '';
         const siteRow = {
-          company_id:          companyId,
+          company_id:          activeCid,
           site_name:           d.siteName,
           address:             d.address           || '',
           address_num:         d.addrNum           || '',
@@ -3100,7 +3104,7 @@ function OrderApp({ onDone, onBack }) {
         if (upsertError) throw upsertError;
         // site_id の取得は案件作成のみに使用。取得失敗しても処理は継続
         const { data: siteData } = await sb.from('sites')
-          .select('id').eq('company_id', companyId).eq('site_name', d.siteName)
+          .select('id').eq('company_id', activeCid).eq('site_name', d.siteName)
           .maybeSingle();
         siteId = siteData?.id || null;
         // ローカルキャッシュも更新
@@ -3120,7 +3124,7 @@ function OrderApp({ onDone, onBack }) {
     // ② cases テーブルに案件を作成（同一送信の複数作業区分は1つの案件に紐づく）
     const caseName = ordersList[0]?.data?.siteName || '';
     const { data: newCase, error: caseError } = await sb.from('cases').insert({
-      company_id: companyId || null,
+      company_id: activeCid,
       site_id:    siteId,
       case_name:  caseName,
     }).select('id').single();
@@ -3128,9 +3132,8 @@ function OrderApp({ onDone, onBack }) {
     const caseId = newCase.id;
 
     // ③ orders テーブルに作業を登録（case_id で案件に紐づける）
-    // 担当者の電話番号を profiles から取得
-    const { data: profileRow } = await sb.from('profiles').select('phone').eq('id', currentUserId).maybeSingle();
-    const personPhone = profileRow?.phone || '';
+    // 担当者の電話番号は冒頭で取得済みの profileData から参照
+    const personPhone = profileData?.phone || '';
 
     const ids = [];
     for (const order of ordersList) {
@@ -3138,7 +3141,7 @@ function OrderApp({ onDone, onBack }) {
       const d   = order.data;
       const { data: newOrder, error } = await sb.from('orders').insert({
         user_id:        currentUserId,
-        company_id:     companyId        || null,
+        company_id:     activeCid,
         person:         personName       || '',
         person_kana:    personNameKana   || '',
         phone:          personPhone,
