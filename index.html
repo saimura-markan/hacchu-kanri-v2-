@@ -526,13 +526,15 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
     if (error) { setLoading(false); setErrors({ password: "メールアドレスまたはパスワードが正しくありません" }); return; }
     const role = data.user?.app_metadata?.role ?? "user";
     const { data: profile } = await sb.from('profiles').select('name, company_id').eq('id', data.user.id).maybeSingle();
-    // name が空の場合はメールアドレスの @ 前を仮名として自動設定
+    // name が空の場合は user_metadata.full_name があれば使用（メールアドレス流用はしない）
     if (!profile?.name) {
-      const fallbackName = email.split('@')[0];
-      await sb.from('profiles').upsert(
-        { id: data.user.id, name: fallbackName },
-        { onConflict: 'id' }
-      );
+      const fallbackName = data.user.user_metadata?.full_name || "";
+      if (fallbackName) {
+        await sb.from('profiles').upsert(
+          { id: data.user.id, name: fallbackName },
+          { onConflict: 'id' }
+        );
+      }
     }
     if (!["admin","manager","staff"].includes(role)) {
       if (profile?.company_id) {
@@ -1253,7 +1255,7 @@ function RgDone({ data, companyId, companyName, onDone }) {
           <div key={k} style={{ display:"flex", gap:10, padding:"6px 0",
             borderBottom:"1px solid rgba(255,255,255,0.1)" }}>
             <div style={{ fontSize:12, color:"rgba(255,255,255,0.6)", minWidth:110, flexShrink:0 }}>{k}</div>
-            <div style={{ fontSize:14, fontWeight:700, color:C.white }}>{v}</div>
+            <div style={{ fontSize:14, fontWeight:700, color:C.white, wordBreak:"break-all", minWidth:0 }}>{v}</div>
           </div>
         ))}
       </div>
@@ -1284,11 +1286,13 @@ function RegisterApp({ onDone, onBack }) {
   const handleRegister = async () => {
     setRegLoading(true);
     setRegError("");
+    const fullName     = (data.lastName.trim() + ' ' + data.firstName.trim()).trim();
+    const fullNameKana = (data.lastNameKana.trim() + ' ' + data.firstNameKana.trim()).trim();
     // 1. Supabase Auth にユーザー登録
     const { data: authData, error: signUpErr } = await sb.auth.signUp({
       email:    data.email.toLowerCase(),
       password: data.password,
-      options:  { data: { role: "user" } },
+      options:  { data: { role: "user", full_name: fullName } },
     });
     if (signUpErr) {
       setRegError(signUpErr.message);
@@ -1297,8 +1301,6 @@ function RegisterApp({ onDone, onBack }) {
     }
     // 2. profiles テーブルに追加
     if (authData?.user) {
-      const fullName     = (data.lastName.trim() + ' ' + data.firstName.trim()).trim();
-      const fullNameKana = (data.lastNameKana.trim() + ' ' + data.firstNameKana.trim()).trim();
       const { error: profileErr } = await sb.from('profiles').insert({
         id:         authData.user.id,
         name:       fullName,
@@ -1355,25 +1357,22 @@ function RegisterApp({ onDone, onBack }) {
         <div style={{ background:C.white, borderRadius:16,
           boxShadow:"0 2px 12px rgba(10,31,92,0.07)", border:"1px solid "+C.grayL,
           display:"flex", overflow:"hidden", marginTop:16 }}>
-          <div style={{ flex:1, padding:"18px 16px", borderRight:"1px solid "+C.grayL }}>
+          <div style={{ flex:1, padding:"18px 16px", borderRight:"1px solid "+C.grayL,
+            display:"flex", flexDirection:"column", justifyContent:"center" }}>
             <div style={{ fontSize:12, color:C.gray, marginBottom:4 }}>📞 電話受付</div>
             <div style={{ fontSize:20, fontWeight:900, color:C.navy }}>06-6392-3882</div>
             <div style={{ fontSize:12, color:C.gray, marginTop:2 }}>平日 9:00〜18:00</div>
           </div>
           <div style={{ flex:1, padding:"18px 16px", display:"flex", flexDirection:"column",
             alignItems:"center", justifyContent:"center", gap:4 }}>
-            <div style={{ position:"relative", width:52, height:52 }}>
-              <svg viewBox="0 0 52 52" width="52" height="52">
-                <circle cx="26" cy="26" r="23" fill="none" stroke="#2952c8" strokeWidth="2.5" opacity="0.25"/>
-                <circle cx="26" cy="26" r="23" fill="none" stroke="#2952c8" strokeWidth="2.5" strokeLinecap="round"/>
-                <path d="M 37 18 Q 42 26 37 34" stroke="#2952c8" strokeWidth="2" fill="none" strokeLinecap="round"/>
-                <path d="M 35 32 L 37 34 L 39 32" stroke="#2952c8" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
-                justifyContent:"center", flexDirection:"column", lineHeight:1 }}>
-                <span style={{ fontSize:11, fontWeight:900, color:C.navy }}>24</span>
-                <span style={{ fontSize:9, color:C.blue, fontWeight:700 }}>/365</span>
-              </div>
+            <div style={{ width:64, height:64, borderRadius:"50%",
+              background:"linear-gradient(135deg,#0a1f5c,#2952c8)",
+              display:"flex", flexDirection:"column", alignItems:"center",
+              justifyContent:"center", gap:2,
+              boxShadow:"0 4px 14px rgba(41,82,200,0.40)" }}>
+              <span style={{ fontSize:18, fontWeight:900, color:"#fff", lineHeight:1 }}>24</span>
+              <div style={{ width:28, height:1, background:"rgba(255,255,255,0.45)" }} />
+              <span style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.85)", lineHeight:1 }}>365</span>
             </div>
             <div style={{ textAlign:"center" }}>
               <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
@@ -2969,8 +2968,10 @@ function OrderApp({ onDone, onBack }) {
       setUserId(user.id);
       sb.from('profiles').select('name, name_kana, company_id').eq('id', user.id).maybeSingle()
         .then(({ data }) => {
-          if (data?.name)      setPersonName(data.name);
-          if (data?.name_kana) setPersonNameKana(data.name_kana);
+          const nameFromMeta = user.user_metadata?.full_name || "";
+          if (data?.name)           setPersonName(data.name);
+          else if (nameFromMeta)    setPersonName(nameFromMeta);
+          if (data?.name_kana)      setPersonNameKana(data.name_kana);
           setPersonNameLoading(false);
           if (data?.company_id) {
             setCompanyId(data.company_id);
@@ -3074,6 +3075,16 @@ function OrderApp({ onDone, onBack }) {
     const caseId = newCase.id;
 
     // ③ orders テーブルに作業を登録（case_id で案件に紐づける）
+    // 会社名テキストを companies テーブルから取得
+    let companyNameText = '';
+    if (companyId) {
+      const { data: coRow } = await sb.from('companies').select('name').eq('id', companyId).maybeSingle();
+      companyNameText = coRow?.name || '';
+    }
+    // 担当者の電話番号を profiles から取得
+    const { data: profileRow } = await sb.from('profiles').select('phone').eq('id', currentUserId).maybeSingle();
+    const personPhone = profileRow?.phone || '';
+
     const ids = [];
     for (const order of ordersList) {
       const svc = SERVICES.find(s => s.id === order.serviceId);
@@ -3081,8 +3092,11 @@ function OrderApp({ onDone, onBack }) {
       const { data: newOrder, error } = await sb.from('orders').insert({
         user_id:        currentUserId,
         company_id:     companyId        || null,
-        case_id:        caseId,
+        company:        companyNameText,
+        person:         personName       || '',
         person_kana:    personNameKana   || '',
+        phone:          personPhone,
+        case_id:        caseId,
         service:        svc.label,
         site:           d.siteName  || '',
         address:        d.address   || '',
@@ -6157,7 +6171,7 @@ function mapOrder(row) {
     caseId:         row.case_id           || null,
     caseCode:       row.cases?.case_code  || null,
     caseName:       row.cases?.case_name  || null,
-    company:        row.company    || '',
+    company:        row.company    || row.companies?.name || '',
     companyId:      row.company_id || '',
     person:         row.person      || row.profiles?.name     || '',
     personKana:     row.person_kana || row.profiles?.name_kana || '',
@@ -7122,7 +7136,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 🏢 会社・担当者情報
               </div>
               <div style={{ padding:"4px 18px 12px" }}>
-                <Row label="会社名"   value={order.company}   copy />
+                <Row label="会社名"   value={order.company || companyName}   copy />
                 {order.companyId && (
                   <div style={{ display:"flex", gap:12, padding:"9px 0",
                     borderBottom:"1px solid "+C.grayL, alignItems:"flex-start" }}>
@@ -8353,7 +8367,7 @@ function AdminApp({ role, onLogout }) {
   const fetchOrders = async () => {
     const { data, error } = await sb
       .from('orders')
-      .select('*, profiles(name, name_kana), schedules(*, schedule_history(*)), order_images(*)')
+      .select('*, profiles(name, name_kana), companies(name), schedules(*, schedule_history(*)), order_images(*)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (error) { setDbError(error.message); setLoading(false); return; }
