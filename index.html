@@ -6630,7 +6630,10 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [menuPos,     setMenuPos]     = useState({ x:0, y:0 });
   const [touching,    setTouching]    = useState(false);
   const [companyName, setCompanyName] = useState("");
-  const [adSiteData,  setAdSiteData]  = useState({});
+  const [adSiteData,      setAdSiteData]      = useState({});
+  const [adSiteEditMode,  setAdSiteEditMode]  = useState(false);
+  const [adSiteFormData,  setAdSiteFormData]  = useState({});
+  const [adSiteSaving,    setAdSiteSaving]    = useState(false);
   const [siteHistory, setSiteHistory] = useState([]);
   const [showSoudanModal,  setShowSoudanModal]  = useState(false);
   const [soudanCandidates, setSoudanCandidates] = useState([{ date:'', time:'' }]);
@@ -6741,6 +6744,56 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     setEditMode(true);
   };
   const cancelEdit = () => { setEditMode(false); setEditData(null); };
+  const startSiteEdit = () => {
+    setAdSiteFormData({
+      key_info:      adSiteData.key_info      || order.key     || '',
+      parking_info:  adSiteData.parking_info  || order.parking || '',
+      contact_name:  adSiteData.contact_name  || '',
+      contact_phone: adSiteData.contact_phone || '',
+      memo:          adSiteData.memo          || '',
+      entry_info:    adSiteData.entry_info    || '',
+      yosei_info:    adSiteData.yosei_info    || '',
+    });
+    setAdSiteEditMode(true);
+  };
+  const cancelSiteEdit = () => { setAdSiteEditMode(false); setAdSiteFormData({}); };
+  const saveSiteInfo = async () => {
+    if (!order.companyId || !order.site) return;
+    setAdSiteSaving(true);
+    const updated = { ...adSiteData, ...adSiteFormData };
+    const { error } = await sb.from('sites').upsert({
+      company_id:     order.companyId,
+      site_name:      order.site,
+      key_info:       updated.key_info      || null,
+      key_images:     updated.key_images    || [],
+      parking_info:   updated.parking_info  || null,
+      parking_images: updated.parking_images || [],
+      contact_name:   updated.contact_name  || null,
+      contact_phone:  updated.contact_phone || null,
+      memo:           updated.memo          || null,
+      images:         updated.images        || [],
+      entry_info:     updated.entry_info    || null,
+      entry_images:   updated.entry_images  || [],
+      yosei_info:     updated.yosei_info    || null,
+      yosei_images:   updated.yosei_images  || [],
+    }, { onConflict: 'company_id,site_name' });
+    if (!error) {
+      setAdSiteData(updated);
+      setAdSiteEditMode(false);
+      setAdSiteFormData({});
+    }
+    setAdSiteSaving(false);
+  };
+  const deleteAdImg = async (imgField, path) => {
+    if (!order.companyId || !order.site) return;
+    const newPaths = (adSiteData[imgField] || []).filter(p => p !== path);
+    const { error } = await sb.from('sites').upsert({
+      company_id: order.companyId,
+      site_name:  order.site,
+      [imgField]: newPaths,
+    }, { onConflict: 'company_id,site_name' });
+    if (!error) setAdSiteData(d => ({ ...d, [imgField]: newPaths }));
+  };
   const saveEdit = async () => {
     setSaving(true);
     try {
@@ -7206,22 +7259,31 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 
             {/* 案件情報（黄色ヘッダー） */}
             {(()=>{
-              const AdImgs = ({paths})=>{
+              const AdImgs = ({paths, imgField})=>{
                 if (!paths?.length) return null;
                 return <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:8 }}>
                   {paths.map((path,i)=>{
                     const url = sb.storage.from('site-images').getPublicUrl(path).data.publicUrl;
-                    return /\.pdf$/i.test(path)
-                      ? <a key={i} href={url} target="_blank" rel="noopener"
-                          style={{ width:80,height:80,border:"1px solid "+C.grayL,borderRadius:8,
-                            display:"flex",flexDirection:"column",alignItems:"center",
-                            justifyContent:"center",gap:3,textDecoration:"none",
-                            background:"#f8f9fc",color:C.gray,fontSize:9,fontWeight:700 }}>
-                          <span style={{ fontSize:24 }}>📄</span>PDF</a>
-                      : <img key={i} src={url}
-                          style={{ width:80,height:80,objectFit:"cover",borderRadius:8,
-                            border:"1px solid "+C.grayL,cursor:"pointer" }}
-                          onClick={()=>setLightboxUrl(url)} />;
+                    return <div key={i} style={{ position:"relative", display:"inline-block" }}>
+                      {/\.pdf$/i.test(path)
+                        ? <a href={url} target="_blank" rel="noopener"
+                            style={{ width:80,height:80,border:"1px solid "+C.grayL,borderRadius:8,
+                              display:"flex",flexDirection:"column",alignItems:"center",
+                              justifyContent:"center",gap:3,textDecoration:"none",
+                              background:"#f8f9fc",color:C.gray,fontSize:9,fontWeight:700 }}>
+                            <span style={{ fontSize:24 }}>📄</span>PDF</a>
+                        : <img src={url}
+                            style={{ width:80,height:80,objectFit:"cover",borderRadius:8,
+                              border:"1px solid "+C.grayL,cursor:"pointer" }}
+                            onClick={()=>setLightboxUrl(url)} />}
+                      {imgField && (role==="admin"||role==="manager") && (
+                        <button onClick={()=>{ if(window.confirm('この画像を削除しますか？')) deleteAdImg(imgField, path); }}
+                          style={{ position:"absolute",top:-6,right:-6,width:20,height:20,borderRadius:99,
+                            background:C.red,border:"none",color:C.white,fontSize:11,fontWeight:900,
+                            cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+                            lineHeight:1,padding:0,zIndex:1 }}>✕</button>
+                      )}
+                    </div>;
                   })}
                 </div>;
               };
@@ -7254,10 +7316,10 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   </div> },
                 { show:!!(keyText||adSiteData.key_images?.length), icon:"🔑", label:"鍵情報", content:
                   <>{keyText&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{keyText}</div>}
-                  <AdImgs paths={adSiteData.key_images} /></> },
+                  <AdImgs paths={adSiteData.key_images} imgField="key_images" /></> },
                 { show:!!(parkingText||adSiteData.parking_images?.length), icon:"🚗", label:"駐車場", content:
                   <>{parkingText&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{parkingText}</div>}
-                  <AdImgs paths={adSiteData.parking_images} /></> },
+                  <AdImgs paths={adSiteData.parking_images} imgField="parking_images" /></> },
                 { show:!!(adSiteData.contact_name||adSiteData.contact_phone), icon:"👤", label:"担当者様", content:
                   <>{adSiteData.contact_name&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7 }}>{adSiteData.contact_name}</div>}
                   {adSiteData.contact_phone&&<a href={"tel:"+adSiteData.contact_phone}
@@ -7267,13 +7329,13 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   <div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{order.note}</div> },
                 { show:!!(adSiteData.memo||adSiteData.images?.length), icon:"⚠️", label:"現場注意事項", content:
                   <>{adSiteData.memo&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{adSiteData.memo}</div>}
-                  <AdImgs paths={adSiteData.images} /></> },
+                  <AdImgs paths={adSiteData.images} imgField="images" /></> },
                 { show:!!(adSiteData.entry_info||adSiteData.entry_images?.length), icon:"🚪", label:"入館情報", content:
                   <>{adSiteData.entry_info&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{adSiteData.entry_info}</div>}
-                  <AdImgs paths={adSiteData.entry_images} /></> },
+                  <AdImgs paths={adSiteData.entry_images} imgField="entry_images" /></> },
                 { show:!!(adSiteData.yosei_info||adSiteData.yosei_images?.length), icon:"📦", label:"養生範囲", content:
                   <>{adSiteData.yosei_info&&<div style={{ fontSize:14,color:C.navy,lineHeight:1.7,whiteSpace:"pre-wrap" }}>{adSiteData.yosei_info}</div>}
-                  <AdImgs paths={adSiteData.yosei_images} /></> },
+                  <AdImgs paths={adSiteData.yosei_images} imgField="yosei_images" /></> },
                 { show:!!(order.images?.length), icon:"📷",
                   label:`添付写真${order.images?.length?"（"+order.images.length+"枚）":""}`, content:
                   <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
@@ -7284,14 +7346,90 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                     ))}
                   </div> },
               ].filter(r=>r.show);
+              const GoldHeader = ({children}) => (
+                <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
+                  marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+                    padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
+                  <div style={{ fontSize:15, fontWeight:800, color:C.white, flex:1 }}>案件情報</div>
+                  {children}
+                </div>
+              );
+              if (adSiteEditMode && (role==="admin"||role==="manager")) {
+                const FS = { fontSize:12, color:C.gray, fontWeight:700, marginBottom:4, display:"block" };
+                const IS = { width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid "+C.grayL,
+                  fontSize:14, fontFamily:"inherit", outline:"none", color:C.navy,
+                  background:C.white, boxSizing:"border-box", marginBottom:10 };
+                return (
+                  <div style={{ background:"#fdf6ee", borderRadius:16, padding:14, marginBottom:14 }}>
+                    <GoldHeader>
+                      <button onClick={cancelSiteEdit}
+                        style={{ background:"rgba(255,255,255,0.25)", border:"none", color:C.white,
+                          borderRadius:8, padding:"5px 12px", fontSize:13, fontWeight:700,
+                          cursor:"pointer", fontFamily:"inherit" }}>
+                        ✕ キャンセル
+                      </button>
+                    </GoldHeader>
+                    <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", padding:"16px 18px" }}>
+                      <label style={FS}>🔑 鍵情報</label>
+                      <textarea value={adSiteFormData.key_info||''} rows={2} placeholder="鍵の場所・受取方法..."
+                        onChange={e=>setAdSiteFormData(d=>({...d,key_info:e.target.value}))}
+                        style={{...IS,resize:"vertical"}} />
+                      <label style={FS}>🚗 駐車場</label>
+                      <textarea value={adSiteFormData.parking_info||''} rows={2} placeholder="駐車場所・台数・注意事項..."
+                        onChange={e=>setAdSiteFormData(d=>({...d,parking_info:e.target.value}))}
+                        style={{...IS,resize:"vertical"}} />
+                      <label style={FS}>👤 担当者名</label>
+                      <input type="text" value={adSiteFormData.contact_name||''} placeholder="担当者名"
+                        onChange={e=>setAdSiteFormData(d=>({...d,contact_name:e.target.value}))}
+                        style={IS} />
+                      <label style={FS}>📞 担当者電話番号</label>
+                      <input type="tel" value={adSiteFormData.contact_phone||''} placeholder="電話番号"
+                        onChange={e=>setAdSiteFormData(d=>({...d,contact_phone:e.target.value}))}
+                        style={IS} />
+                      <label style={FS}>⚠️ 現場注意事項</label>
+                      <textarea value={adSiteFormData.memo||''} rows={3} placeholder="注意事項・特記事項..."
+                        onChange={e=>setAdSiteFormData(d=>({...d,memo:e.target.value}))}
+                        style={{...IS,resize:"vertical"}} />
+                      <label style={FS}>🚪 入館情報</label>
+                      <textarea value={adSiteFormData.entry_info||''} rows={2} placeholder="入館方法・インターフォン番号..."
+                        onChange={e=>setAdSiteFormData(d=>({...d,entry_info:e.target.value}))}
+                        style={{...IS,resize:"vertical"}} />
+                      <label style={FS}>📦 養生範囲</label>
+                      <textarea value={adSiteFormData.yosei_info||''} rows={2} placeholder="養生が必要な範囲・使用材料..."
+                        onChange={e=>setAdSiteFormData(d=>({...d,yosei_info:e.target.value}))}
+                        style={{...IS,resize:"vertical",marginBottom:16}} />
+                      <div style={{ display:"flex", gap:12 }}>
+                        <button onClick={saveSiteInfo} disabled={adSiteSaving}
+                          style={{ flex:2, padding:"12px", fontSize:14, fontWeight:800,
+                            background:C.blue, color:C.white, border:"none", borderRadius:10,
+                            cursor:adSiteSaving?"not-allowed":"pointer", opacity:adSiteSaving?0.7:1,
+                            fontFamily:"inherit" }}>
+                          {adSiteSaving?"保存中…":"💾 保存する"}
+                        </button>
+                        <button onClick={cancelSiteEdit} disabled={adSiteSaving}
+                          style={{ flex:1, padding:"12px", fontSize:13, fontWeight:700,
+                            background:C.grayL, color:C.gray, border:"none", borderRadius:10,
+                            cursor:"pointer", fontFamily:"inherit" }}>
+                          キャンセル
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
               return (
                 <div style={{ background:"#fdf6ee", borderRadius:16, padding:14, marginBottom:14 }}>
-                  <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
-                    marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
-                    <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
-                      padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
-                    <div style={{ fontSize:15, fontWeight:800, color:C.white }}>案件情報</div>
-                  </div>
+                  <GoldHeader>
+                    {(role==="admin"||role==="manager") && order.companyId && (
+                      <button onClick={startSiteEdit}
+                        style={{ background:"rgba(255,255,255,0.25)", border:"none", color:C.white,
+                          borderRadius:8, padding:"5px 12px", fontSize:13, fontWeight:700,
+                          cursor:"pointer", fontFamily:"inherit" }}>
+                        ✏️ 編集
+                      </button>
+                    )}
+                  </GoldHeader>
                   <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
                     {rows.map((row,i)=>(
                       <VR key={i} icon={row.icon} label={row.label} isLast={i===rows.length-1}>
