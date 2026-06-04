@@ -1822,17 +1822,7 @@ function KaitaiDetail({ details, detail, onChange, showErrors }) {
         </div>
         {showErrors&&!v.days&&<div style={{ color:C.red, fontSize:13, marginTop:6 }}>⚠️ 工事日数を選択してください</div>}
       </SubSection>
-      <SubSection title="📐 解体面積 ※必須">
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <input type="number" min="1" value={v.area||""}
-            onChange={e=>u({area:e.target.value})}
-            placeholder="例：45"
-            style={{ flex:1, padding:"12px 14px", borderRadius:12, fontSize:17,
-              border:"2px solid "+C.grayL, fontFamily:"inherit", outline:"none",
-              color:C.navy, background:C.white, boxSizing:"border-box" }} />
-          <span style={{ fontSize:16, fontWeight:700, color:C.navy, flexShrink:0 }}>㎡</span>
-        </div>
-      </SubSection>
+
       <SubSection title="🚫 作業に入れない日 ※必須">
         <div style={{ fontSize:13, color:C.gray, marginBottom:8, lineHeight:1.7 }}>例）土日祝・毎週水曜日・6月15日など</div>
         <TextArea value={v.offDays||""} onChange={e=>u({offDays:e.target.value})}
@@ -2650,7 +2640,6 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
             {serviceId==="kaitai"&&sch.serviceDetail&&(
               <>
                 <ConfRow label="工事日数"   value={sch.serviceDetail.days?sch.serviceDetail.days+"日":""} />
-                <ConfRow label="解体面積"   value={sch.serviceDetail.area?sch.serviceDetail.area+"㎡":""} />
                 <ConfRow label="入れない日" value={sch.serviceDetail.offDays} />
                 {(()=>{
                   const ad=sch.serviceDetail.asbestosDetail;
