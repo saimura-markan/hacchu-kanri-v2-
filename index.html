@@ -3931,8 +3931,14 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [uploadingField, setUploadingField] = useState(null);
   const [relatedOrders,   setRelatedOrders]   = useState([]);
   const [expandedRelated, setExpandedRelated] = useState({});
-  const saveTimer   = useRef(null);
-  const blobUrlsRef = useRef({});
+  const saveTimer           = useRef(null);
+  const blobUrlsRef         = useRef({});
+  const originalSiteDataRef = useRef({
+    key_info:'', parking_info:'',
+    contact_name:  order.siteContactName  || '',
+    contact_phone: order.siteContactPhone || '',
+    memo:'', entry_info:'', yosei_info:'',
+  });
 
   useEffect(() => {
     return () => {
@@ -3969,7 +3975,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         const data = rows?.[0];
         if (!data) return;
         // テキスト情報のみ更新（blobUrlsは一切触らない）
-        setSiteData({
+        const freshSiteData = {
           key_info:     data.key_info     || '',
           parking_info: data.parking_info || '',
           contact_name: data.contact_name  || order.siteContactName  || '',
@@ -3977,7 +3983,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           memo:         data.memo         || '',
           entry_info:   data.entry_info   || '',
           yosei_info:   data.yosei_info   || '',
-        });
+        };
+        setSiteData(freshSiteData);
+        originalSiteDataRef.current = freshSiteData;
         // 画像パスはDBパスを優先しつつ、未DB保存の新規パスを保持
         const mergeImgs = (dbImgs, prevImgs) => {
           const dbSet = new Set(dbImgs);
@@ -4204,7 +4212,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           contact_phone:'担当者電話', memo:'現場注意事項', entry_info:'入館情報', yosei_info:'養生範囲',
         };
         const changedFields = Object.keys(SITE_FL).filter(f =>
-          (siteData[f]||'') !== (merged[f]||'') && (merged[f]||'') !== ''
+          (originalSiteDataRef.current[f]||'') !== (merged[f]||'') && (merged[f]||'') !== ''
         );
         if (changedFields.length > 0 && order?.id) {
           sb.auth.getUser().then(({ data: { user } }) => {
@@ -4235,6 +4243,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           });
         }
         setSiteData(merged);
+        originalSiteDataRef.current = merged;
         setFormData(FORM_BLANK);
         setPendingImages(PENDING_BLANK);
         setSaveError('');
