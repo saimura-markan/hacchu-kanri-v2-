@@ -1302,17 +1302,17 @@ function RegisterApp({ onDone, onBack }) {
       setRegLoading(false);
       return;
     }
-    // 2. profiles テーブルに追加
+    // 2. profiles テーブルに追加（DBトリガーが先に行を作る場合があるためupsert）
     if (authData?.user) {
-      const { error: profileErr } = await sb.from('profiles').insert({
+      const { error: profileErr } = await sb.from('profiles').upsert({
         id:         authData.user.id,
         name:       fullName,
         name_kana:  fullNameKana,
         phone:      data.phone,
         company_id: companyId,
         role:       "user",
-      });
-      if (profileErr) console.error('[profiles insert]', profileErr.message);
+      }, { onConflict: 'id' });
+      if (profileErr) console.error('[profiles upsert]', profileErr.message);
     }
     setRegLoading(false);
     setDone(true);
