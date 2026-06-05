@@ -9371,12 +9371,13 @@ function AdminApp({ role, onLogout }) {
           } else {
             const role = session.user.app_metadata?.role ?? "user";
             setUserRole(role);
-            // 初期ロードまたはログイン画面のときだけ遷移（操作中の画面は維持）
-            setScreen(prev =>
-              (prev === null || prev === "login")
-                ? (["admin","manager"].includes(role) ? "admin" : "history")
-                : prev
-            );
+            // admin/managerは常にadmin画面へ。一般ユーザーは初期ロード・ログイン時のみ遷移
+            const isAdminRole = ["admin","manager"].includes(role);
+            setScreen(prev => {
+              if (isAdminRole && (prev === null || prev === "login" || prev === "history")) return "admin";
+              if (!isAdminRole && (prev === null || prev === "login")) return "history";
+              return prev;
+            });
           }
         });
         return () => subscription.unsubscribe();
