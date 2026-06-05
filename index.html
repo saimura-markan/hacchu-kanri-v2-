@@ -539,7 +539,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
         );
       }
     }
-    if (!["admin","manager","staff"].includes(role)) {
+    if (!["admin","manager"].includes(role)) {
       if (profile?.company_id) {
         const { data: company } = await sb.from('companies').select('is_active').eq('id', profile.company_id).single();
         if (company && !company.is_active) {
@@ -4919,7 +4919,7 @@ function ChatScreen({ role, order, onBack }) {
   const [sidebarSearch, setSidebarSearch] = useState("");
   const bottomRef   = useRef(null);
   const touchTimer  = useRef(null);
-  const isAdminRole = ['admin','manager','staff'].includes(role);
+  const isAdminRole = ['admin','manager'].includes(role);
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); }, [messages]);
 
   // ユーザー名取得
@@ -6637,7 +6637,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 
       <Legend />
 
-      {role !== "staff" && checkedIds.length > 0 && (
+      {role === "admin" && checkedIds.length > 0 && (
         <div style={{ padding:"6px 10px", borderBottom:"1px solid "+C.grayL }}>
           <button onClick={()=>onDeleteSelected(checkedIds)}
             style={{ width:"100%", padding:"6px 10px", fontSize:12, fontWeight:700, borderRadius:6,
@@ -6657,8 +6657,8 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
         ) : orders.map(order=>(
           <AdOrderCard key={order.id} order={order}
             isSelected={selected?.id===order.id}
-            isChecked={role !== "staff" && checkedIds.includes(order.id)}
-            showCheckbox={role !== "staff"}
+            isChecked={role === "admin" && checkedIds.includes(order.id)}
+            showCheckbox={role === "admin"}
             onClick={()=>onSelect(order)}
             onToggleCheck={onToggleCheck}
             unreadCount={unreadCounts?.[order.id]||0}
@@ -7034,7 +7034,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10, flexShrink:0 }}>
           <ADStatusBadge status={order.status} />
-          {(role === "admin" || role === "manager") && (
+          {role === "admin" && (
             <select
               value={AD_STATUS_CHANGE_LIST.includes(order.status) ? order.status : ""}
               onChange={e => {
@@ -7087,7 +7087,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
           <div style={{ maxWidth:700, margin:"0 auto" }}>
 
             {/* 編集ボタン */}
-            {!editMode && (role === "admin" || role === "manager") && (
+            {!editMode && role === "admin" && (
               <button onClick={startEdit}
                 style={{ width:"100%", marginBottom:16, padding:"11px", fontSize:14,
                   fontWeight:800, color:C.blue, background:C.blueL,
@@ -7498,7 +7498,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   {children}
                 </div>
               );
-              if (adSiteEditMode && (role==="admin"||role==="manager")) {
+              if (adSiteEditMode && role==="admin") {
                 const FS = { fontSize:12, color:C.gray, fontWeight:700, marginBottom:4, display:"block" };
                 const IS = { width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid "+C.grayL,
                   fontSize:14, fontFamily:"inherit", outline:"none", color:C.navy,
@@ -7564,7 +7564,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               return (
                 <div style={{ background:"#fdf6ee", borderRadius:16, padding:14, marginBottom:14 }}>
                   <GoldHeader>
-                    {(role==="admin"||role==="manager") && order.companyId && (
+                    {role==="admin" && order.companyId && (
                       <button onClick={startSiteEdit}
                         style={{ background:"rgba(255,255,255,0.25)", border:"none", color:C.white,
                           borderRadius:8, padding:"5px 12px", fontSize:13, fontWeight:700,
@@ -7757,7 +7757,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               </div>
             )}
 
-            {role !== "staff" && (
+            {role === "admin" && (
               <button onClick={()=>onDelete([order.id])}
                 style={{ width:"100%", marginTop:12, padding:"11px", fontSize:14,
                   fontWeight:800, color:C.red, background:"#fff0f0",
@@ -7819,8 +7819,8 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 
           <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
             <div style={{ maxWidth:700, margin:"0 auto" }}>
-              {/* 作業日程変更ボタン（日程相談中 && admin/manager のみ） */}
-              {order.status === "日程相談中" && (role === "admin" || role === "manager") && (
+              {/* 作業日程変更ボタン（日程相談中 && admin のみ） */}
+              {order.status === "日程相談中" && role === "admin" && (
                 <div style={{ marginBottom:16 }}>
                   <button onClick={() => {
                     const sch0 = order.schedules?.[0];
@@ -8491,10 +8491,10 @@ function StaffField({ label, fkey, placeholder, type='text', form, setForm }) {
 }
 
 function StaffPanel({ onClose }) {
-  const ROLES      = ['admin', 'manager', 'staff'];
-  const ROLE_LABEL = { admin:'admin', manager:'manager', staff:'staff' };
-  const ROLE_COLOR = { admin:C.red, manager:C.orange, staff:C.blue };
-  const EMPTY_FORM = { name:'', role:'staff', phone:'', email:'', is_active:true };
+  const ROLES      = ['admin', 'manager'];
+  const ROLE_LABEL = { admin:'admin', manager:'manager' };
+  const ROLE_COLOR = { admin:C.red, manager:C.orange };
+  const EMPTY_FORM = { name:'', role:'manager', phone:'', email:'', is_active:true };
 
   const [list,    setList]    = useState([]);
   const [loading, setLoading] = useState(true);
@@ -8850,7 +8850,7 @@ function AdminApp({ role, onLogout }) {
     let channel;
     const init = async () => {
       const { data: { session } } = await sb.auth.getSession();
-      if (!session || !["admin","manager","staff"].includes(session.user.app_metadata?.role)) { onLogout(); return; }
+      if (!session || !["admin","manager"].includes(session.user.app_metadata?.role)) { onLogout(); return; }
       await fetchOrders();
       channel = sb.channel('admin-orders')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
@@ -9279,7 +9279,7 @@ function AdminApp({ role, onLogout }) {
           borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>
           📋
         </div>
-        {(role === "admin" || role === "manager") && (
+        {role === "admin" && (
           <div title="企業ID管理"
             style={{ width:36, height:36, background:"rgba(255,255,255,0.08)",
             borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
@@ -9295,7 +9295,7 @@ function AdminApp({ role, onLogout }) {
             👷
           </div>
         )}
-        {role !== "staff" && (
+        {role === "admin" && (
           <div title="削除済み案件"
             style={{ width:36, height:36,
               background:showDeleted?"rgba(255,100,100,0.35)":"rgba(255,255,255,0.08)",
@@ -9374,7 +9374,7 @@ function AdminApp({ role, onLogout }) {
             // 初期ロードまたはログイン画面のときだけ遷移（操作中の画面は維持）
             setScreen(prev =>
               (prev === null || prev === "login")
-                ? (["admin","manager","staff"].includes(role) ? "admin" : "history")
+                ? (["admin","manager"].includes(role) ? "admin" : "history")
                 : prev
             );
           }
@@ -9384,7 +9384,7 @@ function AdminApp({ role, onLogout }) {
 
       const handleLogin = (role) => {
         setUserRole(role);
-        setScreen(["admin","manager","staff"].includes(role) ? "admin" : "history");
+        setScreen(["admin","manager"].includes(role) ? "admin" : "history");
       };
 
       const handleGoDetail = (order) => {
