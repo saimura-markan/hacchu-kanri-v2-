@@ -1850,8 +1850,8 @@ function KaitaiDetail({ details, detail, onChange, showErrors }) {
 }
 
 // ── 産廃の詳細 ───────────────────────────────────────────
-function SanpaiDetail({ details, detail, onChange }) {
-  const v=detail||{wasteSize:"",wasteTypes:[],hasAsbestos:false,asbestosDetail:null,baccanType:"",haizaiHelper:""};
+function SanpaiDetail({ details, detail, onChange, showErrors }) {
+  const v=detail||{wasteSize:"",wasteTypes:[],hasAsbestos:false,asbestosDetail:null,baccanType:"",haizaiHelper:"",haizaiHelperReason:""};
   const u=p=>onChange({...v,...p});
   const hasHaizai=details.includes("廃材回収");
   const hasBackan=details.includes("バッカン");
@@ -1890,7 +1890,21 @@ function SanpaiDetail({ details, detail, onChange }) {
           </SubSection>
           <SubSection title="👷 搬出補助作業員">
             <RadioGroup options={["搬出補助作業員あり","搬出補助作業員なし"]}
-              value={v.haizaiHelper||""} onChange={val=>u({haizaiHelper:val})} />
+              value={v.haizaiHelper||""} onChange={val=>u({haizaiHelper:val, haizaiHelperReason: val==="搬出補助作業員あり" ? v.haizaiHelperReason : ""})} />
+            {v.haizaiHelper==="搬出補助作業員あり" && (
+              <div style={{ marginTop:10 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:showErrors&&!v.haizaiHelperReason?C.red:C.navy, marginBottom:6 }}>
+                  搬出補助作業員が必要な理由 ※必須{showErrors&&!v.haizaiHelperReason&&" ⚠️"}
+                </div>
+                <TextArea value={v.haizaiHelperReason||""} rows={3}
+                  onChange={e=>u({haizaiHelperReason:e.target.value})}
+                  placeholder="例：エレベーターなし4階・重量物あり"
+                  hasError={showErrors&&!v.haizaiHelperReason} />
+                {showErrors&&!v.haizaiHelperReason&&(
+                  <div style={{ color:C.red, fontSize:13, marginTop:4 }}>⚠️ 理由を入力してください</div>
+                )}
+              </div>
+            )}
           </SubSection>
         </>
       )}
@@ -2202,7 +2216,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
       )}
       {serviceId==="sanpai"&&(sch.details||[]).length>0&&(
         <SanpaiDetail details={sch.details||[]} detail={sch.serviceDetail}
-          onChange={v=>onChange({...sch,serviceDetail:v})} />
+          onChange={v=>onChange({...sch,serviceDetail:v})} showErrors={showErrors} />
       )}
       {serviceId==="souji"&&(sch.details||[]).length>0&&(
         <SoujiDetail details={sch.details||[]} detail={sch.serviceDetail}
@@ -2331,6 +2345,12 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
     if (serviceId==="kaitai") {
       if (!schedules[0].serviceDetail?.days)    errs.push("工事日数を選択してください");
       if (!schedules[0].serviceDetail?.offDays) errs.push("作業に入れない日を入力してください");
+    }
+    if (serviceId==="sanpai") {
+      const sd=schedules[0].serviceDetail;
+      if (sd?.haizaiHelper==="搬出補助作業員あり" && !sd?.haizaiHelperReason) {
+        errs.push("搬出補助作業員が必要な理由を入力してください");
+      }
     }
     return errs;
   };
