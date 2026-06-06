@@ -2615,10 +2615,101 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
   );
 }
 
+// ── 日程編集モーダル ──────────────────────────────────────
+function ScheduleEditModal({ serviceId, sch, schIdx, onChange, onSave, onCancel }) {
+  const CONF_ITEMS = {
+    kaitai: ["フロアめくり","建具","間仕切り","天井","内壁","キッチン","トイレ","洗面台","UB","在来風呂","アスベストあり"],
+    sanpai: ["廃材回収","バッカン"],
+    souji:  ["簡易清掃・家具移動","ハウスクリーニング","エアコンクリーニング","その他"],
+    yousei: ["養生","家具移動","荷上げ"],
+  };
+  const detailItems = CONF_ITEMS[serviceId] || [];
+  const toggleDetail = (opt) => {
+    const current = sch.details || [];
+    const next = current.includes(opt) ? current.filter(x=>x!==opt) : [...current, opt];
+    let upd = { ...sch, details: next };
+    if (opt==="アスベストあり" && !next.includes("アスベストあり")) {
+      upd = { ...upd, serviceDetail: { ...(sch.serviceDetail||{}), asbestosDetail: null } };
+    }
+    onChange(upd);
+  };
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.55)",
+      display:"flex", alignItems:"flex-start", justifyContent:"center",
+      zIndex:300, padding:"20px 16px", overflowY:"auto" }}>
+      <div style={{ background:C.white, borderRadius:20, width:"100%", maxWidth:480,
+        boxShadow:"0 8px 40px rgba(0,0,0,0.25)", marginTop:20, marginBottom:20 }}>
+        <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+          borderRadius:"20px 20px 0 0", padding:"16px 20px",
+          display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontSize:17, fontWeight:800, color:C.white }}>✏️ 日程 {schIdx+1} の修正</div>
+          <button onClick={onCancel} style={{ background:"rgba(255,255,255,0.15)", border:"none",
+            color:C.white, width:32, height:32, borderRadius:"50%", cursor:"pointer", fontSize:18, fontFamily:"inherit" }}>✕</button>
+        </div>
+        <div style={{ padding:"20px" }}>
+          <div style={{ marginBottom:16 }}>
+            <div style={{ fontSize:13, color:C.gray, marginBottom:6, fontWeight:600 }}>日付</div>
+            <input type="date" value={sch.date||""}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={e=>onChange({...sch, date:e.target.value})}
+              style={{ width:"100%", fontSize:14, padding:"12px 10px", borderRadius:12,
+                border:"2px solid "+C.grayL, boxSizing:"border-box", outline:"none",
+                color:C.navy, background:C.white, fontFamily:"inherit" }} />
+          </div>
+          {TIME_PATTERNS[serviceId] ? (
+            <TimePatternSelect serviceId={serviceId}
+              startTime={sch.startTime||""} endTime={sch.endTime||""}
+              onChange={({startTime,endTime})=>onChange({...sch,startTime,endTime})} />
+          ) : (
+            <div style={{ display:"flex", gap:10, alignItems:"flex-end", marginBottom:14 }}>
+              <TimeSelect label="開始時間" value={sch.startTime||""}
+                onChange={e=>onChange({...sch, startTime:e.target.value})} />
+              <div style={{ paddingBottom:14, fontSize:18, color:C.gray, fontWeight:700, flexShrink:0 }}>〜</div>
+              <TimeSelect label="終了時間" value={sch.endTime||""}
+                onChange={e=>onChange({...sch, endTime:e.target.value})} />
+            </div>
+          )}
+          {detailItems.length>0&&(
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:13, color:C.gray, marginBottom:6, fontWeight:600 }}>作業内容</div>
+              <div style={{ background:"#f8f9ff", borderRadius:10, padding:"0 12px", border:"1px solid "+C.grayL }}>
+                {detailItems.map(opt=>(
+                  <CheckBox key={opt} label={opt}
+                    checked={(sch.details||[]).includes(opt)}
+                    onChange={()=>toggleDetail(opt)}
+                    warn={opt==="アスベストあり"} small />
+                ))}
+              </div>
+            </div>
+          )}
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:13, color:C.gray, marginBottom:6, fontWeight:600 }}>メモ（任意）</div>
+            <TextArea value={sch.memo||""} rows={3}
+              onChange={e=>onChange({...sch, memo:e.target.value})}
+              placeholder="この日程に関する特記事項など" />
+          </div>
+          <div style={{ marginBottom:10 }}>
+            <OrBigBtn onClick={onSave} color="green">💾 保存する</OrBigBtn>
+          </div>
+          <OrSubBtn onClick={onCancel}>キャンセル（変更を破棄）</OrSubBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── 確認・最終確認・完了 ─────────────────────────────────
-function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll, personName, images, onImagesChange }) {
+function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onSubmitAll, personName, images, onImagesChange, onUpdateSchedule }) {
   const svc=SERVICES.find(s=>s.id===serviceId);
   const allDone=doneServices.length>=SERVICES.length;
+  const [editIdx, setEditIdx] = useState(null);
+  const [editSch, setEditSch] = useState(null);
+  const openEdit = (i) => { setEditIdx(i); setEditSch({...(formData.schedules[i]||{})}); };
+  const handleSave = () => {
+    if (onUpdateSchedule) onUpdateSchedule(editIdx, editSch);
+    setEditIdx(null); setEditSch(null);
+  };
+  const handleCancel = () => { setEditIdx(null); setEditSch(null); };
   const ConfRow=({label,value})=>value?(
     <div style={{ display:"flex", gap:12, padding:"9px 0", borderBottom:"1px solid "+C.grayL }}>
       <div style={{ fontSize:14, color:C.gray, minWidth:90, flexShrink:0 }}>{label}</div>
@@ -2657,7 +2748,18 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
       </Card>
       {formData.schedules.map((sch,i)=>(
         <Card key={i}>
-          <CardTitle icon="📅">日程 {i+1}</CardTitle>
+          <div style={{ fontSize:15, fontWeight:800, color:C.navy,
+            borderBottom:"2px solid "+C.grayL, padding:"14px 18px 12px",
+            display:"flex", alignItems:"center", gap:8 }}>
+            <span style={{ fontSize:20 }}>📅</span>
+            <span style={{ flex:1 }}>日程 {i+1}</span>
+            <button onClick={()=>openEdit(i)}
+              style={{ fontSize:12, fontWeight:700, padding:"5px 12px", borderRadius:8,
+                background:"#eef3ff", border:"1px solid #2952c8", color:C.blue,
+                cursor:"pointer", fontFamily:"inherit", flexShrink:0 }}>
+              ✏️ 修正する
+            </button>
+          </div>
           <div style={{ padding:"14px 18px" }}>
             <ConfRow label="日付"     value={sch.date} />
             <ConfRow label="時間"     value={sch.startTime&&sch.endTime?sch.startTime+"〜"+sch.endTime:""} />
@@ -2783,6 +2885,10 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
           <OrBigBtn onClick={onSubmitAll} color="green">✉️ このまま発注する</OrBigBtn>
         </div>
       </div>
+      {editIdx!==null && editSch && (
+        <ScheduleEditModal serviceId={serviceId} sch={editSch} schIdx={editIdx}
+          onChange={setEditSch} onSave={handleSave} onCancel={handleCancel} />
+      )}
     </div>
   );
 }
@@ -3288,7 +3394,14 @@ function OrderApp({ onDone, onBack }) {
             onImagesChange={setAttachedImages}
             onEdit={()=>setPhase("form")}
             onAddMore={()=>{ setCurrentSvc(null); setPhase("service"); }}
-            onSubmitAll={handleSubmitAll}/>
+            onSubmitAll={handleSubmitAll}
+            onUpdateSchedule={(idx, newSch) => {
+              setSavedForms(f => {
+                const old = f[currentSvc] || {};
+                const scheds = (old.schedules||[]).map((s,i) => i===idx ? newSch : s);
+                return { ...f, [currentSvc]: { ...old, schedules: scheds } };
+              });
+            }} />
         )}
         {phase==="finalConfirm"&&(
           <FinalConfirm orders={orders} images={attachedImages}
