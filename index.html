@@ -5382,11 +5382,15 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
   const [userId,          setUserId]          = useState(null);
   const [unreadCounts,    setUnreadCounts]    = useState({});
   const [showUnreadBubble,setShowUnreadBubble]= useState(false);
+  const [userName,        setUserName]        = useState("");
 
   const fetchOrders = async () => {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) { setLoading(false); return; }
     setUserId(user.id);
+    sb.from('profiles').select('name').eq('id', user.id).maybeSingle().then(({ data: prof }) => {
+      if (prof?.name) setUserName(prof.name);
+    });
     const { data, error } = await sb
       .from('orders')
       .select('*, schedules(*, schedule_history(*)), order_images(*), cases(id, case_code, case_name)')
@@ -5505,7 +5509,25 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         boxShadow:"0 2px 8px rgba(10,31,92,0.06)" }}>
         <img src={LOGO_IMG} style={{ height:54, objectFit:"contain" }} />
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <button onClick={onMyPage} style={{ padding:"6px 14px", background:"#eef3ff", border:"1px solid #2952c8", borderRadius:8, color:"#2952c8", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>👤 マイページ</button>
+          <div onClick={onMyPage} title="マイページへ" style={{ cursor:"pointer", display:"flex", alignItems:"center", gap:8,
+            padding:"5px 12px 5px 6px", borderRadius:10, background:"#eef3ff", border:"1px solid #2952c8", maxWidth:180 }}>
+            <div style={{ width:28, height:28, borderRadius:"50%", background:C.blue, flexShrink:0,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:800, color:C.white }}>
+              {userName ? userName[0].toUpperCase() : "?"}
+            </div>
+            <div style={{ overflow:"hidden" }}>
+              <div style={{ fontSize:12, fontWeight:700, color:C.navy, whiteSpace:"nowrap",
+                overflow:"hidden", textOverflow:"ellipsis", maxWidth:110 }}>
+                {userName || "マイページ"}
+              </div>
+              {role && role !== "user" && (
+                <span style={{ fontSize:9, fontWeight:700, background:C.blue, color:C.white,
+                  borderRadius:4, padding:"1px 5px", display:"inline-block", marginTop:1 }}>
+                  {role}
+                </span>
+              )}
+            </div>
+          </div>
           <button onClick={onLogout} style={{ padding:"6px 14px", background:C.grayPale, border:"1px solid "+C.grayL, borderRadius:8, color:C.gray, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>ログアウト</button>
         </div>
       </div>
@@ -5980,6 +6002,7 @@ function MyPageApp({ onBack, onLogout }) {
   const [firstName,     setFirstName]     = useState("");
   const [lastNameKana,  setLastNameKana]  = useState("");
   const [firstNameKana, setFirstNameKana] = useState("");
+  const [userRole,      setUserRole]      = useState("");
   const [phone,         setPhone]         = useState("");
   const [email,         setEmail]         = useState("");
   const [company,       setCompany]       = useState("");
@@ -5998,6 +6021,7 @@ function MyPageApp({ onBack, onLogout }) {
       if (!user) { setLoading(false); return; }
       setUserId(user.id);
       setEmail(user.email || "");
+      setUserRole(user.app_metadata?.role || user.user_metadata?.role || "user");
       const { data, error } = await sb
         .from('profiles')
         .select('name, name_kana, phone, company_id')
@@ -6107,6 +6131,17 @@ function MyPageApp({ onBack, onLogout }) {
             <ReadOnlyField label="契約社名" value={company} />
             <ReadOnlyField label="メールアドレス（ログインID）" value={email} />
             <ReadOnlyField label="企業ID" value={companyId} />
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>ロール</div>
+              <div style={{ display:"inline-flex", alignItems:"center", gap:6,
+                padding:"4px 12px", borderRadius:20,
+                background: userRole==="admin" ? "#fde8e8" : userRole==="manager" ? "#eef3ff" : userRole==="staff" ? "#fff7ed" : "#f0fdf4",
+                color: userRole==="admin" ? C.red : userRole==="manager" ? C.blue : userRole==="staff" ? "#c05621" : "#16a34a",
+                fontWeight:700, fontSize:13, border:"1px solid",
+                borderColor: userRole==="admin" ? "#fca5a5" : userRole==="manager" ? "#a5b4fc" : userRole==="staff" ? "#fdba74" : "#86efac" }}>
+                {userRole==="admin" ? "👑 admin" : userRole==="manager" ? "🔧 manager" : userRole==="staff" ? "👷 staff" : "👤 一般ユーザー"}
+              </div>
+            </div>
 
             <div style={{ height:1, background:C.grayL, margin:"20px 0" }}/>
 
@@ -8774,11 +8809,12 @@ function DeletedPanel({ onClose, onRestore, onHardDelete }) {
 }
 
 // ── メイン ───────────────────────────────────────────────
-function AdminApp({ role, onLogout }) {
-  const [orders,   setOrders]   = useState([]);
-  const [chats,    setChats]    = useState({});
-  const [loading,  setLoading]  = useState(true);
-  const [dbError,  setDbError]  = useState(null);
+function AdminApp({ role, onLogout, onMyPage }) {
+  const [orders,    setOrders]   = useState([]);
+  const [chats,     setChats]    = useState({});
+  const [loading,   setLoading]  = useState(true);
+  const [dbError,   setDbError]  = useState(null);
+  const [adminName, setAdminName]= useState("");
   const [selected,   setSelected]   = useState(null);
   const [filter,     setFilter]     = useState("全て");
   const [search,     setSearch]     = useState("");
@@ -8851,6 +8887,9 @@ function AdminApp({ role, onLogout }) {
     const init = async () => {
       const { data: { session } } = await sb.auth.getSession();
       if (!session || !["admin","manager"].includes(session.user.app_metadata?.role)) { onLogout(); return; }
+      sb.from('profiles').select('name').eq('id', session.user.id).maybeSingle().then(({ data: prof }) => {
+        setAdminName(prof?.name || session.user.email?.split('@')[0] || '');
+      });
       await fetchOrders();
       channel = sb.channel('admin-orders')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, fetchOrders)
@@ -9312,6 +9351,29 @@ function AdminApp({ role, onLogout }) {
           </div>
         )}
         <div style={{ flex:1 }}/>
+        {/* ユーザー情報（クリックでマイページ） */}
+        {onMyPage && (
+          <div onClick={onMyPage} title={adminName || role}
+            style={{ cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", gap:3, marginBottom:4 }}>
+            <div style={{ width:36, height:36, borderRadius:"50%", position:"relative",
+              background:"rgba(255,255,255,0.25)", border:"2px solid rgba(255,255,255,0.5)",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:16, fontWeight:800, color:C.white }}>
+              {adminName ? adminName[0].toUpperCase() : "?"}
+              <div style={{ position:"absolute", bottom:-3, right:-3,
+                background: role==="admin" ? "#e53e3e" : "#2952c8",
+                borderRadius:"50%", width:14, height:14, fontSize:7, fontWeight:900,
+                color:C.white, display:"flex", alignItems:"center", justifyContent:"center",
+                border:"1.5px solid rgba(255,255,255,0.9)" }}>
+                {role==="admin" ? "A" : "M"}
+              </div>
+            </div>
+            <div style={{ fontSize:9, color:"rgba(255,255,255,0.6)", maxWidth:50, textAlign:"center",
+              overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {adminName ? adminName.split(" ")[0] : role}
+            </div>
+          </div>
+        )}
         <button onClick={onLogout} style={{ width:44, height:44, background:"rgba(255,255,255,0.1)", border:"none", borderRadius:8, color:"rgba(255,255,255,0.7)", fontSize:10, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:2 }}>
           <span style={{fontSize:16}}>🚪</span>
           <span>ログアウト</span>
@@ -9357,6 +9419,7 @@ function AdminApp({ role, onLogout }) {
       const [detailOrder, setDetailOrder] = React.useState(null);
       const [detailViewOnly, setDetailViewOnly] = React.useState(false);
       const [chatBackTo, setChatBackTo] = React.useState("detail");
+      const [mypageBackTo, setMypageBackTo] = React.useState("history");
 
       React.useEffect(() => {
         const { data: { subscription } } = sb.auth.onAuthStateChange((event, session) => {
@@ -9426,12 +9489,12 @@ function AdminApp({ role, onLogout }) {
       if (screen === "resetpassword") return <ResetPasswordScreen onDone={async () => { await sb.auth.signOut(); setScreen("login"); }} />;
       if (screen === "login")    return <LoginApp onLogin={handleLogin} onRegister={() => setScreen("register")} />;
       if (screen === "register") return <RegisterApp onDone={() => setScreen("login")} onBack={() => setScreen("login")} />;
-      if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => setScreen("mypage")} onLogout={() => setScreen("login")} onGoDetail={handleGoDetail} onGoDetailView={handleGoDetailView} onGoChat={handleGoChat} />;
+      if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => { setMypageBackTo("history"); setScreen("mypage"); }} onLogout={() => setScreen("login")} onGoDetail={handleGoDetail} onGoDetailView={handleGoDetailView} onGoChat={handleGoChat} />;
       if (screen === "detail" && detailOrder) return <DetailScreen role={userRole} order={detailOrder} onBack={() => setScreen("history")} onOpenChat={handleDetailOpenChat} onStatusChange={handleDetailStatusChange} onChat={() => {}} viewOnly={detailViewOnly} />;
       if (screen === "chat" && detailOrder) return <ChatScreen role={userRole} order={detailOrder} onBack={() => setScreen(chatBackTo)} />;
       if (screen === "order")    return <OrderApp onDone={() => setScreen("history")} onBack={() => setScreen("history")} />;
-      if (screen === "mypage")   return <MyPageApp onBack={() => setScreen("history")} onLogout={() => setScreen("login")} />;
-      if (screen === "admin")    return <AdminApp role={userRole} onLogout={() => setScreen("login")} />;
+      if (screen === "mypage")   return <MyPageApp onBack={() => setScreen(mypageBackTo)} onLogout={() => setScreen("login")} />;
+      if (screen === "admin")    return <AdminApp role={userRole} onLogout={() => setScreen("login")} onMyPage={() => { setMypageBackTo("admin"); setScreen("mypage"); }} />;
       return null;
     }
 
