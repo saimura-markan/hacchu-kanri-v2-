@@ -6667,7 +6667,7 @@ function Legend() {
 }
 
 // ── 受注カード ───────────────────────────────────────────
-function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onToggleCheck, unreadCount, siteChangeCount, changeLogCount }) {
+function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onToggleCheck, unreadCount, mentionCount, siteChangeCount, changeLogCount }) {
   useTimer();
   const timer = getOrderTimer(order);
 
@@ -6710,12 +6710,18 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
             {timer.label}
           </span>
         )}
-        {(unreadCount > 0 || siteChangeCount > 0 || changeLogCount > 0) && (
+        {(unreadCount > 0 || mentionCount > 0 || siteChangeCount > 0 || changeLogCount > 0) && (
           <div style={{ display:"flex", gap:4, marginTop:5, flexWrap:"wrap" }}>
-            {unreadCount > 0 && (
+            {mentionCount > 0 && (
               <span style={{ background:"#e63946", color:"#fff", borderRadius:99,
                 padding:"1px 8px", fontSize:11, fontWeight:800,
                 animation:"urgentPulse 2s ease-in-out infinite" }}>
+                🔴 @メンション {mentionCount}件
+              </span>
+            )}
+            {unreadCount > 0 && (
+              <span style={{ background:"#f07800", color:"#fff", borderRadius:99,
+                padding:"1px 8px", fontSize:11, fontWeight:800 }}>
                 💬 {unreadCount}件未読
               </span>
             )}
@@ -6740,7 +6746,7 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
 
 // ── 受注一覧パネル ───────────────────────────────────────
 function OrderList({ role, orders, selected, onSelect, filter, setFilter, search, setSearch,
-                      checkedIds, onToggleCheck, onDeleteSelected, unreadCounts, siteChangeCounts, changeLogCounts }) {
+                      checkedIds, onToggleCheck, onDeleteSelected, unreadCounts, mentionCounts, siteChangeCounts, changeLogCounts }) {
   useTimer();
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
   const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
@@ -6837,6 +6843,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
             onClick={()=>onSelect(order)}
             onToggleCheck={onToggleCheck}
             unreadCount={unreadCounts?.[order.id]||0}
+            mentionCount={mentionCounts?.[order.id]||0}
             siteChangeCount={siteChangeCounts?.[order.id]||0}
             changeLogCount={changeLogCounts?.[order.id]||0} />
         ))}
@@ -6875,8 +6882,12 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [scheduleChangeStart, setScheduleChangeStart] = useState("");
   const [scheduleChangeEnd,   setScheduleChangeEnd]   = useState("");
   const [scheduleChangeSending, setScheduleChangeSending] = useState(false);
-  const bottomRef  = useRef(null);
-  const touchTimer = useRef(null);
+  const [adminStaff,    setAdminStaff]    = useState([]);
+  const [mentionQuery,  setMentionQuery]  = useState(null);
+  const [mentionAtPos,  setMentionAtPos]  = useState(0);
+  const bottomRef   = useRef(null);
+  const touchTimer  = useRef(null);
+  const textareaRef = useRef(null);
   useTimer();
 
   const handleSoudanConfirm = async () => {
@@ -6918,6 +6929,12 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
       sb.from('profiles').select('name').eq('id', user.id).maybeSingle()
         .then(({ data }) => setAdminName(data?.name || user.email?.split('@')[0] || ''));
     });
+  }, []);
+
+  // @メンション用スタッフ一覧取得
+  useEffect(() => {
+    sb.from('staff').select('name, role').order('name')
+      .then(({ data }) => setAdminStaff((data || []).filter(s => ['admin','manager'].includes(s.role))));
   }, []);
 
   // チャットタブを開いたとき既読登録
@@ -7077,10 +7094,34 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 
   const timer = getOrderTimer(order);
 
+  const handleChatInputChange = (e) => {
+    const text   = e.target.value;
+    setChatInput(text);
+    const cursor = e.target.selectionStart;
+    const before = text.slice(0, cursor);
+    const m      = before.match(/@([^\s]*)$/);
+    if (m) { setMentionQuery(m[1]); setMentionAtPos(m.index); }
+    else setMentionQuery(null);
+  };
+
+  const filteredMentions = mentionQuery !== null
+    ? adminStaff.filter(s => s.name.toLowerCase().includes(mentionQuery.toLowerCase()))
+    : [];
+
+  const handleMentionSelect = (name) => {
+    const cursor = textareaRef.current?.selectionStart ?? chatInput.length;
+    const before = chatInput.slice(0, mentionAtPos);
+    const after  = chatInput.slice(cursor);
+    setChatInput(before + '@' + name + ' ' + after);
+    setMentionQuery(null);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
   const handleSend = () => {
     if (!chatInput.trim()) return;
+    setMentionQuery(null);
     const text = chatInput.trim();
-    const mentions = (text.match(/@\S+/g) || []).map(m => m.slice(1));
+    const mentions = (text.match(/@(\S+)/g) || []).map(m => m.slice(1));
     onAddChat(order.id, { from:"staff", text, replyToId: chatReplyTo?.id || null,
       mentions: mentions.length > 0 ? mentions : null,
       senderName: adminName  || null,
@@ -8142,7 +8183,27 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 
           <div style={{ background:C.white, borderTop:"2px solid "+C.grayL,
             padding:"12px 20px", flexShrink:0 }}>
-            <div style={{ maxWidth:700, margin:"0 auto" }}>
+            <div style={{ maxWidth:700, margin:"0 auto", position:"relative" }}>
+              {/* @メンション候補ポップアップ */}
+              {mentionQuery !== null && filteredMentions.length > 0 && (
+                <div style={{ position:"absolute", bottom:"100%", left:0, right:0,
+                  background:C.white, border:`2px solid ${C.blue}`, borderRadius:10,
+                  marginBottom:6, zIndex:200, boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
+                  maxHeight:180, overflowY:"auto" }}>
+                  {filteredMentions.map(s => (
+                    <button key={s.name} onMouseDown={e=>{ e.preventDefault(); handleMentionSelect(s.name); }}
+                      style={{ width:"100%", padding:"8px 14px", textAlign:"left", background:"none",
+                        border:"none", borderBottom:`1px solid ${C.grayL}`, cursor:"pointer",
+                        display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:10, background:s.role==="admin"?C.red:C.orange,
+                        color:"#fff", borderRadius:4, padding:"1px 5px", fontWeight:700, flexShrink:0 }}>
+                        {s.role}
+                      </span>
+                      <span style={{ fontSize:13, fontWeight:600, color:C.navy }}>{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               {chatReplyTo && (
                 <div style={{ background:"#eef3ff", borderLeft:`3px solid ${C.blue}`,
                   padding:"5px 10px", marginBottom:8, borderRadius:8,
@@ -8157,9 +8218,16 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 </div>
               )}
               <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
-              <textarea value={chatInput} onChange={e=>setChatInput(e.target.value)}
-                onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ return; } if(e.key==="Enter"&&e.shiftKey){ e.preventDefault(); handleSend(); } }}
-                placeholder="お客様へのメッセージを入力... (Shift+Enterで送信)" rows={2}
+              <textarea ref={textareaRef} value={chatInput} onChange={handleChatInputChange}
+                onKeyDown={e=>{
+                  if (mentionQuery !== null && filteredMentions.length > 0) {
+                    if (e.key==="Escape") { e.preventDefault(); setMentionQuery(null); return; }
+                    if (e.key==="Enter")  { e.preventDefault(); handleMentionSelect(filteredMentions[0].name); return; }
+                  }
+                  if (e.key==="Enter"&&!e.shiftKey) return;
+                  if (e.key==="Enter"&&e.shiftKey) { e.preventDefault(); handleSend(); }
+                }}
+                placeholder="メッセージを入力... @でメンション / Shift+Enterで送信" rows={2}
                 style={{ flex:1, fontSize:14, padding:"12px 14px", borderRadius:12,
                   border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
                   color:C.navy, resize:"none", lineHeight:1.5, outline:"none" }} />
@@ -8963,9 +9031,11 @@ function AdminApp({ role, onLogout, onMyPage }) {
   const [showStaff,   setShowStaff]   = useState(false);
   const [checkedIds,  setCheckedIds]  = useState([]);
   const [unreadCounts,     setUnreadCounts]     = useState({});
+  const [mentionCounts,    setMentionCounts]    = useState({});
   const [siteChangeCounts, setSiteChangeCounts] = useState({});
   const [changeLogCounts,  setChangeLogCounts]  = useState({});
-  const pendingDeletes = useRef(new Set());
+  const pendingDeletes  = useRef(new Set());
+  const adminNameRef    = useRef('');
 
   const fetchOrders = async () => {
     const { data, error } = await sb
@@ -8980,14 +9050,35 @@ function AdminApp({ role, onLogout, onMyPage }) {
   };
 
   const fetchNotifications = async () => {
-    // お客様からの未読メッセージ数（order_id別）
-    const { data: unread } = await sb.from('messages')
-      .select('order_id')
-      .eq('from_role', 'user')
-      .eq('is_read', false);
-    const counts = {};
-    (unread || []).forEach(m => { counts[m.order_id] = (counts[m.order_id] || 0) + 1; });
-    setUnreadCounts(counts);
+    const { data: { user } } = await sb.auth.getUser();
+    const uid    = user?.id;
+    const myName = adminNameRef.current;
+
+    // ①お客様→管理者の未読（自分がread_byに入っていないもの＝自分未読）
+    if (uid) {
+      const { data: unread } = await sb.from('messages')
+        .select('order_id')
+        .eq('from_role', 'user')
+        .not('read_by', 'cs', `{${uid}}`);
+      const counts = {};
+      (unread || []).forEach(m => { counts[m.order_id] = (counts[m.order_id] || 0) + 1; });
+      setUnreadCounts(counts);
+    }
+
+    // ②スタッフ間メンション（自分宛のメンション＆自分未読）
+    if (uid && myName) {
+      const { data: staffMsgs } = await sb.from('messages')
+        .select('order_id, mentions')
+        .eq('from_role', 'staff')
+        .not('read_by', 'cs', `{${uid}}`);
+      const mentCounts = {};
+      (staffMsgs || []).forEach(m => {
+        if (m.mentions?.includes(myName)) {
+          mentCounts[m.order_id] = (mentCounts[m.order_id] || 0) + 1;
+        }
+      });
+      setMentionCounts(mentCounts);
+    }
 
     // 管理者未確認の現場情報変更数（order_id別）
     const { data: siteChanges } = await sb.from('site_history')
@@ -9028,7 +9119,9 @@ function AdminApp({ role, onLogout, onMyPage }) {
       const { data: { session } } = await sb.auth.getSession();
       if (!session || !["admin","manager"].includes(session.user.app_metadata?.role)) { onLogout(); return; }
       sb.from('profiles').select('name').eq('id', session.user.id).maybeSingle().then(({ data: prof }) => {
-        setAdminName(prof?.name || session.user.email?.split('@')[0] || '');
+        const n = prof?.name || session.user.email?.split('@')[0] || '';
+        setAdminName(n);
+        adminNameRef.current = n;
       });
       await fetchOrders();
       channel = sb.channel('admin-orders')
@@ -9399,14 +9492,25 @@ function AdminApp({ role, onLogout, onMyPage }) {
   };
 
   const markChatRead = async (id) => {
+    const { data: { user } } = await sb.auth.getUser();
+    const uid = user?.id;
+    // 楽観的更新
     setChats(c => ({ ...c, [id]: (c[id]||[]).map(m => ({ ...m, read: true })) }));
     setUnreadCounts(prev => { const next = { ...prev }; delete next[id]; return next; });
-    const { error } = await sb.from('messages')
-      .update({ is_read: true })
+    setMentionCounts(prev => { const next = { ...prev }; delete next[id]; return next; });
+    if (!uid) return;
+    // 自分がまだ読んでいないメッセージに自分のUIDを追加（per-user既読管理）
+    const { data: msgs } = await sb.from('messages')
+      .select('id, read_by')
       .eq('order_id', id)
-      .in('from_role', ['user', 'staff', 'eli']);
-    if (error) console.error('[markChatRead] DB update failed:', error.message);
-    else console.log('[markChatRead] DB updated OK for order:', id);
+      .not('read_by', 'cs', `{${uid}}`);
+    if (msgs?.length > 0) {
+      await Promise.all(msgs.map(msg =>
+        sb.from('messages')
+          .update({ read_by: [...(msg.read_by || []), uid] })
+          .eq('id', msg.id)
+      ));
+    }
   };
 
   const updateMsg = (orderId, msgId, updates) => {
@@ -9530,6 +9634,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
           onToggleCheck={id=>setCheckedIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])}
           onDeleteSelected={handleDelete}
           unreadCounts={unreadCounts}
+          mentionCounts={mentionCounts}
           siteChangeCounts={siteChangeCounts}
           changeLogCounts={changeLogCounts} />
 
