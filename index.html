@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-  <title>LiBot 工事 受発注システム</title>
+  <title>E-Li 工事受発注システム</title>
   <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"
     onerror="showLoadError('React')"></script>
   <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"
@@ -342,7 +342,7 @@
     // ログイン画面
     // ═══════════════════════════════════════════════════════
 
-// ── LiBotロゴ（SVG） ──────────────────────────────────────
+// ── E-Liロゴ（SVG） ──────────────────────────────────────
 function EliLogo({ height = 32 }) {
   return (
     <svg height={height} viewBox="0 0 130 44" style={{ display: "block" }}>
@@ -350,9 +350,9 @@ function EliLogo({ height = 32 }) {
       <line x1="0" y1="20" x2="20" y2="16" stroke={C.white} strokeWidth="2.5" opacity="0.8" strokeLinecap="round"/>
       <line x1="0" y1="25" x2="17" y2="22" stroke={C.white} strokeWidth="1.8" opacity="0.55" strokeLinecap="round"/>
       <line x1="0" y1="30" x2="14" y2="28" stroke={C.white} strokeWidth="1.2" opacity="0.35" strokeLinecap="round"/>
-      {/* LiBot テキスト */}
+      {/* E-Li テキスト */}
       <text x="24" y="36" fontSize="32" fontWeight="900" fill={C.white}
-        fontFamily="'Arial Black','Impact',sans-serif" letterSpacing="-1">LiBot</text>
+        fontFamily="'Arial Black','Impact',sans-serif" letterSpacing="-1">E-Li</text>
       {/* スピード弧 */}
       <path d="M 54 5 Q 108 1 120 22 Q 108 40 92 40"
         stroke={C.white} strokeWidth="3" fill="none" strokeLinecap="round" opacity="0.9"/>
@@ -360,7 +360,7 @@ function EliLogo({ height = 32 }) {
   );
 }
 
-// ── LiBot（SVG） ──────────────────────────────────
+// ── E-Li（SVG） ──────────────────────────────────
 function EliSVG({ size = 56 }) {
   return (
     <svg viewBox="0 0 80 90" width={size} height={size * 1.1} style={{ display:"block" }}>
@@ -381,7 +381,7 @@ function EliSVG({ size = 56 }) {
       <rect x="20" y="58" width="40" height="24" rx="12" fill={C.navyMid}/>
       <rect x="26" y="63" width="28" height="14" rx="7" fill={C.navy}/>
       <text x="40" y="74" textAnchor="middle" fontSize="7" fontWeight="bold"
-        fill={C.yellow} fontFamily="sans-serif">LiBot</text>
+        fill={C.yellow} fontFamily="sans-serif">E-Li</text>
       <rect x="24" y="79" width="12" height="9" rx="5" fill={C.navyMid}/>
       <rect x="44" y="79" width="12" height="9" rx="5" fill={C.navyMid}/>
     </svg>
@@ -499,7 +499,7 @@ function Header({ title = "ログイン" }) {
           <div style={{ fontSize: 15, fontWeight: 800, color: C.white }}>{title}</div>
         </div>
       </div>
-      <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ height:40, width:"auto", flexShrink:0 }} />
+      <img src={ELI_IMG} alt="E-Li" className="libot-float" style={{ height:40, width:"auto", flexShrink:0 }} />
     </div>
   );
 }
@@ -596,7 +596,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
     <div className="login-root">
       <div className="login-container">
 
-        {/* ── ヘッダー行：ロゴ左 / LiBot右 ── */}
+        {/* ── ヘッダー行：ロゴ左 / E-Li右 ── */}
         <div className="login-header">
           <div className="login-hero-left">
             <div className="login-service-label">工事 受発注システム</div>
@@ -605,7 +605,7 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
             <div className="login-catchcopy">発注を、もっとスマートに。</div>
             <div className="login-subcatch">現場を支える、次世代の受発注システム。</div>
           </div>
-          <img src={ELI_IMG} className="login-libot libot-float" alt="LiBot" />
+          <img src={ELI_IMG} className="login-libot libot-float" alt="E-Li" />
         </div>
 
         {/* ── 特徴アイコン 4つ ── */}
@@ -889,7 +889,7 @@ function RgTopBar() {
 function EliRow({ children }) {
   return (
     <div style={{ padding:"24px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:20 }}>
-      <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ height:100, width:"auto",
+      <img src={ELI_IMG} alt="E-Li" className="libot-float" style={{ height:100, width:"auto",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
       <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
         padding:"14px 18px", fontSize:16, color:C.navy, fontWeight:700,
@@ -1236,7 +1236,7 @@ function RgDone({ data, companyId, companyName, onDone }) {
   const fullName = ((data.lastName||'') + ' ' + (data.firstName||'')).trim();
   return (
     <div style={{ padding:"24px", textAlign:"center" }}>
-      <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ height:100, width:"auto",
+      <img src={ELI_IMG} alt="E-Li" className="libot-float" style={{ height:100, width:"auto",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", marginBottom:16 }} />
       <div style={{ fontSize:24, fontWeight:800, color:C.navy, marginBottom:8 }}>
         登録が完了しました！🎉
@@ -1378,7 +1378,7 @@ function RegisterApp({ onDone, onBack }) {
               <span style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.85)", lineHeight:1 }}>365</span>
             </div>
             <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>LiBotシステム</div>
+              <div style={{ fontSize:13, fontWeight:800, color:C.navy }}>E-Liシステム</div>
               <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>24時間365日受付</div>
             </div>
           </div>
@@ -3326,7 +3326,7 @@ function OrderApp({ onDone, onBack }) {
         text:      '受け付けました！\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。',
         is_read:   false,
       });
-      if (msgError) console.error('[LiBot自動メッセージ失敗]', msgError.message);
+      if (msgError) console.error('[E-Li自動メッセージ失敗]', msgError.message);
       ids.push(newOrder.id);
     }
     return ids;
@@ -3496,7 +3496,7 @@ function HiBigBtn({ children, onClick, color, disabled }) {
   );
 }
 
-// ── LiBotのメッセージ ─────────────────────────────
+// ── E-Liのメッセージ ─────────────────────────────
 function EliMessage({ orders, totalUnread=0 }) {
   const adjCount    = orders.filter(o=>o.status==="調整中").length;
   const soudanCount = orders.filter(o=>o.status==="日程相談中").length;
@@ -3515,7 +3515,7 @@ function EliMessage({ orders, totalUnread=0 }) {
   return (
     <div style={{ display:"flex", alignItems:"flex-start", gap:12,
       padding:"0 0 16px", marginBottom:4 }}>
-      <img src={ELI_IMG} alt="LiBot" className="libot-float"
+      <img src={ELI_IMG} alt="E-Li" className="libot-float"
         style={{ height:60, width:"auto", flexShrink:0 }} />
       <div style={{ flex:1, minWidth:0 }}>
         {msgs.map((msg,i)=>(
@@ -4728,7 +4728,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                 borderRadius:"50%", display:"flex", alignItems:"center",
                 justifyContent:"center", fontSize:24, flexShrink:0 }}>💬</div>
               <div>
-                <div style={{ fontSize:16, fontWeight:900, color:C.white }}>LiBotとチャット</div>
+                <div style={{ fontSize:16, fontWeight:900, color:C.white }}>E-Liとチャット</div>
                 <div style={{ fontSize:13, color:"rgba(255,255,255,0.8)", marginTop:2 }}>担当者への連絡・日程相談はこちら</div>
               </div>
             </button>
@@ -5290,7 +5290,7 @@ function ChatScreen({ role, order, onBack }) {
           </div>
           <div style={{ padding:"14px 16px", borderTop:"1px solid rgba(255,255,255,0.1)",
             fontSize:11, color:"rgba(255,255,255,0.35)", textAlign:"center", lineHeight:1.6 }}>
-            LiBot 工事受発注システム
+            E-Li 工事受発注システム
           </div>
         </div>
 
@@ -5390,7 +5390,7 @@ function ChatScreen({ role, order, onBack }) {
                         {/* 送信者ラベル */}
                         {isEli && (
                           <div style={{ fontSize:10, color:"#9a8730", marginBottom:3,
-                            fontWeight:700, letterSpacing:0.3 }}>LiBot 自動通知</div>
+                            fontWeight:700, letterSpacing:0.3 }}>E-Li 自動通知</div>
                         )}
                         {!isOwn && isStaff && (
                           <div style={{ fontSize:11, color:C.blue, marginBottom:3,
@@ -5620,7 +5620,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
   if (loading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
       minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
-      <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ height:80, width:"auto", filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.15))" }} />
+      <img src={ELI_IMG} alt="E-Li" className="libot-float" style={{ height:80, width:"auto", filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.15))" }} />
       <div style={{ marginTop:16, fontSize:15, color:C.navy, fontWeight:700 }}>読み込み中…</div>
     </div>
   );
@@ -5674,7 +5674,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
 
       <div className="hi-main-content">
 
-        {/* LiBotのメッセージ */}
+        {/* E-Liのメッセージ */}
         <EliMessage orders={orders} totalUnread={Object.values(unreadCounts).reduce((a,b)=>a+b,0)} />
 
         {/* フィルター */}
@@ -5870,7 +5870,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         </div>
       </div>
 
-      {/* 右下固定LiBot ＋ 未読吹き出し */}
+      {/* 右下固定E-Li ＋ 未読吹き出し */}
       <div style={{ position:"fixed", bottom:24, right:16, zIndex:100,
         display:"flex", flexDirection:"column", alignItems:"flex-end", pointerEvents:"none" }}>
         {showUnreadBubble&&(
@@ -5883,7 +5883,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
             新しいメッセージがあるよ！
           </div>
         )}
-        <img src={ELI_IMG} alt="LiBot" className="libot-float"
+        <img src={ELI_IMG} alt="E-Li" className="libot-float"
           style={{ height:64, width:"auto", pointerEvents:"none",
             filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.18))" }} />
       </div>
@@ -5917,7 +5917,7 @@ function MyTopBar({ onBack, onLogout }) {
 function MyEliRow({ children }) {
   return (
     <div style={{ padding:"20px 24px 0", display:"flex", alignItems:"flex-end", gap:14, marginBottom:16 }}>
-      <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ height:100, width:"auto",
+      <img src={ELI_IMG} alt="E-Li" className="libot-float" style={{ height:100, width:"auto",
         filter:"drop-shadow(0 6px 16px rgba(10,31,92,0.15))", flexShrink:0 }} />
       <div style={{ flex:1, background:"#f4f7ff", borderRadius:"4px 18px 18px 18px",
         padding:"12px 16px", fontSize:15, color:C.navy, fontWeight:700,
@@ -6232,7 +6232,7 @@ function MyPageApp({ onBack, onLogout }) {
   if (loading) return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
       minHeight:"100vh", background:C.bg, fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
-      <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ height:80, width:"auto", filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.15))" }} />
+      <img src={ELI_IMG} alt="E-Li" className="libot-float" style={{ height:80, width:"auto", filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.15))" }} />
       <div style={{ marginTop:16, fontSize:15, color:C.navy, fontWeight:700 }}>読み込み中…</div>
     </div>
   );
@@ -6759,7 +6759,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
       display:"flex", flexDirection:"column", flexShrink:0, height:"100vh", overflow:"hidden" }}>
 
       <div style={{ background:`linear-gradient(135deg,${C.navy},#1a3a8f)`, padding:"14px 14px 10px" }}>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>LiBot 管理者画面</div>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>E-Li 管理者画面</div>
         <div style={{ fontSize:17, fontWeight:900, color:C.white }}>受注一覧</div>
         <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
           {adjCount>0 && (
@@ -8064,7 +8064,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                     alignItems:"flex-end", gap:8, marginBottom:14 }}>
                     {!isOwn && (
                       msg.from==="eli"
-                        ? <img src={ELI_IMG} alt="LiBot" className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
+                        ? <img src={ELI_IMG} alt="E-Li" className="libot-float" style={{ width:36, height:36, borderRadius:"50%", objectFit:"cover", flexShrink:0 }} />
                         : <div style={{ width:34, height:34, background:C.navy, borderRadius:"50%",
                             display:"flex", alignItems:"center", justifyContent:"center",
                             fontSize:15, flexShrink:0 }}>👤</div>
@@ -8088,7 +8088,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       onTouchMove={()=>{ setTouching(false); clearTimeout(touchTimer.current); }}
                     >
                       {/* 送信者名 */}
-                      {msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>LiBot</div>}
+                      {msg.from==="eli"   && <div style={{ fontSize:11, color:C.gray,   marginBottom:3 }}>E-Li</div>}
                       {msg.from==="user"  && <div style={{ fontSize:11, color:C.orange, marginBottom:3, fontWeight:600 }}>👤 {order.person}</div>}
                       {isOwn             && <div style={{ fontSize:11, color:C.green,  marginBottom:3, fontWeight:600, textAlign:"right" }}>👷 {displayName}</div>}
                       {/* 引用 */}
@@ -8283,7 +8283,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
             boxShadow:'0 20px 60px rgba(10,31,92,0.3)' }}>
             <div style={{ fontSize:16, fontWeight:900, color:C.navy, marginBottom:4 }}>📅 日程相談中に変更</div>
             <div style={{ fontSize:12, color:C.gray, marginBottom:16 }}>
-              候補日を1件以上入力してください。LiBotがお客様へ自動送信します。
+              候補日を1件以上入力してください。E-Liがお客様へ自動送信します。
             </div>
             {soudanCandidates.map((c, i) => (
               <div key={i} style={{ display:'flex', gap:8, marginBottom:10, alignItems:'center' }}>
@@ -8358,7 +8358,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
             boxShadow:'0 20px 60px rgba(10,31,92,0.3)' }}>
             <div style={{ fontSize:16, fontWeight:900, color:C.navy, marginBottom:4 }}>📅 作業日程を変更する</div>
             <div style={{ fontSize:12, color:C.gray, marginBottom:16 }}>
-              日付と作業時間を入力してください。LiBotがお客様へ自動通知します。
+              日付と作業時間を入力してください。E-Liがお客様へ自動通知します。
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:16 }}>
               <div>
