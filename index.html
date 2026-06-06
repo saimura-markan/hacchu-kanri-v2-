@@ -1834,11 +1834,6 @@ function KaitaiDetail({ details, detail, onChange, showErrors }) {
           <RadioGroup options={FLOOR_SIZES} value={v.floorSize||""} onChange={val=>u({floorSize:val})} cols />
         </SubSection>
       )}
-      {hasAsbestos&&(
-        <div style={{ marginTop:10 }}>
-          <AsbestosDetail val={v.asbestosDetail} onChange={val=>u({asbestosDetail:val})} />
-        </div>
-      )}
       <SubSection title="📄 図面">
         <RadioGroup options={["図面なし","図面あり"]} value={v.house_plan||""} onChange={val=>u({house_plan:val})} />
         {v.house_plan==="図面あり"&&(
@@ -2179,6 +2174,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
         </div>
       )}
       <div style={{ marginBottom:4 }}>
+        <style>{`@keyframes asbFadeIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}`}</style>
         <div style={{ fontSize:13, color:C.gray, marginBottom:6, fontWeight:600 }}>作業内容</div>
         <div style={{ background:C.white, borderRadius:10, padding:"0 12px", border:"1px solid "+C.grayL }}>
           {detailItems.map(opt=>(
@@ -2188,6 +2184,13 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
               warn={opt==="アスベストあり"} small />
           ))}
         </div>
+        {serviceId==="kaitai" && (sch.details||[]).includes("アスベストあり") && (
+          <div style={{ marginTop:6, animation:"asbFadeIn 0.2s ease" }}>
+            <AsbestosDetail
+              val={(sch.serviceDetail||{}).asbestosDetail}
+              onChange={val=>onChange({...sch, serviceDetail:{...(sch.serviceDetail||{}), asbestosDetail:val}})} />
+          </div>
+        )}
       </div>
       {serviceId==="yousei"&&(
         <YouseiDetail details={sch.details||[]} detail={sch.serviceDetail}
@@ -2568,12 +2571,14 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
               canRemove={schedules.length>1}
               showErrors={showErrors&&i===0} />
           ))}
-          <button onClick={addSchedule}
-            style={{ display:"flex", alignItems:"center", gap:8, width:"100%",
-              padding:"13px 16px", borderRadius:12, border:"2px dashed "+C.blue,
-              background:"#f0f5ff", color:C.blue, fontSize:15, fontWeight:700, cursor:"pointer" }}>
-            ＋ 日程を追加する
-          </button>
+          {serviceId !== "kaitai" && (
+            <button onClick={addSchedule}
+              style={{ display:"flex", alignItems:"center", gap:8, width:"100%",
+                padding:"13px 16px", borderRadius:12, border:"2px dashed "+C.blue,
+                background:"#f0f5ff", color:C.blue, fontSize:15, fontWeight:700, cursor:"pointer" }}>
+              ＋ 日程を追加する
+            </button>
+          )}
         </div>
       </Card>
 
