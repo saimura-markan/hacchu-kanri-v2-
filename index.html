@@ -1918,7 +1918,7 @@ function SanpaiDetail({ details, detail, onChange, showErrors }) {
 }
 
 // ── 清掃の詳細 ───────────────────────────────────────────
-function SoujiDetail({ details, detail, onChange }) {
+function SoujiDetail({ details, detail, onChange, onNext }) {
   const v=detail||{
     kanyi_yousei:"",kanyi_kagu:"",kanyi_heavy:"",kanyi_workers:"",
     house_yousei:"",house_size:"",house_furniture:"",house_water:"",house_corner:false,house_vacancy:"",house_plan:"",
@@ -2035,12 +2035,13 @@ function SoujiDetail({ details, detail, onChange }) {
                 </div>
               )}
               {v.ac_model_input==="写真で添付"&&(
-                <div style={{ marginTop:12, background:"#eef3ff", borderRadius:10,
-                  padding:"12px 14px", border:"1px solid "+C.blue }}>
+                <button onClick={onNext} style={{ marginTop:12, width:"100%", background:"#eef3ff",
+                  borderRadius:10, padding:"12px 14px", border:"1px solid "+C.blue,
+                  cursor:"pointer", textAlign:"left", fontFamily:"inherit" }}>
                   <div style={{ fontSize:14, color:C.blue, fontWeight:700 }}>
                     📷 次のページで写真添付をお願いします
                   </div>
-                </div>
+                </button>
               )}
             </div>
           )}
@@ -2113,7 +2114,7 @@ function needsWorkers(serviceId) {
 }
 
 // ── 日程カード ───────────────────────────────────────────
-function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, showErrors }) {
+function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, showErrors, onNext }) {
   const toggleDetail=t=>{
     const d=sch.details||[];
     const removing=d.includes(t);
@@ -2220,7 +2221,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
       )}
       {serviceId==="souji"&&(sch.details||[]).length>0&&(
         <SoujiDetail details={sch.details||[]} detail={sch.serviceDetail}
-          onChange={v=>onChange({...sch,serviceDetail:v})} />
+          onChange={v=>onChange({...sch,serviceDetail:v})} onNext={onNext} />
       )}
       {needsWorkers(serviceId) && serviceId!=="souji" && (
         <div style={{ marginTop:14, marginBottom:4 }}>
@@ -2589,7 +2590,8 @@ function StepForm({ serviceId, savedData, onSubmit, onBack, isAdditional, firstS
               onChange={v=>updateSch(i,v)}
               onRemove={()=>rmSchedule(i)}
               canRemove={schedules.length>1}
-              showErrors={showErrors&&i===0} />
+              showErrors={showErrors&&i===0}
+              onNext={handleNext} />
           ))}
           {serviceId !== "kaitai" && (
             <button onClick={addSchedule}
