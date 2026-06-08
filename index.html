@@ -3269,65 +3269,70 @@ function OrderApp({ onDone, onBack }) {
     const personPhone = profileData?.phone || '';
 
     const ids = [];
+    let imagesAttached = false; // 画像は案件内の最初の受注のみに添付
     for (const order of ordersList) {
       const svc = SERVICES.find(s => s.id === order.serviceId);
       const d   = order.data;
-      const { data: newOrder, error } = await sb.from('orders').insert({
-        user_id:        currentUserId,
-        company_id:     activeCid,
-        person:         personName       || '',
-        person_kana:    personNameKana   || '',
-        phone:          personPhone,
-        case_id:        caseId,
-        service:        svc.label,
-        site:           d.siteName  || '',
-        address:        d.address   || '',
-        key_info:            d.keyInfo?.noKey ? '在宅' : (d.keyInfo?.key || ''),
-        parking:             d.keyInfo?.parking || '',
-        note:                d.note      || '',
-        site_contact_name:   d.siteContactName  || '',
-        site_contact_phone:  d.siteContactPhone || '',
-        service_detail: d,
-      }).select('id').single();
-      if (error) throw error;
-      if (d.schedules?.length) {
-        await sb.from('schedules').insert(
-          d.schedules.map((sch, i) => ({
-            order_id:   newOrder.id,
-            work_date:  sch.date       || null,
-            start_time: sch.startTime  || '',
-            end_time:   sch.endTime    || '',
-            workers:    sch.workers    || '',
-            details:    sch.details    || [],
-            sort_order: i,
-          }))
-        );
-      }
-      for (let i = 0; i < images.length; i++) {
-        const img  = images[i];
-        // 特殊文字・日本語を含むファイル名はアップロード失敗の原因になるため連番JPEGに統一
-        const path = `${newOrder.id}/${i}.jpg`;
-        const { error: upErr } = await sb.storage.from('order-images')
-          .upload(path, img.blob, { contentType:'image/jpeg', upsert:true });
-        if (upErr) {
-          console.error('[画像アップロード失敗]', upErr.message);
-          throw new Error(`画像のアップロードに失敗しました: ${upErr.message}`);
+      const schedules = d.schedules?.length
+        ? d.schedules
+        : [{ date:'', startTime:'', endTime:'', workers:'', details:[], memo:'', serviceDetail:null }];
+      for (const sch of schedules) {
+        const { data: newOrder, error } = await sb.from('orders').insert({
+          user_id:        currentUserId,
+          company_id:     activeCid,
+          person:         personName       || '',
+          person_kana:    personNameKana   || '',
+          phone:          personPhone,
+          case_id:        caseId,
+          service:        svc.label,
+          site:           d.siteName  || '',
+          address:        d.address   || '',
+          key_info:            d.keyInfo?.noKey ? '在宅' : (d.keyInfo?.key || ''),
+          parking:             d.keyInfo?.parking || '',
+          note:                d.note      || '',
+          site_contact_name:   d.siteContactName  || '',
+          site_contact_phone:  d.siteContactPhone || '',
+          service_detail: { ...d, schedules: [sch] },
+        }).select('id').single();
+        if (error) throw error;
+        await sb.from('schedules').insert({
+          order_id:   newOrder.id,
+          work_date:  sch.date       || null,
+          start_time: sch.startTime  || '',
+          end_time:   sch.endTime    || '',
+          workers:    sch.workers    || '',
+          details:    sch.details    || [],
+          sort_order: 0,
+        });
+        if (!imagesAttached) {
+          for (let i = 0; i < images.length; i++) {
+            const img  = images[i];
+            // 特殊文字・日本語を含むファイル名はアップロード失敗の原因になるため連番JPEGに統一
+            const path = `${newOrder.id}/${i}.jpg`;
+            const { error: upErr } = await sb.storage.from('order-images')
+              .upload(path, img.blob, { contentType:'image/jpeg', upsert:true });
+            if (upErr) {
+              console.error('[画像アップロード失敗]', upErr.message);
+              throw new Error(`画像のアップロードに失敗しました: ${upErr.message}`);
+            }
+            const { error: dbErr } = await sb.from('order_images')
+              .insert({ order_id:newOrder.id, path:path });
+            if (dbErr) {
+              console.error('[order_images 登録失敗]', dbErr.message);
+              throw new Error(`画像情報の保存に失敗しました: ${dbErr.message}`);
+            }
+          }
+          imagesAttached = true;
         }
-        const { error: dbErr } = await sb.from('order_images')
-          .insert({ order_id:newOrder.id, path:path });
-        if (dbErr) {
-          console.error('[order_images 登録失敗]', dbErr.message);
-          throw new Error(`画像情報の保存に失敗しました: ${dbErr.message}`);
-        }
+        const { error: msgError } = await sb.from('messages').insert({
+          order_id:  newOrder.id,
+          from_role: 'eli',
+          text:      '受け付けました！\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。',
+          is_read:   false,
+        });
+        if (msgError) console.error('[E-Li自動メッセージ失敗]', msgError.message);
+        ids.push(newOrder.id);
       }
-      const { error: msgError } = await sb.from('messages').insert({
-        order_id:  newOrder.id,
-        from_role: 'eli',
-        text:      '受け付けました！\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。',
-        is_read:   false,
-      });
-      if (msgError) console.error('[E-Li自動メッセージ失敗]', msgError.message);
-      ids.push(newOrder.id);
     }
     return ids;
   };
@@ -4452,34 +4457,33 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         if (prof?.company_id) activeCid = prof.company_id;
       }
       const svc = SERVICES.find(s => s.id === addServiceId);
-      const { data: newOrder, error } = await sb.from('orders').insert({
-        user_id:    user.id,
-        company_id: activeCid || null,
-        service:    svc?.label || addServiceId || '',
-        site:       order.site    || '',
-        address:    order.address || '',
-        note:       formData.note || '',
-        status:     '調整中',
-      }).select('id').single();
-      if (error) throw error;
-      if (formData.schedules?.length) {
-        await sb.from('schedules').insert(
-          formData.schedules.map((sch, i) => ({
-            order_id:   newOrder.id,
-            work_date:  sch.date       || null,
-            start_time: sch.startTime  || '',
-            end_time:   sch.endTime    || '',
-            workers:    sch.workers    || '',
-            details:    sch.details    || [],
-            sort_order: i,
-          }))
-        );
+      const addSchedules = formData.schedules?.length ? formData.schedules : [];
+      for (const sch of addSchedules) {
+        const { data: newOrder, error } = await sb.from('orders').insert({
+          user_id:    user.id,
+          company_id: activeCid || null,
+          service:    svc?.label || addServiceId || '',
+          site:       order.site    || '',
+          address:    order.address || '',
+          note:       formData.note || '',
+          status:     '調整中',
+        }).select('id').single();
+        if (error) throw error;
+        await sb.from('schedules').insert({
+          order_id:   newOrder.id,
+          work_date:  sch.date       || null,
+          start_time: sch.startTime  || '',
+          end_time:   sch.endTime    || '',
+          workers:    sch.workers    || '',
+          details:    sch.details    || [],
+          sort_order: 0,
+        });
+        await sb.from('messages').insert({
+          order_id:  newOrder.id,
+          from_role: 'eli',
+          text:      `追加日程依頼を受け付けました！\n元の受付番号：${order.id}\n24時間以内に担当者よりご連絡いたします。`,
+        });
       }
-      await sb.from('messages').insert({
-        order_id:  newOrder.id,
-        from_role: 'eli',
-        text:      `追加日程依頼を受け付けました！\n元の受付番号：${order.id}\n24時間以内に担当者よりご連絡いたします。`,
-      });
       setAddDone(true);
       setTimeout(() => {
         setAddStep(null); setAddDone(false); setAddServiceId("");
