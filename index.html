@@ -5533,7 +5533,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
     });
     const { data, error } = await sb
       .from('orders')
-      .select('*, schedules(*, schedule_history(*)), order_images(*), cases(id, case_code, case_name)')
+      .select('*, schedules(*, schedule_history(*)), order_images(*), cases!left(id, case_code, case_name)')
       .eq('user_id', user.id)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
