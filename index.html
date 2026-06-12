@@ -2800,6 +2800,9 @@ function StepConfirm({ serviceId, formData, doneServices, onEdit, onAddMore, onS
                   return pts.length ? <ConfRow label="アスベスト箇所" value={pts.join("・")} /> : null;
                 })()}
                 <ConfRow label="補助作業員" value={sch.serviceDetail.haizaiHelper} />
+                {sch.serviceDetail.haizaiHelper==="搬出補助作業員あり"&&sch.serviceDetail.haizaiHelperReason&&(
+                  <ConfRow label="補助の理由" value={sch.serviceDetail.haizaiHelperReason} />
+                )}
                 <ConfRow label="バッカン"   value={sch.serviceDetail.baccanType} />
               </>
             )}
@@ -4829,7 +4832,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                           ['フロア面積',sd.floorSize],['アスベスト',asbStr],
                           ['廃材量',sd.wasteSize],
                           ['廃材種別',Array.isArray(sd.wasteTypes)&&sd.wasteTypes.length?sd.wasteTypes.join("・"):null],
-                          ['補助作業員',sd.haizaiHelper],['バッカン',sd.baccanType],
+                          ['補助作業員',sd.haizaiHelper],
+                          ['補助の理由',sd.haizaiHelper==="搬出補助作業員あり"?sd.haizaiHelperReason:null],
+                          ['バッカン',sd.baccanType],
                           ['図面',sd.house_plan]];
                         return rows.map(([label,value])=>!value?null:(
                           <div key={label} style={{ display:"flex", gap:10, padding:"8px 0", borderBottom:"1px solid #f0f0f5" }}>
@@ -4976,7 +4981,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
                                     ['フロア面積',sd.floorSize],['アスベスト',asbStr],
                                     ['廃材量',sd.wasteSize],
                                     ['廃材種別',Array.isArray(sd.wasteTypes)&&sd.wasteTypes.length?sd.wasteTypes.join("・"):null],
-                                    ['補助作業員',sd.haizaiHelper],['バッカン',sd.baccanType],
+                                    ['補助作業員',sd.haizaiHelper],
+                                    ['補助の理由',sd.haizaiHelper==="搬出補助作業員あり"?sd.haizaiHelperReason:null],
+                                    ['バッカン',sd.baccanType],
                                     ['図面',sd.house_plan]];
                                   return rows.map(([label,value])=>!value?null:(
                                     <div key={label} style={{ display:"flex", gap:10,
@@ -7839,7 +7846,9 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       ['フロア面積',sd.floorSize],['アスベスト',asbStr],
                       ['廃材量',sd.wasteSize],
                       ['廃材種別',Array.isArray(sd.wasteTypes)&&sd.wasteTypes.length?sd.wasteTypes.join("・"):null],
-                      ['補助作業員',sd.haizaiHelper],['バッカン',sd.baccanType],
+                      ['補助作業員',sd.haizaiHelper],
+                      ['補助の理由',sd.haizaiHelper==="搬出補助作業員あり"?sd.haizaiHelperReason:null],
+                      ['バッカン',sd.baccanType],
                       ['図面',sd.house_plan]];
                     return sdRows.map(([label,value])=>!value?null:(
                       <Row key={label} label={label} value={value} />
@@ -8314,6 +8323,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                     const hasAsb=sd.hasAsbestos===true||(sd.wasteTypes||[]).includes("アスベストあり");
                     rows.push(<PRow key={px+'アスベスト'}   label={px+'アスベスト'}   value={hasAsb?'あり'+(asbStr?'（'+asbStr+'）':''):''} />);
                     rows.push(<PRow key={px+'搬出手間'}     label={px+'搬出手間'}     value={sd.haizaiHelper} />);
+                    if (sd.haizaiHelper==="搬出補助作業員あり"&&sd.haizaiHelperReason) rows.push(<PRow key={px+'搬出手間（理由）'} label={px+'搬出手間（理由）'} value={sd.haizaiHelperReason} />);
                     rows.push(<PRow key={px+'バッカン'}     label={px+'バッカン'}     value={sd.baccanType} />);
                   } else if (SVC_ID==='souji') {
                     rows.push(<PRow key={px+'養生撤去処分（簡易）'} label={px+'養生撤去処分（簡易）'} value={sd.kanyi_yousei} />);
