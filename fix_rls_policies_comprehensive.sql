@@ -3,8 +3,12 @@
 -- 実行場所: Supabase ダッシュボード → SQL Editor
 -- ================================================================
 --
+-- 【重要】実行順序
+--   STEP 1: 下部の「ロール移行SQL」を先に実行する
+--   STEP 2: このファイルの残りを実行する
+--
 -- 修正内容:
---   0. ロール判定関数（app_metadata + user_metadata 両対応）
+--   0. ロール判定関数（app_metadata のみ参照・安全版）
 --   1. orders    : manager/staff 読み取り追加、UPDATE ポリシー追加
 --   2. schedules : manager/staff 読み取り追加、UPDATE ポリシー追加
 --   3. messages  : manager/staff 読み取り追加、UPDATE ポリシー追加（既読処理）
@@ -16,18 +20,46 @@
 
 
 -- ================================================================
--- 0. ロール判定ヘルパー関数
---    ダッシュボードから設定した user_metadata にも対応するため
---    app_metadata → user_metadata の順でフォールバックする
+-- STEP 1: ロール移行SQL（このファイルの他の部分より先に実行）
+-- ================================================================
+-- user_metadata に設定されたロールを app_metadata へ移行する。
+--
+-- 【なぜ必要か】
+--   user_metadata はユーザー自身が supabase.auth.updateUser() で
+--   自由に書き換えられるため、認可判定に使うと権限昇格が可能になる。
+--   app_metadata はサービスロールキーでのみ書き込めるため安全。
+--
+-- 以下を SQL Editor で実行後、STEP 2 へ進む:
+--
+-- UPDATE auth.users
+-- SET raw_app_meta_data = raw_app_meta_data ||
+--       jsonb_build_object('role', raw_user_meta_data ->> 'role')
+-- WHERE raw_user_meta_data ->> 'role' IS NOT NULL
+--   AND (raw_app_meta_data ->> 'role') IS NULL;
+--
+-- 実行結果で更新行数を確認し、対象ユーザーが正しく移行されたことを確認すること。
+-- 移行後は Dashboard > Authentication > Users でも app_metadata に role が
+-- 表示されることを確認する。
+--
+-- 【今後のロール設定方法】
+--   Dashboard の「Edit User」(user_metadata) ではなく、
+--   SQL Editor から以下のように app_metadata に直接設定する:
+--
+--   UPDATE auth.users
+--   SET raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'::jsonb
+--   WHERE email = 'xxx@markan.co.jp';
+-- ================================================================
+
+
+-- ================================================================
+-- STEP 2: ロール判定ヘルパー関数
+--   app_metadata のみを参照する（user_metadata は信頼しない）
 -- ================================================================
 CREATE OR REPLACE FUNCTION get_my_role()
 RETURNS text
 LANGUAGE sql STABLE
 AS $$
-  SELECT COALESCE(
-    auth.jwt() -> 'app_metadata' ->> 'role',
-    auth.jwt() -> 'user_metadata' ->> 'role'
-  )
+  SELECT auth.jwt() -> 'app_metadata' ->> 'role'
 $$;
 
 
@@ -250,13 +282,12 @@ CREATE POLICY "admins_insert_images"
 
 
 -- ================================================================
--- 【補足】ロールが user_metadata に設定されている場合の移行
---   Supabase ダッシュボードの「Edit User」から設定した role は
---   user_metadata に入る。get_my_role() 関数が両方に対応しているため
---   移行作業は不要だが、app_metadata に統一したい場合は以下を実行。
+-- 【確認クエリ】移行後に実行してロール設定を確認
 -- ================================================================
--- UPDATE auth.users
--- SET app_metadata = app_metadata || jsonb_build_object('role', user_metadata ->> 'role')
--- WHERE user_metadata ->> 'role' IS NOT NULL
---   AND (app_metadata ->> 'role') IS NULL;
+-- SELECT email,
+--        raw_app_meta_data  ->> 'role' AS app_role,
+--        raw_user_meta_data ->> 'role' AS user_role
+-- FROM auth.users
+-- WHERE raw_app_meta_data  ->> 'role' IS NOT NULL
+--    OR raw_user_meta_data ->> 'role' IS NOT NULL;
 -- ================================================================
