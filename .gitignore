@@ -1,4 +1,5 @@
 .DS_Store
+.env.local
 .claude/
 v3-login.tsx
 v4-admin-v2.tsx
