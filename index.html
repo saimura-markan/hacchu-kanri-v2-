@@ -6895,9 +6895,11 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [scheduleChangeStart, setScheduleChangeStart] = useState("");
   const [scheduleChangeEnd,   setScheduleChangeEnd]   = useState("");
   const [scheduleChangeSending, setScheduleChangeSending] = useState(false);
-  const [adminStaff,    setAdminStaff]    = useState([]);
-  const [mentionQuery,  setMentionQuery]  = useState(null);
-  const [mentionAtPos,  setMentionAtPos]  = useState(0);
+  const [adminStaff,      setAdminStaff]      = useState([]);
+  const [mentionQuery,    setMentionQuery]    = useState(null);
+  const [mentionAtPos,    setMentionAtPos]    = useState(0);
+  const [adRelatedOrders,   setAdRelatedOrders]   = useState([]);
+  const [adExpandedRelated, setAdExpandedRelated] = useState({});
   const bottomRef   = useRef(null);
   const touchTimer  = useRef(null);
   const textareaRef = useRef(null);
@@ -7000,6 +7002,42 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     sb.from('order_change_logs').select('*').eq('order_id', order.id)
       .order('changed_at', { ascending: false })
       .then(({ data }) => setChangeLogs(data || []));
+  }, [order?.id]);
+
+  // 関連発注（同じ現場・同じ会社の他の発注）を取得
+  useEffect(() => {
+    setAdRelatedOrders([]);
+    setAdExpandedRelated({});
+    if (!order?.companyId || !order?.site) return;
+    sb.from('orders')
+      .select('id,service,status,service_detail,schedules(work_date,start_time,end_time,workers,details,sort_order)')
+      .eq('company_id', order.companyId)
+      .eq('site', order.site)
+      .neq('id', order.id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error('[adRelatedOrders]', error.message); return; }
+        if (data) setAdRelatedOrders(data.map(r => {
+          const sdSchedules = r.service_detail?.schedules || [];
+          return {
+            id:       r.id,
+            service:  r.service || '',
+            status:   r.status  || '',
+            schedules: (r.schedules || [])
+              .sort((a, b) => (a.sort_order||0) - (b.sort_order||0))
+              .map((s, si) => ({
+                date:          s.work_date   || '',
+                start:         s.start_time  || '',
+                end:           s.end_time    || '',
+                workers:       s.workers     || '',
+                details:       Array.isArray(s.details) ? s.details : [],
+                memo:          sdSchedules[si]?.memo          || '',
+                serviceDetail: sdSchedules[si]?.serviceDetail || null,
+              })),
+          };
+        }));
+      });
   }, [order?.id]);
 
   const handleConfirmChanges = async () => {
@@ -7987,6 +8025,102 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 </div>
               </div>
             )}
+
+            {adRelatedOrders.length > 0 && (()=>{
+              const adFmtTime = t => {
+                if (!t) return "";
+                const [hh,mm] = t.split(":");
+                return mm==="00" ? `${parseInt(hh)}時` : `${parseInt(hh)}時${mm}分`;
+              };
+              return (
+                <div style={{ background:"#f0f4ff", borderRadius:16, padding:"14px", marginTop:16 }}>
+                  <div style={{ background:"#2952c8", borderRadius:14, padding:"12px 18px",
+                    marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
+                    <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
+                      padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>📋</div>
+                    <div style={{ fontSize:15, fontWeight:800, color:C.white }}>関連する発注</div>
+                    <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", marginLeft:"auto" }}>
+                      {adRelatedOrders.length}件
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {adRelatedOrders.map(rel => {
+                      const isExp = !!adExpandedRelated[rel.id];
+                      const sch0  = rel.schedules[0];
+                      return (
+                        <div key={rel.id} style={{ background:C.white, borderRadius:12,
+                          border:"1px solid #d0d8ef", overflow:"hidden" }}>
+                          <button
+                            onClick={()=>setAdExpandedRelated(prev=>({...prev,[rel.id]:!prev[rel.id]}))}
+                            style={{ width:"100%", background:"transparent", border:"none",
+                              padding:"12px 14px", display:"flex", alignItems:"center",
+                              justifyContent:"space-between", cursor:"pointer",
+                              fontFamily:"inherit", gap:8 }}>
+                            <div style={{ display:"flex", alignItems:"center", gap:8,
+                              minWidth:0, flex:1 }}>
+                              <ADStatusBadge status={rel.status} />
+                              <div style={{ fontSize:13, fontWeight:700, color:C.navy,
+                                overflow:"hidden", textOverflow:"ellipsis",
+                                whiteSpace:"nowrap", flex:1 }}>
+                                {rel.service}
+                              </div>
+                              {sch0?.date && (
+                                <div style={{ fontSize:12, color:C.gray, flexShrink:0 }}>
+                                  {sch0.date}
+                                </div>
+                              )}
+                            </div>
+                            <span style={{ fontSize:12, color:C.gray, flexShrink:0 }}>
+                              {isExp?"▲":"▼"}
+                            </span>
+                          </button>
+                          {isExp && (
+                            <div style={{ padding:"4px 14px 12px",
+                              borderTop:"1px solid "+C.grayL }}>
+                              <div style={{ fontSize:11, color:C.gray, marginBottom:6 }}>
+                                受付番号: {rel.id}
+                              </div>
+                              {rel.schedules.map((s,si)=>(
+                                <div key={si} style={{ marginBottom:si<rel.schedules.length-1?10:0 }}>
+                                  {rel.schedules.length>1&&(
+                                    <div style={{ fontSize:11, fontWeight:800, color:C.navy,
+                                      marginBottom:4 }}>日程 {si+1}</div>
+                                  )}
+                                  {[['日付',s.date],
+                                    ['時間',s.start&&s.end?adFmtTime(s.start)+"〜"+adFmtTime(s.end):""],
+                                    ['作業内容',(s.details||[]).join("・")],
+                                    ['作業者数',s.workers]]
+                                    .filter(([,v])=>v)
+                                    .map(([label,value])=>(
+                                      <div key={label} style={{ display:"flex", gap:10,
+                                        padding:"5px 0", borderBottom:"1px solid #f0f0f5" }}>
+                                        <div style={{ fontSize:12, color:C.gray,
+                                          minWidth:72, flexShrink:0 }}>{label}</div>
+                                        <div style={{ fontSize:13, fontWeight:600,
+                                          color:C.navy }}>{value}</div>
+                                      </div>
+                                    ))
+                                  }
+                                  {s.memo&&(
+                                    <div style={{ display:"flex", gap:10,
+                                      padding:"5px 0", borderBottom:"1px solid #f0f0f5" }}>
+                                      <div style={{ fontSize:12, color:C.gray,
+                                        minWidth:72, flexShrink:0 }}>メモ</div>
+                                      <div style={{ fontSize:13, fontWeight:600,
+                                        color:C.navy, whiteSpace:"pre-wrap" }}>{s.memo}</div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {role === "admin" && (
               <button onClick={()=>onDelete([order.id])}
