@@ -1707,31 +1707,35 @@ function TimePatternSelect({ serviceId, startTime, endTime, onChange, hasError }
       <div style={{ fontSize:13, color:hasError?C.red:C.gray, marginBottom:8, fontWeight:600 }}>
         時間帯{hasError?" ⚠️ 必須":""}
       </div>
-      <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+      <div style={{ display:"grid", gap:8,
+        gridTemplateColumns:"repeat(auto-fill, minmax(64px, 1fr))" }}>
         {patterns.map((p, i) => {
           const active = !isManual && i === activeIdx;
           return (
             <button key={p.label} type="button"
               onClick={() => handlePattern(p)}
-              style={{ flex:"1 1 auto", minWidth:0, padding:"10px 6px", borderRadius:12,
+              style={{ padding:"10px 4px", borderRadius:12,
                 border:"2px solid "+(active?C.blue:hasError&&nothingSelected?C.red:C.grayL),
                 background:active?C.blue:hasError&&nothingSelected?"#fff0f0":C.white,
                 color:active?C.white:C.navy, cursor:"pointer", fontFamily:"inherit",
-                textAlign:"center", transition:"all 0.15s", outline:"none" }}>
-              <div style={{ fontSize:15, fontWeight:800 }}>{p.label}</div>
-              <div style={{ fontSize:11, fontWeight:500, marginTop:2,
-                color:active?"rgba(255,255,255,0.8)":C.gray }}>{p.sub}</div>
+                textAlign:"center", transition:"all 0.15s", outline:"none",
+                minWidth:0, overflow:"hidden" }}>
+              <div style={{ fontSize:14, fontWeight:800 }}>{p.label}</div>
+              <div style={{ fontSize:10, fontWeight:500, marginTop:2,
+                color:active?"rgba(255,255,255,0.8)":C.gray,
+                whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.sub}</div>
             </button>
           );
         })}
         <button type="button" onClick={handleManual}
-          style={{ flex:"1 1 auto", minWidth:0, padding:"10px 6px", borderRadius:12,
+          style={{ padding:"10px 4px", borderRadius:12,
             border:"2px solid "+(isManual?C.navy:C.grayL),
             background:isManual?C.navy:C.white,
             color:isManual?C.white:C.navy, cursor:"pointer", fontFamily:"inherit",
-            textAlign:"center", transition:"all 0.15s", outline:"none" }}>
-          <div style={{ fontSize:15, fontWeight:800 }}>手動入力</div>
-          <div style={{ fontSize:11, fontWeight:500, marginTop:2,
+            textAlign:"center", transition:"all 0.15s", outline:"none",
+            minWidth:0, overflow:"hidden" }}>
+          <div style={{ fontSize:14, fontWeight:800 }}>手動入力</div>
+          <div style={{ fontSize:10, fontWeight:500, marginTop:2,
             color:isManual?"rgba(255,255,255,0.8)":C.gray }}>時間を指定</div>
         </button>
       </div>
