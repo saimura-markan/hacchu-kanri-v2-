@@ -11,8 +11,8 @@
 
 | 変数名 | 値 | 管理場所 |
 |---|---|---|
-| `SUPABASE_URL` | `https://wxjmqrxaqrujsvgzknwy.supabase.co` | index.html 310行目 |
-| `SUPABASE_ANON_KEY` | `sb_publishable_JYkjSrSixBp9jquMeq6hKw_YMwwiDSx` | index.html 311行目 |
+| `SUPABASE_URL` | `https://YOUR_PROJECT_ID.supabase.co` | index.html 310行目（実値はindex.html参照） |
+| `SUPABASE_ANON_KEY` | `YOUR_SUPABASE_ANON_KEY` | index.html 311行目（実値はindex.html参照） |
 
 > Anonキーは公開鍵。フロントエンドに置くことが設計上の前提。  
 > データは Supabase RLS（Row Level Security）で保護する。
@@ -39,7 +39,7 @@
 
 | サービス | アカウント | 補足 |
 |---|---|---|
-| Supabase | saimura@markan.jp | プロジェクトID: `wxjmqrxaqrujsvgzknwy` |
+| Supabase | saimura@markan.jp | プロジェクトID: Supabase Dashboard で確認 |
 | Vercel | saimura@markan.jp | GitHubリポジトリと連携済み |
 | GitHub | saimura-markan | リポジトリ: `hacchu-kanri-v2-` |
 | Resend | saimura@markan.jp | ドメイン: markan.co.jp |

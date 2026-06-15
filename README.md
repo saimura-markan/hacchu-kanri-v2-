@@ -82,8 +82,8 @@ git push origin main
 
 ```js
 // index.html 310〜312行目
-const SUPABASE_URL      = 'https://wxjmqrxaqrujsvgzknwy.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_JYkjSrSixBp9jquMeq6hKw_YMwwiDSx';
+const SUPABASE_URL      = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 ```
 
@@ -345,7 +345,7 @@ Supabase Realtimeは現在使用していない。同時接続ユーザーが多
 
 | サービス | 用途 | 備考 |
 |---|---|---|
-| Supabase | DB・Auth・Storage・Edge Functions | プロジェクトID: `wxjmqrxaqrujsvgzknwy` |
+| Supabase | DB・Auth・Storage・Edge Functions | プロジェクトID: Supabase Dashboard で確認 |
 | Vercel | ホスティング | GitHubリポジトリと連携済み |
 | Resend | メール送信 | ドメイン認証要確認 |
 | GitHub | ソースコード管理 | `saimura-markan/hacchu-kanri-v2-` |
