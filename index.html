@@ -8664,33 +8664,69 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 }
 
 // ── 現場管理パネル ─────────────────────────────────────────
+const EMPTY_SITE_FORM = {
+  site_name:"", zip_code:"", address:"", address_num:"", address_bldg:"",
+  site_contact_name:"", site_contact_phone:"", key_info:"", parking_info:"", memo:""
+};
+
 function SiteManagePanel({ company, onClose }) {
-  const [sites, setSites]         = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [showAdd, setShowAdd]     = useState(false);
-  const [newSiteName, setNewSiteName] = useState("");
-  const [newAddress, setNewAddress]   = useState("");
-  const [saving, setSaving]       = useState(false);
+  const [sites, setSites]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [showAdd, setShowAdd]   = useState(false);
+  const [form, setForm]         = useState(EMPTY_SITE_FORM);
+  const [zipLoading, setZipLoading] = useState(false);
+  const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState("");
 
   useEffect(() => {
     sb.from('sites')
-      .select('id, site_name, address, created_at')
+      .select('id, site_name, address, address_num, created_at')
       .eq('company_id', company.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => { setSites(data || []); setLoading(false); });
   }, [company.id]);
 
+  const setF = (key, val) => setForm(f => ({ ...f, [key]: val }));
+
+  const fetchAddressByZip = async (zip) => {
+    const clean = zip.replace(/[-ー−]/g, "");
+    if (clean.length !== 7) return;
+    setZipLoading(true);
+    try {
+      const res = await fetch(`https://zipcloud.ibsnet.co.jp/api/search?zipcode=${clean}`);
+      const json = await res.json();
+      if (json.results && json.results[0]) {
+        const r = json.results[0];
+        setF("address", r.address1 + r.address2 + r.address3);
+      }
+    } catch(e) {}
+    setZipLoading(false);
+  };
+
   const handleAddSite = async () => {
-    if (!newSiteName.trim()) { setSaveError("現場名は必須です"); return; }
+    if (!form.site_name.trim()) { setSaveError("現場名は必須です"); return; }
+    if (!form.address_num.trim()) { setSaveError("番地は必須です"); return; }
     setSaveError(""); setSaving(true);
+    const row = {
+      company_id:         company.id,
+      site_name:          form.site_name.trim(),
+      zip_code:           form.zip_code.trim(),
+      address:            form.address.trim(),
+      address_num:        form.address_num.trim(),
+      address_bldg:       form.address_bldg.trim(),
+      site_contact_name:  form.site_contact_name.trim(),
+      site_contact_phone: form.site_contact_phone.trim(),
+      key_info:           form.key_info.trim(),
+      parking_info:       form.parking_info.trim(),
+      memo:               form.memo.trim(),
+    };
     const { data, error } = await sb.from('sites')
-      .insert({ company_id: company.id, site_name: newSiteName.trim(), address: newAddress.trim() })
-      .select('id, site_name, address, created_at').single();
+      .insert(row)
+      .select('id, site_name, address, address_num, created_at').single();
     setSaving(false);
     if (error) { setSaveError("登録に失敗しました: " + error.message); return; }
     if (data) setSites(s => [data, ...s]);
-    setNewSiteName(""); setNewAddress(""); setShowAdd(false);
+    setForm(EMPTY_SITE_FORM); setShowAdd(false);
   };
 
   const handleDeleteSite = async (id, name) => {
@@ -8700,12 +8736,23 @@ function SiteManagePanel({ company, onClose }) {
     setSites(s => s.filter(x => x.id !== id));
   };
 
+  const inputStyle = { width:"100%", fontSize:14, padding:"10px 12px", borderRadius:8,
+    border:"1px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit", outline:"none" };
+  const labelStyle = { fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 };
+  const fieldBox   = (label, key, ph, required=false) => (
+    <div key={key}>
+      <div style={labelStyle}>{label}{required ? " ※必須" : "（任意）"}</div>
+      <input value={form[key]} onChange={e=>setF(key, e.target.value)}
+        placeholder={ph} style={inputStyle} />
+    </div>
+  );
+
   return (
     <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.6)",
       display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 }}
       onClick={e=>{ if(e.target===e.currentTarget) onClose(); }}>
-      <div style={{ background:C.white, borderRadius:20, width:"90%", maxWidth:700,
-        maxHeight:"80vh", overflow:"hidden", display:"flex", flexDirection:"column",
+      <div style={{ background:C.white, borderRadius:20, width:"92%", maxWidth:760,
+        maxHeight:"88vh", overflow:"hidden", display:"flex", flexDirection:"column",
         boxShadow:"0 20px 60px rgba(10,31,92,0.35)" }}>
         <div style={{ background:`linear-gradient(135deg,#1a5c3a,${C.green})`,
           padding:"16px 24px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -8730,20 +8777,60 @@ function SiteManagePanel({ company, onClose }) {
           {showAdd && (
             <div style={{ background:C.bg, border:"2px solid "+C.green,
               borderRadius:14, padding:"16px", marginBottom:16 }}>
-              <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:12 }}>📝 新しい現場</div>
+              <div style={{ fontSize:14, fontWeight:800, color:C.navy, marginBottom:14 }}>📝 新しい現場</div>
+              {/* 現場名 */}
               <div style={{ marginBottom:10 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 }}>現場名 ※必須</div>
-                <input value={newSiteName} onChange={e=>setNewSiteName(e.target.value)}
-                  placeholder="例：〇〇マンション101号室"
-                  style={{ width:"100%", fontSize:14, padding:"10px 12px", borderRadius:8,
-                    border:"1px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit", outline:"none" }} />
+                {fieldBox("現場名", "site_name", "例：〇〇マンション101号室", true)}
               </div>
-              <div style={{ marginBottom:12 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 }}>住所</div>
-                <input value={newAddress} onChange={e=>setNewAddress(e.target.value)}
-                  placeholder="例：大阪府大阪市北区〇〇町1-2-3"
-                  style={{ width:"100%", fontSize:14, padding:"10px 12px", borderRadius:8,
-                    border:"1px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit", outline:"none" }} />
+              {/* 郵便番号・住所 */}
+              <div style={{ display:"grid", gridTemplateColumns:"160px 1fr", gap:10, marginBottom:10 }}>
+                <div>
+                  <div style={labelStyle}>郵便番号（任意）</div>
+                  <div style={{ position:"relative" }}>
+                    <input value={form.zip_code}
+                      onChange={e=>{ const v=e.target.value; setF("zip_code",v); fetchAddressByZip(v); }}
+                      placeholder="例：5320004"
+                      maxLength={8}
+                      style={inputStyle} />
+                    {zipLoading && (
+                      <span style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)",
+                        fontSize:11, color:C.gray }}>検索中…</span>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div style={labelStyle}>住所（自動入力）</div>
+                  <input value={form.address} onChange={e=>setF("address",e.target.value)}
+                    placeholder="郵便番号を入力すると自動で入ります"
+                    style={inputStyle} />
+                </div>
+              </div>
+              {/* 番地・建物名 */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                <div>
+                  <div style={labelStyle}>番地 ※必須</div>
+                  <input value={form.address_num} onChange={e=>setF("address_num",e.target.value)}
+                    placeholder="例：1-2-3" style={inputStyle} />
+                </div>
+                {fieldBox("建物名・部屋番号", "address_bldg", "例：〇〇ビル3F")}
+              </div>
+              {/* 現場担当者 */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                {fieldBox("現場担当者名", "site_contact_name", "例：山田 花子")}
+                {fieldBox("現場担当者電話番号", "site_contact_phone", "例：090-0000-0000")}
+              </div>
+              {/* 鍵・駐車場 */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:10 }}>
+                {fieldBox("鍵情報", "key_info", "例：管理室で受取・暗証番号1234")}
+                {fieldBox("駐車場情報", "parking_info", "例：建物前2台まで可")}
+              </div>
+              {/* 全体へのご要望 */}
+              <div style={{ marginBottom:14 }}>
+                <div style={labelStyle}>全体へのご要望（任意）</div>
+                <textarea value={form.memo} onChange={e=>setF("memo",e.target.value)}
+                  placeholder="例：インターホン不可・必ず電話連絡してください"
+                  rows={3}
+                  style={{ ...inputStyle, resize:"vertical" }} />
               </div>
               {saveError && (
                 <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:8,
@@ -8758,7 +8845,7 @@ function SiteManagePanel({ company, onClose }) {
                     fontSize:14, fontWeight:800, cursor:saving?"not-allowed":"pointer" }}>
                   {saving ? "登録中…" : "✅ 登録する"}
                 </button>
-                <button onClick={()=>{ setShowAdd(false); setSaveError(""); }}
+                <button onClick={()=>{ setShowAdd(false); setSaveError(""); setForm(EMPTY_SITE_FORM); }}
                   style={{ background:C.grayPale, color:C.navy, border:"1px solid "+C.grayL,
                     borderRadius:8, padding:"10px 20px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
                   キャンセル
@@ -8774,7 +8861,7 @@ function SiteManagePanel({ company, onClose }) {
             <table style={{ width:"100%", borderCollapse:"collapse" }}>
               <thead>
                 <tr style={{ background:C.navy }}>
-                  {["現場名","住所","登録日","削除"].map(h=>(
+                  {["現場名","住所・番地","登録日","削除"].map(h=>(
                     <th key={h} style={{ padding:"10px 14px", fontSize:13, fontWeight:700,
                       color:C.white, textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>
                   ))}
@@ -8784,7 +8871,9 @@ function SiteManagePanel({ company, onClose }) {
                 {sites.map((s,i)=>(
                   <tr key={s.id} style={{ background:i%2===0?C.white:C.bg }}>
                     <td style={{ padding:"10px 14px", fontSize:14, fontWeight:600, color:C.navy }}>{s.site_name}</td>
-                    <td style={{ padding:"10px 14px", fontSize:13, color:C.navy }}>{s.address||'—'}</td>
+                    <td style={{ padding:"10px 14px", fontSize:13, color:C.navy }}>
+                      {[s.address, s.address_num].filter(Boolean).join(" ") || "—"}
+                    </td>
                     <td style={{ padding:"10px 14px", fontSize:12, color:C.gray, whiteSpace:"nowrap" }}>
                       {s.created_at ? new Date(s.created_at).toLocaleDateString('ja-JP') : '—'}
                     </td>
