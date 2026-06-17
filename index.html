@@ -8905,6 +8905,32 @@ function CompanyPanel({ onClose }) {
   const [addError, setAddError]         = useState("");
   const [addSaving, setAddSaving]       = useState(false);
   const [managingCompany, setManagingCompany] = useState(null);
+  const [editingCompany, setEditingCompany]   = useState(null);
+  const [editForm, setEditForm]               = useState({});
+  const [editError, setEditError]             = useState("");
+  const [editSaving, setEditSaving]           = useState(false);
+
+  const openEdit = (co) => {
+    setEditForm({ name:co.name||"", contact:co.contact||"", phone:co.phone||"", address:co.address||"", email:co.email||"" });
+    setEditError("");
+    setEditingCompany(co);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editForm.name || !editForm.contact || !editForm.phone || !editForm.address) {
+      setEditError("企業名・代表者名・企業連絡先・住所は必須です");
+      return;
+    }
+    setEditSaving(true);
+    const { data, error } = await sb.from('companies')
+      .update({ name:editForm.name, contact:editForm.contact, phone:editForm.phone, address:editForm.address, email:editForm.email })
+      .eq('id', editingCompany.id)
+      .select().single();
+    setEditSaving(false);
+    if (error) { setEditError("更新に失敗しました: " + error.message); return; }
+    if (data) setCompanies(cs => cs.map(c => c.id === data.id ? data : c));
+    setEditingCompany(null);
+  };
 
   useEffect(() => {
     sb.from('companies').select('*').order('id').then(({ data }) => {
@@ -9069,7 +9095,7 @@ function CompanyPanel({ onClose }) {
           <table style={{ width:"100%", borderCollapse:"collapse" }}>
             <thead>
               <tr style={{ background:C.navy }}>
-                {["企業ID","会社名","代表者","連絡先","状態","現場管理","削除"].map(h=>(
+                {["企業ID","会社名","代表者","連絡先","状態","現場管理","編集","削除"].map(h=>(
                   <th key={h} style={{ padding:"10px 14px", fontSize:13, fontWeight:700,
                     color:C.white, textAlign:"left", whiteSpace:"nowrap" }}>{h}</th>
                 ))}
@@ -9077,9 +9103,9 @@ function CompanyPanel({ onClose }) {
             </thead>
             <tbody>
               {cpLoading ? (
-                <tr><td colSpan={6} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
+                <tr><td colSpan={8} style={{ textAlign:"center", padding:"24px", color:C.gray }}>読み込み中...</td></tr>
               ) : companies.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
+                <tr><td colSpan={8} style={{ textAlign:"center", padding:"24px", color:C.gray }}>登録された取引先がありません</td></tr>
               ) : companies.map((co,i)=>(
                 <tr key={co.id} style={{ background:i%2===0?C.white:C.bg }}>
                   <td style={{ padding:"10px 14px" }}>
@@ -9115,6 +9141,14 @@ function CompanyPanel({ onClose }) {
                     </button>
                   </td>
                   <td style={{ padding:"10px 14px" }}>
+                    <button onClick={()=>openEdit(co)}
+                      style={{ padding:"4px 12px", borderRadius:6, fontSize:12, fontWeight:700,
+                        cursor:"pointer", border:"2px solid #b07d00",
+                        background:"#fffbe6", color:"#7a5800", whiteSpace:"nowrap" }}>
+                      ✏️ 編集
+                    </button>
+                  </td>
+                  <td style={{ padding:"10px 14px" }}>
                     <button onClick={()=>handleDelete(co.id, co.name)}
                       style={{ padding:"4px 12px", borderRadius:6, fontSize:12, fontWeight:700,
                         cursor:"pointer", border:"2px solid "+C.red,
@@ -9130,6 +9164,71 @@ function CompanyPanel({ onClose }) {
       </div>
       {managingCompany && (
         <SiteManagePanel company={managingCompany} onClose={()=>setManagingCompany(null)} />
+      )}
+      {editingCompany && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.55)",
+          display:"flex", alignItems:"center", justifyContent:"center", zIndex:200 }}
+          onClick={e=>{ if(e.target===e.currentTarget) setEditingCompany(null); }}>
+          <div style={{ background:C.white, borderRadius:20, width:"90%", maxWidth:620,
+            boxShadow:"0 20px 60px rgba(10,31,92,0.35)", overflow:"hidden" }}>
+            <div style={{ background:`linear-gradient(135deg,#7a5800,#b07d00)`,
+              padding:"16px 24px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div>
+                <div style={{ fontSize:16, fontWeight:900, color:C.white }}>✏️ 企業情報を編集</div>
+                <div style={{ fontSize:12, color:"rgba(255,255,255,0.8)", marginTop:2 }}>{editingCompany.name}（{editingCompany.id}）</div>
+              </div>
+              <button onClick={()=>setEditingCompany(null)}
+                style={{ background:"rgba(255,255,255,0.15)", border:"none", color:C.white,
+                  borderRadius:8, padding:"6px 14px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                ✕ とじる
+              </button>
+            </div>
+            <div style={{ padding:"20px 24px" }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:12 }}>
+                {[
+                  ["企業名（正式名称） ※必須","name","例：株式会社〇〇建設"],
+                  ["代表者名 ※必須","contact","例：田中 太郎"],
+                  ["企業連絡先 ※必須","phone","例：090-0000-0000"],
+                  ["企業メールアドレス（任意）","email","例：info@example.com"],
+                ].map(([label,key,ph])=>(
+                  <div key={key}>
+                    <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 }}>{label}</div>
+                    <input value={editForm[key]||""} onChange={e=>setEditForm(f=>({...f,[key]:e.target.value}))}
+                      placeholder={ph}
+                      style={{ width:"100%", fontSize:14, padding:"10px 12px", borderRadius:8,
+                        border:"1px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit", outline:"none" }} />
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginBottom:16 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:C.navy, marginBottom:4 }}>住所 ※必須</div>
+                <input value={editForm.address||""} onChange={e=>setEditForm(f=>({...f,address:e.target.value}))}
+                  placeholder="例：大阪府大阪市北区〇〇町1-2-3"
+                  style={{ width:"100%", fontSize:14, padding:"10px 12px", borderRadius:8,
+                    border:"1px solid "+C.grayL, boxSizing:"border-box", fontFamily:"inherit", outline:"none" }} />
+              </div>
+              {editError && (
+                <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:8,
+                  padding:"10px 14px", marginBottom:12, fontSize:13, color:C.red, fontWeight:600 }}>
+                  ⚠️ {editError}
+                </div>
+              )}
+              <div style={{ display:"flex", gap:10 }}>
+                <button onClick={handleSaveEdit} disabled={editSaving}
+                  style={{ background:editSaving?"#b0bec5":`linear-gradient(135deg,#b07d00,#7a5800)`,
+                    color:C.white, border:"none", borderRadius:8, padding:"10px 20px",
+                    fontSize:14, fontWeight:800, cursor:editSaving?"not-allowed":"pointer" }}>
+                  {editSaving ? "保存中…" : "💾 保存する"}
+                </button>
+                <button onClick={()=>setEditingCompany(null)}
+                  style={{ background:C.grayPale, color:C.navy, border:"1px solid "+C.grayL,
+                    borderRadius:8, padding:"10px 20px", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
