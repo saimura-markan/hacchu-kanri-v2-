@@ -2156,7 +2156,7 @@ function ScheduleCard({ sch, idx, serviceId, onChange, onRemove, canRemove, show
   return (
     <div style={{ background:hasAnyErr||errKaitaiDays||errKaitaiOffDays?"#fff8f8":"#f4f7ff",
       borderRadius:16, padding:"16px", marginBottom:12,
-      border:"2px solid "+(hasAnyErr||errKaitaiDays||errKaitaiOffDays?C.red:C.grayL), transition:"all 0.3s" }}>
+      border:"2px solid "+(hasAnyErr||errKaitaiDays||errKaitaiOffDays?C.red:C.grayL), transition:"all 0.3s", overflow:"hidden" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
         <div style={{ fontSize:15, fontWeight:800, color:C.blue }}>📅 日程 {idx+1}</div>
         {canRemove&&(
