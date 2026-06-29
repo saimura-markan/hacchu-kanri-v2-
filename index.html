@@ -540,7 +540,21 @@ function LoginScreen({ onLogin, onRegister, onForgot }) {
       }
     }
     if (!["admin","manager"].includes(role)) {
-      if (profile?.company_id) {
+      // user_companies から所属会社を確認（複数会社対応）
+      const { data: ucRows } = await sb.from('user_companies')
+        .select('company_id, companies(is_active)')
+        .eq('user_id', data.user.id);
+      if (ucRows && ucRows.length > 0) {
+        // 1件でもアクティブな会社があればログイン可
+        const hasActive = ucRows.some(uc => uc.companies?.is_active !== false);
+        if (!hasActive) {
+          await sb.auth.signOut();
+          setLoading(false);
+          setErrors({ password: "ご利用の企業アカウントが無効化されています。担当者にご確認ください。" });
+          return;
+        }
+      } else if (profile?.company_id) {
+        // 後方互換: user_companies 未設定の場合は profiles.company_id で確認
         const { data: company } = await sb.from('companies').select('is_active').eq('id', profile.company_id).single();
         if (company && !company.is_active) {
           await sb.auth.signOut();
@@ -3148,33 +3162,66 @@ function OrderApp({ onDone, onBack }) {
   const [personNameLoading, setPersonNameLoading] = useState(true);
   const [attachedImages,  setAttachedImages]  = useState([]);
   const [companyId,       setCompanyId]       = useState(null);
+  const [userCompanies,   setUserCompanies]   = useState([]); // 複数会社対応: [{id, name, is_primary}]
   const [userId,          setUserId]          = useState(null);
   const [sitesCache,      setSitesCache]      = useState([]);
 
   useEffect(() => {
-    sb.auth.getUser().then(({ data: { user } }) => {
+    sb.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) { setPersonNameLoading(false); return; }
       setUserId(user.id);
-      sb.from('profiles').select('name, name_kana, company_id').eq('id', user.id).maybeSingle()
-        .then(({ data }) => {
-          const nameFromMeta = user.user_metadata?.full_name || "";
-          if (data?.name)           setPersonName(data.name);
-          else if (nameFromMeta)    setPersonName(nameFromMeta);
-          if (data?.name_kana)      setPersonNameKana(data.name_kana);
-          setPersonNameLoading(false);
-          if (data?.company_id) {
-            setCompanyId(data.company_id);
-            sb.from('sites')
-              .select('site_name, address, address_num, address_bldg, zip_code, site_contact_name, site_contact_phone, key_info, parking_info')
-              .eq('company_id', data.company_id)
-              .order('site_name')
-              .then(({ data: sites }) => { if (sites) setSitesCache(sites); });
-          }
-        });
+
+      // プロフィール（名前）取得
+      const { data: prof } = await sb.from('profiles')
+        .select('name, name_kana, company_id').eq('id', user.id).maybeSingle();
+      const nameFromMeta = user.user_metadata?.full_name || "";
+      if (prof?.name)        setPersonName(prof.name);
+      else if (nameFromMeta) setPersonName(nameFromMeta);
+      if (prof?.name_kana)   setPersonNameKana(prof.name_kana);
+      setPersonNameLoading(false);
+
+      // user_companies から所属会社を取得（複数会社対応）
+      const { data: ucRows } = await sb.from('user_companies')
+        .select('company_id, is_primary, companies(id, name)')
+        .eq('user_id', user.id)
+        .order('is_primary', { ascending: false }); // primary を先頭に
+
+      let activeCid = null;
+      if (ucRows && ucRows.length > 0) {
+        const companyList = ucRows
+          .filter(uc => uc.companies)
+          .map(uc => ({ id: uc.company_id, name: uc.companies.name || uc.company_id, is_primary: uc.is_primary }));
+        setUserCompanies(companyList);
+        const primary = companyList.find(c => c.is_primary) || companyList[0];
+        if (primary) { activeCid = primary.id; setCompanyId(primary.id); }
+      } else if (prof?.company_id) {
+        // 後方互換: user_companies 未設定の場合は profiles.company_id を使用
+        activeCid = prof.company_id;
+        setCompanyId(prof.company_id);
+      }
+
+      // 現場キャッシュ取得
+      if (activeCid) {
+        const { data: sites } = await sb.from('sites')
+          .select('site_name, address, address_num, address_bldg, zip_code, site_contact_name, site_contact_phone, key_info, parking_info')
+          .eq('company_id', activeCid).order('site_name');
+        if (sites) setSitesCache(sites);
+      }
     });
   }, []);
 
   const STYLE=`@keyframes eliFloat{0%,100%{transform:translateY(0) rotate(-1deg)}50%{transform:translateY(-8px) rotate(1deg)}} @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}`;
+
+  // 会社切り替え：現場キャッシュも更新
+  const handleCompanyChange = async (newCid) => {
+    setCompanyId(newCid);
+    setSitesCache([]);
+    if (!newCid) return;
+    const { data: sites } = await sb.from('sites')
+      .select('site_name, address, address_num, address_bldg, zip_code, site_contact_name, site_contact_phone, key_info, parking_info')
+      .eq('company_id', newCid).order('site_name');
+    if (sites) setSitesCache(sites);
+  };
 
   const handleSelectService=id=>{
     if (id===null) { setPhase("finalConfirm"); return; }
@@ -3197,17 +3244,31 @@ function OrderApp({ onDone, onBack }) {
     setPhase("confirm");
   };
 
-  const saveToSupabase = async (ordersList, images) => {
-    // stale closure を避けるため state の userId・company_id は使わず直接取得
+  const saveToSupabase = async (ordersList, images, selectedCid) => {
+    // stale closure を避けるため state の userId は使わず直接取得
     const { data: { user: currentUser } } = await sb.auth.getUser();
     console.log('[saveToSupabase] userId:', currentUser?.id ?? null);
     if (!currentUser) throw new Error('ログインセッションが切れています。再度ログインしてください。');
     const currentUserId = currentUser.id;
 
-    // profiles から company_id・phone を直接取得（stale closure 対策）
+    // profiles から phone を取得
     const { data: profileData } = await sb.from('profiles')
-      .select('id, company_id, phone').eq('id', currentUserId).maybeSingle();
-    const activeCid = profileData?.company_id || null;
+      .select('id, phone').eq('id', currentUserId).maybeSingle();
+
+    // 発注元会社の決定（引数 selectedCid → user_companies primary → profiles.company_id の優先順）
+    let activeCid = selectedCid || null;
+    if (!activeCid) {
+      const { data: ucRows } = await sb.from('user_companies')
+        .select('company_id, is_primary').eq('user_id', currentUserId)
+        .order('is_primary', { ascending: false }).limit(1);
+      activeCid = ucRows?.[0]?.company_id || null;
+    }
+    if (!activeCid) {
+      // 後方互換: user_companies 未設定の場合は profiles.company_id を参照
+      const { data: profCid } = await sb.from('profiles')
+        .select('company_id').eq('id', currentUserId).maybeSingle();
+      activeCid = profCid?.company_id || null;
+    }
     console.log('[saveToSupabase] company_id:', activeCid);
 
     // profiles 行が存在しない場合は自動作成（登録時の insert 失敗を補完）
@@ -3346,10 +3407,11 @@ function OrderApp({ onDone, onBack }) {
 
   const handleActualSubmit = async (ordersList) => {
     setSubmitting(true);
-    // 呼び出し時点のimagesを引数として渡してstaleクローズャ問題を回避
+    // 呼び出し時点の images・companyId を引数として渡してstale closure を回避
     const images = attachedImages;
+    const currentCid = companyId;
     try {
-      const ids = await saveToSupabase(ordersList, images);
+      const ids = await saveToSupabase(ordersList, images, currentCid);
       setSavedIds(ids);
       setPhase("done");
     } catch(e) {
@@ -3382,6 +3444,23 @@ function OrderApp({ onDone, onBack }) {
       <style>{STYLE}</style>
       <OrTopBar title={getTitle()} onBack={phase==="form" ? ()=>setPhase(doneServices.includes(currentSvc)?"confirm":"service") : undefined}/><OrStepBar phase={phase}/>
       <div style={{ maxWidth:480, margin:"0 auto" }}>
+        {/* 複数会社に所属している場合のみ会社選択プルダウンを表示 */}
+        {userCompanies.length > 1 && (phase === "service" || phase === "confirm" || phase === "finalConfirm") && (
+          <div style={{ margin:"12px 16px 0", padding:"12px 16px", background:"#f0f5ff",
+            borderRadius:12, border:"1px solid #c0d0f0" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:8 }}>🏢 発注元の会社</div>
+            <select value={companyId || ''} onChange={e => handleCompanyChange(e.target.value)}
+              style={{ width:"100%", fontSize:15, padding:"10px 12px", borderRadius:8,
+                border:"1px solid #c0d0f0", background:"white", color:C.navy,
+                fontFamily:"inherit", cursor:"pointer" }}>
+              {userCompanies.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.name}（{c.id}）{c.is_primary ? " ★" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {phase==="service"&&<StepService onSelect={handleSelectService} doneServices={doneServices} onBack={onBack}/>}
         {phase==="form"&&currentSvc&&(
           <StepForm serviceId={currentSvc}
