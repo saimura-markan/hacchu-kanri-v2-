@@ -801,7 +801,13 @@ function ResetPasswordScreen({ onDone }) {
 
   const handleSubmit = async () => {
     const errs = {};
-    if (pw.length < 8)    errs.pw = "パスワードは8文字以上で入力してください";
+    if (pw.length < 8) {
+      errs.pw = "パスワードは8文字以上で入力してください";
+    } else if (!/[a-zA-Z]/.test(pw)) {
+      errs.pw = "パスワードに英字（大文字または小文字）を1文字以上含めてください";
+    } else if (!/[0-9]/.test(pw)) {
+      errs.pw = "パスワードに数字を1文字以上含めてください";
+    }
     if (pw !== pwConfirm) errs.pwConfirm = "パスワードが一致しません";
     setErrors(errs);
     if (Object.keys(errs).length) return;
@@ -840,9 +846,15 @@ function ResetPasswordScreen({ onDone }) {
                   8文字以上の新しいパスワードを入力してください
                 </div>
               </div>
+              <div style={{ background:"#f4f7ff", borderRadius:10, padding:"10px 14px",
+                marginBottom:14, fontSize:12, color:"#444", lineHeight:1.9,
+                border:"1px solid "+C.grayL }}>
+                🔑 パスワードの条件：8文字以上・英字（大文字/小文字）を含む・数字を含む
+              </div>
               <FieldWrap label="🔑 新しいパスワード" error={errors.pw}>
                 <PwInput value={pw} error={errors.pw} placeholder="新しいパスワード（8文字以上）"
                   onChange={e => { setPw(e.target.value); setErrors(er => ({ ...er, pw: "" })); }} />
+                <PwStrength pw={pw} />
               </FieldWrap>
               <FieldWrap label="🔑 パスワード（確認）" error={errors.pwConfirm}>
                 <PwInput value={pwConfirm} error={errors.pwConfirm} placeholder="パスワードをもう一度入力"
