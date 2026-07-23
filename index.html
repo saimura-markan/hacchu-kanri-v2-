@@ -3640,7 +3640,7 @@ function EliMessage({ orders, totalUnread=0 }) {
 }
 
 // ── 注文カード ───────────────────────────────────────────
-function HiOrderCard({ role, order, unreadCount, onClick, onDetail, onChat }) {
+function HiOrderCard({ role, order, unreadCount, mentionCount, onClick, onDetail, onChat }) {
   const st    = HI_STATUS[order.status] || HI_STATUS["調整中"];
   const sch   = order.schedules[0];
   const timer = role === "admin" ? hiGetTimer(order, Date.now()) : null;
@@ -3705,6 +3705,12 @@ function HiOrderCard({ role, order, unreadCount, onClick, onDetail, onChat }) {
             color:C.green, fontSize:13, fontWeight:700, cursor:"pointer", fontFamily:"inherit",
             display:"flex", alignItems:"center", justifyContent:"center", gap:4 }}>
           💬 チャット
+          {mentionCount>0 && (
+            <span style={{ background:"#1e40af", color:C.white, borderRadius:99,
+              padding:"1px 7px", fontSize:11, fontWeight:800 }}>
+              @{mentionCount}
+            </span>
+          )}
           {unreadCount>0 && (
             <span style={{ background:C.red, color:C.white, borderRadius:99,
               padding:"1px 7px", fontSize:11, fontWeight:800 }}>
@@ -5166,6 +5172,11 @@ function ChatScreen({ role, order, onBack }) {
   const [menuPos,     setMenuPos]     = useState({ x:0, y:0 });
   const [touching,    setTouching]    = useState(false);
   const [sidebarSearch, setSidebarSearch] = useState("");
+  const [showMention,  setShowMention]  = useState(false);
+  const [mentionList,  setMentionList]  = useState([]);   // [{id,name,kind}] 送信対象メンション
+  const [mentionNames, setMentionNames] = useState({});   // {uuid: name} 宛先ラベル表示用
+  const [mentionKinds, setMentionKinds] = useState({});   // {uuid: kind} アバター色分け用
+  const [readByMsg,    setReadByMsg]    = useState(null); // 既読メンバーモーダル対象メッセージ
   const bottomRef   = useRef(null);
   const touchTimer  = useRef(null);
   const isAdminRole = ['admin','manager'].includes(role);
@@ -5184,6 +5195,18 @@ function ChatScreen({ role, order, onBack }) {
   useEffect(() => {
     sb.from('messages').select('*').eq('order_id', order.id).order('id')
       .then(({ data }) => { if (data) setMessages(data.map(mapChat)); });
+  }, [order.id]);
+
+  // 宛先ラベル用の id→name / id→kind マップ（案件を開いたとき1回取得）
+  useEffect(() => {
+    if (!order?.id) return;
+    sb.rpc('get_mention_candidates', { p_order_id: order.id })
+      .then(({ data }) => {
+        const map = {}; const kinds = {};
+        (data || []).forEach(c => { map[c.id] = c.name; kinds[c.id] = c.kind; });
+        setMentionNames(map);
+        setMentionKinds(kinds);
+      });
   }, [order.id]);
 
   // ユーザー側：担当者メッセージを既読にする（is_read）
@@ -5209,6 +5232,7 @@ function ChatScreen({ role, order, onBack }) {
       const { data: unread } = await sb.from('messages')
         .select('id, read_by')
         .eq('order_id', order.id)
+        .or(`sender_id.neq.${uid},sender_id.is.null`)   // 自分が送ったものは既読追記しない
         .not('read_by', 'cs', `{${uid}}`);
       if (!unread || !unread.length) return;
       await Promise.all(unread.map(msg =>
@@ -5244,10 +5268,11 @@ function ChatScreen({ role, order, onBack }) {
       setMessages(prev => {
         if (fresh.length === prev.length &&
             fresh.every((m,i) => m.id === prev[i]?.id && m.read === prev[i]?.read &&
-              JSON.stringify(m.reactions) === JSON.stringify(prev[i]?.reactions))) return prev;
+              JSON.stringify(m.reactions) === JSON.stringify(prev[i]?.reactions) &&
+              JSON.stringify(m.readBy) === JSON.stringify(prev[i]?.readBy))) return prev;
         return fresh.map(m => {
           const ex = prev.find(e => e.id === m.id);
-          return ex ? { ...ex, read: m.read, reactions: m.reactions } : m;
+          return ex ? { ...ex, read: m.read, reactions: m.reactions, readBy: m.readBy } : m;
         });
       });
     };
@@ -5277,19 +5302,19 @@ function ChatScreen({ role, order, onBack }) {
   const handleSend = async () => {
     if (!input.trim()) return;
     const text = input.trim();
-    const mentions = (text.match(/@\S+/g) || []).map(m => m.slice(1));
+    const mentionIds = mentionList.map(m => m.id);   // チップで選択済みのUUID配列
     const replyToId = replyTo?.id || null;
-    setInput(""); setReplyTo(null);
+    setInput(""); setReplyTo(null); setMentionList([]);
     const { data: row, error } = await sb.from('messages').insert({
       order_id:    order.id,
       from_role:   isAdminRole ? 'staff' : 'user',
       text,
       reply_to_id: replyToId,
-      mentions:    mentions.length > 0 ? mentions : null,
+      mentions:    mentionIds.length > 0 ? mentionIds : null,
       sender_name: userName || null,
       sender_id:   userId   || null,
     }).select().single();
-    if (error) { console.error('[ChatScreen send]', error); setInput(text); return; }
+    if (error) { console.error('[ChatScreen send]', error); setInput(text); setMentionList(mentionList); return; }
     const msg = mapChat(row);
     setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
     if (!isAdminRole) {
@@ -5307,8 +5332,9 @@ function ChatScreen({ role, order, onBack }) {
     }
   };
 
-  const MENU_BTN = { background:"rgba(255,255,255,0.15)", border:"none", color:C.white,
-    borderRadius:8, padding:"5px 10px", fontSize:15, cursor:"pointer", fontFamily:"inherit" };
+  const MENU_BTN = { background:"transparent", border:"none", color:"#4b5563",
+    borderRadius:8, padding:"7px 10px", fontSize:13, fontWeight:700, cursor:"pointer",
+    fontFamily:"inherit", whiteSpace:"nowrap" };
   const activeMsg = activeMenuId ? messages.find(m => m.id === activeMenuId) : null;
   const activeMsgIsOwn = activeMsg ? (isAdminRole ? activeMsg.from==="staff" : activeMsg.from==="user") : false;
 
@@ -5336,16 +5362,23 @@ function ChatScreen({ role, order, onBack }) {
       `}</style>
 
       {/* 固定コンテキストメニュー */}
-      {activeMenuId && activeMsg && (
+      {activeMenuId && activeMsg && (() => {
+        const MENU_W = 300;
+        const vw = typeof window !== 'undefined' ? window.innerWidth  : 400;
+        const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+        const mLeft = Math.max(8, Math.min(menuPos.x, vw - MENU_W - 8));
+        const mTop  = Math.max(8, Math.min(menuPos.y, vh - 130));
+        return (
         <>
           <div style={{ position:"fixed", inset:0, zIndex:199 }}
             onClick={()=>setActiveMenuId(null)}
             onContextMenu={e=>{ e.preventDefault(); setActiveMenuId(null); }} />
-          <div style={{ position:"fixed", left:menuPos.x, top:menuPos.y, zIndex:200,
-            background:C.navy, borderRadius:12, padding:"6px 8px",
-            display:"flex", flexDirection:"column", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
+          <div style={{ position:"fixed", left:mLeft, top:mTop, width:MENU_W, zIndex:200,
+            background:C.white, borderRadius:14, padding:"8px 10px",
+            display:"flex", flexDirection:"column", gap:6, boxShadow:"0 8px 24px rgba(10,31,92,0.25)" }}
             onClick={e=>e.stopPropagation()}>
-            <div style={{ display:"flex", gap:2, paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.2)" }}>
+            {/* 絵文字リアクション行 */}
+            <div style={{ display:"flex", gap:2, paddingBottom:8, borderBottom:"1px solid "+C.grayL, justifyContent:"space-around" }}>
               {['👍','✅','👀','🙏','😊'].map(emoji=>(
                 <button key={emoji} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", padding:"2px 4px", borderRadius:6,
                   opacity: (activeMsg.reactions?.[emoji]||[]).includes('self') ? 1 : 0.85 }}
@@ -5354,17 +5387,24 @@ function ChatScreen({ role, order, onBack }) {
                 </button>
               ))}
             </div>
-            <div style={{ display:"flex", gap:4 }}>
-              <button style={MENU_BTN} onClick={()=>{ setReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
-              <button style={MENU_BTN} onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
+            {/* アクション行（横1行・折り返しなし） */}
+            <div style={{ display:"flex", flexWrap:"nowrap", gap:2, justifyContent:"space-between" }}>
+              <button style={MENU_BTN} onClick={()=>{ setReplyTo(activeMsg); setActiveMenuId(null); }}>返信</button>
+              <button style={MENU_BTN} onClick={()=>{ setReadByMsg(activeMsg); setActiveMenuId(null); }}>既読メンバー</button>
+              <button style={MENU_BTN} onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>コピー</button>
               {activeMsgIsOwn && (
-                <button style={{...MENU_BTN, color:"#ff8888"}}
-                  onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ handleDelete(activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
+                <button style={{...MENU_BTN, color:C.red}}
+                  onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ handleDelete(activeMsg.id); setActiveMenuId(null); } }}>削除</button>
               )}
             </div>
           </div>
         </>
-      )}
+        );
+      })()}
+
+      <ReadByModal open={!!readByMsg} readBy={readByMsg?.readBy} senderId={readByMsg?.senderId}
+        nameMap={mentionNames} kindMap={mentionKinds}
+        onClose={()=>setReadByMsg(null)} />
 
       <div className="chat-layout">
 
@@ -5537,13 +5577,14 @@ function ChatScreen({ role, order, onBack }) {
                             : !isOwn ? "1px solid #e2e8f0" : "none",
                           whiteSpace:"pre-wrap",
                         }}>
+                          {renderMentionTargets(msg.mentions, mentionNames)}
                           {renderMentions(msg.text)}
                         </div>
 
                         {/* 時刻・既読 */}
                         <div style={{ display:"flex", gap:4, alignItems:"center",
                           marginTop:3, justifyContent:isOwn?"flex-end":"flex-start" }}>
-                          {isOwn && msg.read && (
+                          {isOwn && readByExcludingSender(msg.readBy, msg.senderId).length > 0 && (
                             <span style={{ fontSize:10, color:"#7a8fb5", fontWeight:600 }}>✓ 既読</span>
                           )}
                           <span style={{ fontSize:10, color:"#9ca3af" }}>{msg.time}</span>
@@ -5591,6 +5632,20 @@ function ChatScreen({ role, order, onBack }) {
                       color:C.gray, fontSize:14, flexShrink:0 }}>✕</button>
                 </div>
               )}
+              {mentionList.length > 0 && (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
+                  {mentionList.map(m => (
+                    <span key={m.id} style={{ display:"inline-flex", alignItems:"center", gap:4,
+                      background:C.blueL, color:C.blue, borderRadius:14, padding:"3px 6px 3px 10px",
+                      fontSize:12, fontWeight:700 }}>
+                      @{m.name}
+                      <button onClick={()=>setMentionList(prev => prev.filter(x => x.id !== m.id))}
+                        style={{ background:"none", border:"none", cursor:"pointer", color:C.blue,
+                          fontSize:13, lineHeight:1, padding:"0 2px" }}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <div style={{ display:"flex", gap:8, alignItems:"flex-end" }}>
                 <textarea value={input} onChange={e=>setInput(e.target.value)}
                   onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ return; } if(e.key==="Enter"&&e.shiftKey){ e.preventDefault(); handleSend(); } }}
@@ -5609,11 +5664,27 @@ function ChatScreen({ role, order, onBack }) {
                   display:"flex", alignItems:"center", justifyContent:"center",
                   flexShrink:0, transition:"all 0.15s" }}>✈</button>
               </div>
+              <div style={{ display:"flex", justifyContent:"flex-start", marginTop:8 }}>
+                <button onClick={()=>setShowMention(true)}
+                  style={{ display:"inline-flex", alignItems:"center", gap:6, background:C.blueL,
+                    border:"none", borderRadius:16, padding:"6px 14px", cursor:"pointer",
+                    color:C.blue, fontSize:13, fontWeight:700, fontFamily:"inherit" }}>
+                  <span style={{ fontSize:14 }}>👤</span>メンション
+                </button>
+              </div>
               <div style={{ textAlign:"center", marginTop:6, fontSize:11, color:"#b0b8c8" }}>
                 緊急の場合は 06-6392-3882 まで
               </div>
             </div>
           </div>
+
+          <MentionPickerModal
+            open={showMention}
+            orderId={order.id}
+            initialSelectedIds={mentionList.map(m => m.id)}
+            onClose={()=>setShowMention(false)}
+            onSelect={(selected)=>setMentionList(selected)}
+          />
 
         </div>{/* /chat-main */}
       </div>{/* /chat-layout */}
@@ -5632,6 +5703,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
   const [pickerSearch,    setPickerSearch]    = useState("");
   const [userId,          setUserId]          = useState(null);
   const [unreadCounts,    setUnreadCounts]    = useState({});
+  const [mentionCounts,   setMentionCounts]   = useState({});   // 自分宛メンションの未読件数（order_id別）
   const [showUnreadBubble,setShowUnreadBubble]= useState(false);
   const [userName,        setUserName]        = useState("");
 
@@ -5655,14 +5727,19 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
     const orderIds = mapped.map(o => o.id);
     if (orderIds.length) {
       const { data: unread } = await sb.from('messages')
-        .select('order_id, sender_id')
+        .select('order_id, sender_id, mentions')
         .in('order_id', orderIds)
         .or(`sender_id.neq.${user.id},sender_id.is.null`)
         .not('read_by', 'cs', `{${user.id}}`);
       if (unread) {
         const counts = {};
-        unread.forEach(m => { counts[m.order_id] = (counts[m.order_id] || 0) + 1; });
+        const mentCounts = {};
+        unread.forEach(m => {
+          counts[m.order_id] = (counts[m.order_id] || 0) + 1;
+          if (m.mentions?.includes(user.id)) mentCounts[m.order_id] = (mentCounts[m.order_id] || 0) + 1;
+        });
         setUnreadCounts(counts);
+        setMentionCounts(mentCounts);
         setShowUnreadBubble(Object.values(counts).some(c => c > 0));
       }
     }
@@ -5680,14 +5757,19 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
       const orderIds = (allOrders || []).map(o => o.id);
       if (!orderIds.length) return;
       const { data: unread } = await sb.from('messages')
-        .select('order_id, sender_id')
+        .select('order_id, sender_id, mentions')
         .in('order_id', orderIds)
         .or(`sender_id.neq.${user.id},sender_id.is.null`)
         .not('read_by', 'cs', `{${user.id}}`);
       if (unread) {
         const counts = {};
-        unread.forEach(m => { counts[m.order_id] = (counts[m.order_id] || 0) + 1; });
+        const mentCounts = {};
+        unread.forEach(m => {
+          counts[m.order_id] = (counts[m.order_id] || 0) + 1;
+          if (m.mentions?.includes(user.id)) mentCounts[m.order_id] = (mentCounts[m.order_id] || 0) + 1;
+        });
         setUnreadCounts(counts);
+        setMentionCounts(mentCounts);
         setShowUnreadBubble(Object.values(counts).some(c => c > 0));
       }
     };
@@ -5819,9 +5901,10 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         {filtered.map(order=>(
           <HiOrderCard key={order.id} role={role} order={order}
             unreadCount={unreadCounts[order.id]||0}
+            mentionCount={mentionCounts[order.id]||0}
             onClick={()=>onGoDetailView(order)}
             onDetail={()=>onGoDetail(order)}
-            onChat={()=>{ setUnreadCounts(prev=>({...prev,[order.id]:0})); onGoChat(order); }} />
+            onChat={()=>{ setUnreadCounts(prev=>({...prev,[order.id]:0})); setMentionCounts(prev=>({...prev,[order.id]:0})); onGoChat(order); }} />
         ))}
 
         {/* 案件ピッカーシート */}
@@ -6617,6 +6700,246 @@ function renderMentions(text) {
   );
 }
 
+// メンション宛先ラベル（mentions=UUID配列 を nameMap で氏名化して表示）
+//   1) nameMap にあれば氏名 / 2) UUID形式なら「不明なユーザー」/ 3) それ以外は旧氏名文字列として素通し
+const MENTION_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function renderMentionTargets(mentions, nameMap) {
+  if (!mentions || !mentions.length) return null;
+  return (
+    <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:4 }}>
+      {mentions.map((v, i) => {
+        const label = (nameMap && nameMap[v]) || (MENTION_UUID_RE.test(v) ? '不明なユーザー' : v);
+        return (
+          <span key={i} style={{ background:"#dbeafe", color:"#1e40af",
+            borderRadius:3, padding:"1px 6px", fontWeight:700, fontSize:"0.85em" }}>
+            @{label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// 既読者（送信者自身を除外）。既読表示・既読メンバーモーダルの共通基準。
+function readByExcludingSender(readBy, senderId) {
+  return (readBy || []).filter(id => id && id !== senderId);
+}
+
+// ── メンション候補ピッカー（顧客・管理 共通）─────────────
+// Step1: コンポーネント追加のみ。両画面への組み込みは別対応。
+// 候補は get_mention_candidates RPC（UUID返却）で内部取得する。
+function MentionAvatar({ name, kind }) {
+  const bg = kind === 'staff' ? C.blue : C.orange;   // 社内=青 / 顧客=橙
+  return (
+    <div style={{ width:34, height:34, borderRadius:"50%", background:bg,
+      color:C.white, display:"flex", alignItems:"center", justifyContent:"center",
+      fontSize:15, fontWeight:800, flexShrink:0 }}>
+      {(name || "?").charAt(0)}
+    </div>
+  );
+}
+
+function MentionPickerModal({ open, onClose, onSelect, orderId, initialSelectedIds = [], candidates: candidatesProp }) {
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState(null);
+  const [candidates,  setCandidates]  = useState([]);   // {id,name,kind,company_name}[]
+  const [search,      setSearch]      = useState("");
+  const [selectedIds, setSelectedIds] = useState([]);   // UUID[]
+
+  // 開いたときに取得・初期化（依存は [open, orderId] に限定）
+  useEffect(() => {
+    if (!open) return;
+    setSearch("");
+    setSelectedIds(initialSelectedIds);
+    if (candidatesProp) { setCandidates(candidatesProp); return; }  // 上書き（テスト/キャッシュ用）
+    setLoading(true); setError(null);
+    sb.rpc('get_mention_candidates', { p_order_id: orderId })
+      .then(({ data, error }) => {
+        if (error) { setError(error.message); setCandidates([]); }
+        else setCandidates(data || []);
+      })
+      .finally(() => setLoading(false));
+  }, [open, orderId]);
+
+  if (!open) return null;
+
+  const q = search.trim().toLowerCase();
+  const filtered = q ? candidates.filter(c => (c.name || "").toLowerCase().includes(q)) : candidates;
+  const staffGroup = filtered.filter(c => c.kind === 'staff');
+  const userGroups = {};
+  filtered.filter(c => c.kind === 'user').forEach(c => {
+    const key = c.company_name || '取引先';
+    (userGroups[key] = userGroups[key] || []).push(c);
+  });
+  const allSelected = filtered.length > 0 && filtered.every(c => selectedIds.includes(c.id));
+
+  const toggleOne = (id) =>
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+
+  const toggleAll = () => {
+    const ids = filtered.map(c => c.id);
+    setSelectedIds(prev => allSelected
+      ? prev.filter(x => !ids.includes(x))            // 表示中を全解除
+      : Array.from(new Set([...prev, ...ids])));       // 表示中を全選択
+  };
+
+  const confirm = () => {
+    const selected = candidates
+      .filter(c => selectedIds.includes(c.id))
+      .map(({ id, name, kind }) => ({ id, name, kind }));
+    onSelect(selected);
+    onClose();
+  };
+
+  const Row = (c) => (
+    <label key={c.id} style={{ display:"flex", alignItems:"center", gap:10,
+      padding:"9px 4px", borderBottom:"1px solid "+C.grayL, cursor:"pointer" }}>
+      <div style={{ width:22, height:22, borderRadius:6, flexShrink:0,
+        border:"2px solid "+(selectedIds.includes(c.id) ? C.blue : C.grayL),
+        background:selectedIds.includes(c.id) ? C.blue : C.white,
+        display:"flex", alignItems:"center", justifyContent:"center" }}>
+        {selectedIds.includes(c.id) && <span style={{ color:C.white, fontSize:13, fontWeight:900 }}>✓</span>}
+      </div>
+      <input type="checkbox" checked={selectedIds.includes(c.id)}
+        onChange={()=>toggleOne(c.id)} style={{ display:"none" }} />
+      <MentionAvatar name={c.name} kind={c.kind} />
+      <span style={{ fontSize:15, fontWeight:600, color:C.navy }}>{c.name}</span>
+    </label>
+  );
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.5)",
+      display:"flex", alignItems:"center", justifyContent:"center", zIndex:350, padding:16 }}
+      onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{ background:C.white, borderRadius:20, width:"100%", maxWidth:440,
+          maxHeight:"85vh", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+
+        {/* ヘッダー: タイトル + × */}
+        <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+          padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontSize:17, fontWeight:800, color:C.white }}>メンション</div>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none",
+            color:C.white, width:32, height:32, borderRadius:"50%", cursor:"pointer", fontSize:18 }}>✕</button>
+        </div>
+
+        {/* 検索ボックス */}
+        <div style={{ padding:"12px 16px", borderBottom:"1px solid "+C.grayL }}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="氏名で検索..."
+            style={{ width:"100%", boxSizing:"border-box", padding:"9px 12px", borderRadius:10,
+              border:"1px solid "+C.grayL, background:C.bg, fontSize:14, outline:"none",
+              fontFamily:"inherit", color:C.navy }} />
+        </div>
+
+        {/* 本体（スクロール領域） */}
+        <div style={{ flex:1, overflowY:"auto", padding:"8px 16px" }}>
+          {loading ? <div style={{ padding:24, textAlign:"center", color:C.gray }}>読み込み中…</div>
+          : error ? <div style={{ padding:24, textAlign:"center", color:C.red }}>取得に失敗しました</div>
+          : filtered.length === 0 ? <div style={{ padding:24, textAlign:"center", color:C.gray }}>メンションできる相手がいません</div>
+          : (
+            <React.Fragment>
+              {/* 全員を選択する */}
+              <label style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 4px",
+                borderBottom:"2px solid "+C.grayL, cursor:"pointer" }}>
+                <div style={{ width:22, height:22, borderRadius:6, flexShrink:0,
+                  border:"2px solid "+(allSelected ? C.blue : C.grayL),
+                  background:allSelected ? C.blue : C.white,
+                  display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  {allSelected && <span style={{ color:C.white, fontSize:13, fontWeight:900 }}>✓</span>}
+                </div>
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} style={{ display:"none" }} />
+                <span style={{ fontSize:14, fontWeight:700, color:C.navy }}>全員を選択する</span>
+              </label>
+
+              {/* グループ: 社内担当者 */}
+              {staffGroup.length > 0 && (
+                <React.Fragment>
+                  <div style={{ fontSize:12, fontWeight:700, color:C.gray, padding:"12px 4px 4px" }}>社内担当者</div>
+                  {staffGroup.map(Row)}
+                </React.Fragment>
+              )}
+
+              {/* グループ: 取引先（会社名ごと） */}
+              {Object.entries(userGroups).map(([company, list]) => (
+                <React.Fragment key={company}>
+                  <div style={{ fontSize:12, fontWeight:700, color:C.gray, padding:"12px 4px 4px" }}>{company}</div>
+                  {list.map(Row)}
+                </React.Fragment>
+              ))}
+            </React.Fragment>
+          )}
+        </div>
+
+        {/* フッター: キャンセル(テキスト) + 選択(塗り) */}
+        <div style={{ padding:"12px 16px", borderTop:"1px solid "+C.grayL,
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+          <button onClick={onClose} style={{ background:"none", border:"none", color:C.gray,
+            fontSize:14, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}>キャンセル</button>
+          <button onClick={confirm} disabled={selectedIds.length === 0}
+            style={{ padding:"10px 22px", borderRadius:10, border:"none",
+              background:selectedIds.length ? C.blue : C.grayL,
+              color:selectedIds.length ? C.white : C.gray,
+              fontSize:14, fontWeight:800, cursor:selectedIds.length ? "pointer" : "default",
+              fontFamily:"inherit" }}>
+            選択{selectedIds.length ? `（${selectedIds.length}）` : ""}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 既読メンバーモーダル（顧客・管理 共通）───────────────
+// read_by（UUID配列）を nameMap/kindMap で氏名化して一覧表示。
+// ※ read_by は案件（チャット）単位の一括既読のため、厳密には
+//   「このメッセージを見た人」ではなく「この案件のチャットを開いた人」。
+function ReadByModal({ open, onClose, readBy, senderId, nameMap, kindMap }) {
+  if (!open) return null;
+  const ids = readByExcludingSender(readBy, senderId);  // 送信者自身は除外
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.5)",
+      display:"flex", alignItems:"center", justifyContent:"center", zIndex:400, padding:16 }}
+      onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{ background:C.white, borderRadius:20, width:"100%", maxWidth:400,
+          maxHeight:"80vh", display:"flex", flexDirection:"column", overflow:"hidden" }}>
+
+        {/* ヘッダー */}
+        <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+          padding:"16px 20px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div style={{ fontSize:16, fontWeight:800, color:C.white }}>このメッセージを見たメンバー</div>
+          <button onClick={onClose} style={{ background:"rgba(255,255,255,0.15)", border:"none",
+            color:C.white, width:32, height:32, borderRadius:"50%", cursor:"pointer", fontSize:18 }}>✕</button>
+        </div>
+
+        {/* 注記 */}
+        <div style={{ padding:"8px 20px", fontSize:11, color:C.gray, borderBottom:"1px solid "+C.grayL }}>
+          ※ この案件のチャットを開いたメンバーです
+        </div>
+
+        {/* 本体 */}
+        <div style={{ flex:1, overflowY:"auto", padding:"8px 16px" }}>
+          {ids.length === 0 ? (
+            <div style={{ padding:24, textAlign:"center", color:C.gray }}>まだ誰も読んでいません</div>
+          ) : (
+            ids.map((uid, i) => {
+              const name = (nameMap && nameMap[uid]) || (MENTION_UUID_RE.test(uid) ? '不明なユーザー' : uid);
+              const kind = (kindMap && kindMap[uid]) || 'user';
+              return (
+                <div key={i} style={{ display:"flex", alignItems:"center", gap:10,
+                  padding:"9px 4px", borderBottom:"1px solid "+C.grayL }}>
+                  <MentionAvatar name={name} kind={kind} />
+                  <span style={{ fontSize:15, fontWeight:600, color:C.navy }}>{name}</span>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── タイマー計算 ─────────────────────────────────────────
 
 // 調整中：発注から24時間
@@ -6993,9 +7316,11 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
   const [scheduleChangeStart, setScheduleChangeStart] = useState("");
   const [scheduleChangeEnd,   setScheduleChangeEnd]   = useState("");
   const [scheduleChangeSending, setScheduleChangeSending] = useState(false);
-  const [adminStaff,      setAdminStaff]      = useState([]);
-  const [mentionQuery,    setMentionQuery]    = useState(null);
-  const [mentionAtPos,    setMentionAtPos]    = useState(0);
+  const [showMention,     setShowMention]     = useState(false);
+  const [mentionList,     setMentionList]     = useState([]);   // [{id,name,kind}] 送信対象メンション
+  const [mentionNames,    setMentionNames]    = useState({});   // {uuid: name} 宛先ラベル表示用
+  const [mentionKinds,    setMentionKinds]    = useState({});   // {uuid: kind} アバター色分け用
+  const [readByMsg,       setReadByMsg]       = useState(null); // 既読メンバーモーダル対象メッセージ
   const [adRelatedOrders,   setAdRelatedOrders]   = useState([]);
   const [adExpandedRelated, setAdExpandedRelated] = useState({});
   const bottomRef   = useRef(null);
@@ -7034,6 +7359,18 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
       .then(({ data }) => setStatusLogs(data || []));
   }, [order?.id, order?.status]);
 
+  // 宛先ラベル用の id→name / id→kind マップ（案件を開いたとき1回取得）
+  useEffect(() => {
+    if (!order?.id) return;
+    sb.rpc('get_mention_candidates', { p_order_id: order.id })
+      .then(({ data }) => {
+        const map = {}; const kinds = {};
+        (data || []).forEach(c => { map[c.id] = c.name; kinds[c.id] = c.kind; });
+        setMentionNames(map);
+        setMentionKinds(kinds);
+      });
+  }, [order?.id]);
+
   // 管理者名・ID取得
   useEffect(() => {
     sb.auth.getUser().then(({ data: { user } }) => {
@@ -7044,18 +7381,9 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     });
   }, []);
 
-  // @メンション用スタッフ一覧取得
-  useEffect(() => {
-    sb.from('staff').select('name, role').order('name')
-      .then(({ data }) => setAdminStaff((data || []).filter(s => ['admin','manager'].includes(s.role))));
-  }, []);
-
-  // チャットタブを開いたとき既読登録
+  // チャットタブを開いたとき既読登録（read_by への UUID 追記は markChatRead が担う）
   useEffect(()=>{
     if (tab !== 'chat' || !order?.id) return;
-    sb.auth.getUser().then(({ data: { user } }) => {
-      if (user) sb.rpc('mark_messages_read', { p_order_id: order.id, p_email: user.email });
-    });
     onMarkChatRead && onMarkChatRead(order.id);
   }, [tab, order?.id]);
 
@@ -7243,39 +7571,15 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
 
   const timer = getOrderTimer(order);
 
-  const handleChatInputChange = (e) => {
-    const text   = e.target.value;
-    setChatInput(text);
-    const cursor = e.target.selectionStart;
-    const before = text.slice(0, cursor);
-    const m      = before.match(/@([^\s]*)$/);
-    if (m) { setMentionQuery(m[1]); setMentionAtPos(m.index); }
-    else setMentionQuery(null);
-  };
-
-  const filteredMentions = mentionQuery !== null
-    ? adminStaff.filter(s => s.name.toLowerCase().includes(mentionQuery.toLowerCase()))
-    : [];
-
-  const handleMentionSelect = (name) => {
-    const cursor = textareaRef.current?.selectionStart ?? chatInput.length;
-    const before = chatInput.slice(0, mentionAtPos);
-    const after  = chatInput.slice(cursor);
-    setChatInput(before + '@' + name + ' ' + after);
-    setMentionQuery(null);
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  };
-
   const handleSend = () => {
     if (!chatInput.trim()) return;
-    setMentionQuery(null);
     const text = chatInput.trim();
-    const mentions = (text.match(/@(\S+)/g) || []).map(m => m.slice(1));
+    const mentionIds = mentionList.map(m => m.id);   // チップで選択済みのUUID配列
     onAddChat(order.id, { from:"staff", text, replyToId: chatReplyTo?.id || null,
-      mentions: mentions.length > 0 ? mentions : null,
+      mentions: mentionIds.length > 0 ? mentionIds : null,
       senderName: adminName  || null,
       senderId:   adminUserId || null });
-    setChatInput(""); setChatReplyTo(null);
+    setChatInput(""); setChatReplyTo(null); setMentionList([]);
   };
 
   const handleReaction = async (msgId, emoji) => {
@@ -8243,20 +8547,25 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
           {activeMenuId && (() => {
             const activeMsg = (chats[order.id]||[]).find(m => m.id === activeMenuId);
             if (!activeMsg) return null;
-            const isOwn = activeMsg.from === "staff";
-            const MENU_BTN = { background:"rgba(255,255,255,0.15)", border:"none", color:C.white,
-              borderRadius:8, padding:"5px 10px", fontSize:15, cursor:"pointer", fontFamily:"inherit" };
+            const MENU_BTN = { background:"transparent", border:"none", color:"#4b5563",
+              borderRadius:8, padding:"7px 10px", fontSize:13, fontWeight:700, cursor:"pointer",
+              fontFamily:"inherit", whiteSpace:"nowrap" };
+            const MENU_W = 300;
+            const vw = typeof window !== 'undefined' ? window.innerWidth  : 400;
+            const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+            const mLeft = Math.max(8, Math.min(menuPos.x, vw - MENU_W - 8));
+            const mTop  = Math.max(8, Math.min(menuPos.y, vh - 130));
             return (
               <>
                 <div style={{ position:"fixed", inset:0, zIndex:199 }}
                   onClick={()=>setActiveMenuId(null)}
                   onContextMenu={e=>{ e.preventDefault(); setActiveMenuId(null); }} />
-                <div style={{ position:"fixed", left:menuPos.x, top:menuPos.y, zIndex:200,
-                  background:C.navy, borderRadius:12, padding:"6px 8px",
-                  display:"flex", flexDirection:"column", gap:4, boxShadow:"0 6px 20px rgba(0,0,0,0.35)" }}
+                <div style={{ position:"fixed", left:mLeft, top:mTop, width:MENU_W, zIndex:200,
+                  background:C.white, borderRadius:14, padding:"8px 10px",
+                  display:"flex", flexDirection:"column", gap:6, boxShadow:"0 8px 24px rgba(10,31,92,0.25)" }}
                   onClick={e=>e.stopPropagation()}>
-                  {/* スタンプ行 */}
-                  <div style={{ display:"flex", gap:2, paddingBottom:6, borderBottom:"1px solid rgba(255,255,255,0.2)" }}>
+                  {/* 絵文字リアクション行 */}
+                  <div style={{ display:"flex", gap:2, paddingBottom:8, borderBottom:"1px solid "+C.grayL, justifyContent:"space-around" }}>
                     {['👍','✅','👀','🙏','😊'].map(emoji=>(
                       <button key={emoji} style={{ background:"none", border:"none", fontSize:22, cursor:"pointer", padding:"2px 4px", borderRadius:6 }}
                         onClick={()=>{ handleReaction(activeMsg.id, emoji); setActiveMenuId(null); }}>
@@ -8264,21 +8573,27 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       </button>
                     ))}
                   </div>
-                  {/* アクションボタン */}
-                  <div style={{ display:"flex", gap:4 }}>
+                  {/* アクション行（横1行・折り返しなし） */}
+                  <div style={{ display:"flex", flexWrap:"nowrap", gap:2, justifyContent:"space-between" }}>
                     <button style={MENU_BTN}
-                      onClick={()=>{ setChatReplyTo(activeMsg); setActiveMenuId(null); }}>↩ 返信</button>
+                      onClick={()=>{ setChatReplyTo(activeMsg); setActiveMenuId(null); }}>返信</button>
                     <button style={MENU_BTN}
-                      onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>📋 コピー</button>
+                      onClick={()=>{ setReadByMsg(activeMsg); setActiveMenuId(null); }}>既読メンバー</button>
+                    <button style={MENU_BTN}
+                      onClick={()=>{ navigator.clipboard?.writeText(activeMsg.text); setActiveMenuId(null); }}>コピー</button>
                     {(role==="admin" || (adminUserId && activeMsg.senderId === adminUserId)) && (
-                      <button style={{...MENU_BTN, color:"#ff8888"}}
-                        onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, activeMsg.id); setActiveMenuId(null); } }}>🗑 削除</button>
+                      <button style={{...MENU_BTN, color:C.red}}
+                        onClick={()=>{ if(window.confirm("このメッセージを削除しますか？")){ onDeleteMsg && onDeleteMsg(order.id, activeMsg.id); setActiveMenuId(null); } }}>削除</button>
                     )}
                   </div>
                 </div>
               </>
             );
           })()}
+
+          <ReadByModal open={!!readByMsg} readBy={readByMsg?.readBy} senderId={readByMsg?.senderId}
+            nameMap={mentionNames} kindMap={mentionKinds}
+            onClose={()=>setReadByMsg(null)} />
 
           <div style={{ flex:1, overflowY:"auto", padding:"20px" }}>
             <div style={{ maxWidth:700, margin:"0 auto" }}>
@@ -8397,12 +8712,13 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                         border:!isOwn?`1px solid ${C.grayL}`:"none",
                         whiteSpace:"pre-wrap",
                       }}>
+                        {renderMentionTargets(msg.mentions, mentionNames)}
                         {renderMentions(msg.text)}
                       </div>
                       <div style={{ display:"flex", gap:6, alignItems:"center", marginTop:3,
                         justifyContent:isOwn?"flex-end":"flex-start" }}>
                         <span style={{ fontSize:11, color:C.gray }}>{msg.time}</span>
-                        {isOwn && msg.read && (
+                        {isOwn && readByExcludingSender(msg.readBy, msg.senderId).length > 0 && (
                           <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>✓✓ 既読</span>
                         )}
                       </div>
@@ -8431,26 +8747,6 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
           <div style={{ background:C.white, borderTop:"2px solid "+C.grayL,
             padding:"12px 20px", flexShrink:0 }}>
             <div style={{ maxWidth:700, margin:"0 auto", position:"relative" }}>
-              {/* @メンション候補ポップアップ */}
-              {mentionQuery !== null && filteredMentions.length > 0 && (
-                <div style={{ position:"absolute", bottom:"100%", left:0, right:0,
-                  background:C.white, border:`2px solid ${C.blue}`, borderRadius:10,
-                  marginBottom:6, zIndex:200, boxShadow:"0 4px 16px rgba(0,0,0,0.15)",
-                  maxHeight:180, overflowY:"auto" }}>
-                  {filteredMentions.map(s => (
-                    <button key={s.name} onMouseDown={e=>{ e.preventDefault(); handleMentionSelect(s.name); }}
-                      style={{ width:"100%", padding:"8px 14px", textAlign:"left", background:"none",
-                        border:"none", borderBottom:`1px solid ${C.grayL}`, cursor:"pointer",
-                        display:"flex", alignItems:"center", gap:8 }}>
-                      <span style={{ fontSize:10, background:s.role==="admin"?C.red:C.orange,
-                        color:"#fff", borderRadius:4, padding:"1px 5px", fontWeight:700, flexShrink:0 }}>
-                        {s.role}
-                      </span>
-                      <span style={{ fontSize:13, fontWeight:600, color:C.navy }}>{s.name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
               {chatReplyTo && (
                 <div style={{ background:"#eef3ff", borderLeft:`3px solid ${C.blue}`,
                   padding:"5px 10px", marginBottom:8, borderRadius:8,
@@ -8464,17 +8760,27 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       color:C.gray, fontSize:14, flexShrink:0 }}>✕</button>
                 </div>
               )}
+              {mentionList.length > 0 && (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
+                  {mentionList.map(m => (
+                    <span key={m.id} style={{ display:"inline-flex", alignItems:"center", gap:4,
+                      background:C.blueL, color:C.blue, borderRadius:14, padding:"3px 6px 3px 10px",
+                      fontSize:12, fontWeight:700 }}>
+                      @{m.name}
+                      <button onClick={()=>setMentionList(prev => prev.filter(x => x.id !== m.id))}
+                        style={{ background:"none", border:"none", cursor:"pointer", color:C.blue,
+                          fontSize:13, lineHeight:1, padding:"0 2px" }}>✕</button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <div style={{ display:"flex", gap:10, alignItems:"flex-end" }}>
-              <textarea ref={textareaRef} value={chatInput} onChange={handleChatInputChange}
+              <textarea ref={textareaRef} value={chatInput} onChange={e=>setChatInput(e.target.value)}
                 onKeyDown={e=>{
-                  if (mentionQuery !== null && filteredMentions.length > 0) {
-                    if (e.key==="Escape") { e.preventDefault(); setMentionQuery(null); return; }
-                    if (e.key==="Enter")  { e.preventDefault(); handleMentionSelect(filteredMentions[0].name); return; }
-                  }
                   if (e.key==="Enter"&&!e.shiftKey) return;
                   if (e.key==="Enter"&&e.shiftKey) { e.preventDefault(); handleSend(); }
                 }}
-                placeholder="メッセージを入力... @でメンション / Shift+Enterで送信" rows={2}
+                placeholder="メッセージを入力... Shift+Enterで送信" rows={2}
                 style={{ flex:1, fontSize:14, padding:"12px 14px", borderRadius:12,
                   border:`2px solid ${C.grayL}`, background:C.bg, fontFamily:"inherit",
                   color:C.navy, resize:"none", lineHeight:1.5, outline:"none" }} />
@@ -8486,6 +8792,21 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 送信 ✈️
               </button>
               </div>
+              <div style={{ display:"flex", justifyContent:"flex-start", marginTop:8 }}>
+                <button onClick={()=>setShowMention(true)}
+                  style={{ display:"inline-flex", alignItems:"center", gap:6, background:C.blueL,
+                    border:"none", borderRadius:16, padding:"6px 14px", cursor:"pointer",
+                    color:C.blue, fontSize:13, fontWeight:700, fontFamily:"inherit" }}>
+                  <span style={{ fontSize:14 }}>👤</span>メンション
+                </button>
+              </div>
+              <MentionPickerModal
+                open={showMention}
+                orderId={order.id}
+                initialSelectedIds={mentionList.map(m => m.id)}
+                onClose={()=>setShowMention(false)}
+                onSelect={(selected)=>setMentionList(selected)}
+              />
             </div>
           </div>
         </div>
@@ -9690,7 +10011,8 @@ function AdminApp({ role, onLogout, onMyPage }) {
         .not('read_by', 'cs', `{${uid}}`);
       const mentCounts = {};
       (staffMsgs || []).forEach(m => {
-        if (m.mentions?.includes(myName)) {
+        // 新方式=UUID一致。旧データ（氏名文字列）は myName で救済
+        if (m.mentions?.includes(uid) || (myName && m.mentions?.includes(myName))) {
           mentCounts[m.order_id] = (mentCounts[m.order_id] || 0) + 1;
         }
       });
@@ -9796,12 +10118,14 @@ function AdminApp({ role, onLogout, onMyPage }) {
           return { ...ex,
             read:      ex.read || m.read,   // 既読は下げない
             reactions: m.reactions,
+            readBy:    m.readBy,            // read_by は最新へ同期（既読表示の基準）
           };
         });
         if (merged.length === existing.length &&
             merged.every((m,i) => m.id === existing[i]?.id &&
               m.read === existing[i]?.read &&
-              JSON.stringify(m.reactions) === JSON.stringify(existing[i]?.reactions))) return c;
+              JSON.stringify(m.reactions) === JSON.stringify(existing[i]?.reactions) &&
+              JSON.stringify(m.readBy) === JSON.stringify(existing[i]?.readBy))) return c;
         return { ...c, [id]: merged };
       });
     }, 3000);
@@ -10120,6 +10444,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
     const { data: msgs } = await sb.from('messages')
       .select('id, read_by')
       .eq('order_id', id)
+      .or(`sender_id.neq.${uid},sender_id.is.null`)   // 自分が送ったものは既読追記しない
       .not('read_by', 'cs', `{${uid}}`);
     if (msgs?.length > 0) {
       await Promise.all(msgs.map(msg =>
