@@ -254,6 +254,7 @@ handleStatusChange(id, newStatus)
 ## 今後の追加候補（未実装）
 
 - eli_img.png（LiBotキャラ）差し替え — 新しいキャラ画像ファイルを置いて差し替え
+- ロゴ・キャラ画像の最適化 — eli_img.png（2.3MB）/ logo_img.png（2.0MB）は全ページで毎回読み込むため Egress 削減効果が大きい。リポジトリ内の静的画像なので Supabase transform ではなくファイル自体を圧縮 or WebP 化する
 - ログイン画面デザイン改善 — UI刷新
 - クレーム報告機能（ユーザーから管理者へのクレーム送信）
 - 見積依頼機能（発注前の見積もり依頼フロー）
