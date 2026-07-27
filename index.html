@@ -3549,6 +3549,7 @@ const HI_CSS = `
   @keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
   @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
   @keyframes hiBlink{0%,100%{opacity:1}50%{opacity:0.25}}
+  @keyframes notifFlash{0%{box-shadow:0 0 0 0 rgba(230,57,70,0.55);background:#fff3f0}100%{box-shadow:0 0 0 12px rgba(230,57,70,0);background:transparent}}
   .hi-main-content{max-width:480px;margin:0 auto;padding:16px 16px 40px}
   @media(min-width:1025px){.hi-main-content{max-width:600px}}
 `;
@@ -5517,7 +5518,7 @@ function ChatScreen({ role, order, onBack }) {
                       </div>
                     )}
 
-                    <div style={{
+                    <div data-msg-id={msg.id ?? undefined} style={{
                       display:"flex", flexDirection:isOwn?"row-reverse":"row",
                       alignItems:"flex-end", gap:8, marginBottom:14,
                       animation:"msgIn 0.3s ease" }}>
@@ -5743,7 +5744,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
     const orderIds = mapped.map(o => o.id);
     if (orderIds.length) {
       const { data: unread } = await sb.from('messages')
-        .select('order_id, sender_id, mentions')
+        .select('id, order_id, from_role, sender_id, mentions, created_at')
         .in('order_id', orderIds)
         .or(`sender_id.neq.${user.id},sender_id.is.null`)
         .not('read_by', 'cs', `{${user.id}}`);
@@ -5773,7 +5774,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
       const orderIds = (allOrders || []).map(o => o.id);
       if (!orderIds.length) return;
       const { data: unread } = await sb.from('messages')
-        .select('order_id, sender_id, mentions')
+        .select('id, order_id, from_role, sender_id, mentions, created_at')
         .in('order_id', orderIds)
         .or(`sender_id.neq.${user.id},sender_id.is.null`)
         .not('read_by', 'cs', `{${user.id}}`);
@@ -6705,6 +6706,55 @@ function mapChat(row) {
   };
 }
 
+// ── 通知フィード構築（管理者・顧客で共有）────────────────
+// msgRows / logRows は「自分にとって未読」に絞り込み済みの行を受け取る前提。
+// orders に存在する order_id のみ通す（削除済み案件の到達不能な通知を作らない）。
+function buildNotificationFeed({ msgRows = [], logRows = [], orders = [], uid, myName }) {
+  const orderMap = {};
+  orders.forEach(o => { orderMap[o.id] = o; });
+
+  const items = [];
+
+  msgRows.forEach(m => {
+    const o = orderMap[m.order_id];
+    if (!o) return;                                  // 削除済み・未取得案件は捨てる
+    const isMention = !!(m.mentions?.includes(uid) ||
+                         (myName && m.mentions?.includes(myName)));  // 旧データ救済
+    items.push({
+      key:       `msg:${m.id}`,
+      type:      isMention ? 'mention' : 'chat',
+      orderId:   m.order_id,
+      messageId: m.id,
+      logId:     null,
+      createdAt: m.created_at,
+      read:      false,
+      actorName: m.sender_name || '',
+      excerpt:   '',                                 // パネル open 時に補完
+      siteName:  o.site || '',
+    });
+  });
+
+  logRows.forEach(l => {
+    const o = orderMap[l.order_id];
+    if (!o) return;
+    if (l.changed_by === uid) return;                // 自分が書いた変更は通知しない
+    items.push({
+      key:       `chg:${l.id}`,
+      type:      'change',
+      orderId:   l.order_id,
+      messageId: null,
+      logId:     l.id,
+      createdAt: l.changed_at,
+      read:      false,
+      actorName: '',
+      excerpt:   '',
+      siteName:  o.site || '',
+    });
+  });
+
+  return items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
 // @メンションをハイライト表示
 function renderMentions(text) {
   if (!text || !text.includes('@')) return text;
@@ -7303,7 +7353,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
-function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm, onSiteHistorySeen, onChangeLogsConfirm }) {
+function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm, onSiteHistorySeen, onChangeLogsConfirm, initialTab, tabSeq }) {
   const [tab, setTab]             = useState("detail");
   const [chatInput, setChatInput]   = useState("");
   const [chatReplyTo, setChatReplyTo] = useState(null);
@@ -7396,6 +7446,13 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
         .then(({ data }) => setAdminName(data?.name || user.email?.split('@')[0] || ''));
     });
   }, []);
+
+  // 通知クリックからのタブ指定（未指定なら何もしない＝従来どおりタブは維持される）
+  // tabSeq は「同じタブを連続指定しても再発火させる」ための単調増加カウンタ
+  useEffect(()=>{
+    if (!initialTab) return;
+    setTab(initialTab);
+  }, [order?.id, initialTab, tabSeq]);
 
   // チャットタブを開いたとき既読登録（read_by への UUID 追記は markChatRead が担う）
   useEffect(()=>{
@@ -8423,7 +8480,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 </div>
                 <div>
                   {changeLogs.map(l => (
-                    <div key={l.id} style={{ padding:"9px 18px", borderBottom:"1px solid #ddeeff",
+                    <div key={l.id} data-log-id={l.id} style={{ padding:"9px 18px", borderBottom:"1px solid #ddeeff",
                       display:"flex", gap:8, alignItems:"flex-start", flexWrap:"wrap" }}>
                       <span style={{ fontSize:12, color:C.gray, flexShrink:0, minWidth:90, marginTop:1 }}>
                         {new Date(l.changed_at).toLocaleString("ja",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}
@@ -8679,7 +8736,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       <div style={{ flex:1, height:1, background:C.grayL }} />
                     </div>
                   )}
-                  <div style={{
+                  <div data-msg-id={msg.id ?? undefined} style={{
                     display:"flex", flexDirection:isOwn?"row-reverse":"row",
                     alignItems:"flex-end", gap:8, marginBottom:14 }}>
                     {!isOwn && (
@@ -9987,6 +10044,8 @@ function AdminApp({ role, onLogout, onMyPage }) {
   const [mentionCounts,    setMentionCounts]    = useState({});
   const [siteChangeCounts, setSiteChangeCounts] = useState({});
   const [changeLogCounts,  setChangeLogCounts]  = useState({});
+  const [detailInitialTab, setDetailInitialTab] = useState(null);   // 通知クリック時のタブ指定（Phase 3 で使用）
+  const [detailTabSeq,     setDetailTabSeq]     = useState(0);      // 同一タブ再指定時の再発火用
   const pendingDeletes  = useRef(new Set());
   const adminNameRef    = useRef('');
 
@@ -10010,7 +10069,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
     // ①お客様→管理者の未読（自分がread_byに入っていないもの＝自分未読）
     if (uid) {
       const { data: unread } = await sb.from('messages')
-        .select('order_id')
+        .select('id, order_id, from_role, sender_id, created_at')
         .eq('from_role', 'user')
         .or(`sender_id.neq.${uid},sender_id.is.null`)
         .not('read_by', 'cs', `{${uid}}`);
@@ -10022,7 +10081,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
     // ②スタッフ間メンション（自分宛のメンション＆自分未読・自分が送ったものは除外）
     if (uid && myName) {
       const { data: staffMsgs } = await sb.from('messages')
-        .select('order_id, mentions')
+        .select('id, order_id, from_role, sender_id, mentions, created_at')
         .eq('from_role', 'staff')
         .neq('sender_id', uid)
         .not('read_by', 'cs', `{${uid}}`);
@@ -10046,7 +10105,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
 
     // 管理者未確認の変更ログ件数（order_id別）
     const { data: changeLogs } = await sb.from('order_change_logs')
-      .select('order_id')
+      .select('id, order_id, changed_by, changed_at')
       .is('confirmed_by', null);
     const logCounts = {};
     (changeLogs || []).forEach(l => { logCounts[l.order_id] = (logCounts[l.order_id] || 0) + 1; });
@@ -10508,6 +10567,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
       fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
       <style>{`
         @keyframes urgentPulse { 0%,100%{opacity:1} 50%{opacity:0.65} }
+        @keyframes notifFlash { 0%{box-shadow:0 0 0 0 rgba(230,57,70,0.55);background:#fff3f0} 100%{box-shadow:0 0 0 12px rgba(230,57,70,0);background:transparent} }
         * { box-sizing:border-box; }
         ::-webkit-scrollbar { width:6px; height:6px; }
         ::-webkit-scrollbar-track { background:#f0f4f9; }
@@ -10603,7 +10663,8 @@ function AdminApp({ role, onLogout, onMyPage }) {
           onMarkChatRead={markChatRead} onUpdateMsg={updateMsg}
           onRescheduleConfirm={handleRescheduleConfirm}
           onSiteHistorySeen={handleSiteHistorySeen}
-          onChangeLogsConfirm={handleChangeLogsConfirm} />
+          onChangeLogsConfirm={handleChangeLogsConfirm}
+          initialTab={detailInitialTab} tabSeq={detailTabSeq} />
       </>)}
 
       {showComp  && <CompanyPanel onClose={()=>setShowComp(false)} />}
