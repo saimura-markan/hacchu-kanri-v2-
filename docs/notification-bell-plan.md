@@ -643,3 +643,158 @@ order_change_logs : id, field_name, old_value, new_value
 | App ルーター（画面遷移関数） | `10662-10678` |
 | `mapChat()` | `6690-6710` |
 | `order_change_logs` 書き込み（写真 / テキスト） | `4413-4419` / `4498-4506` |
+
+> ⚠️ 上表の行番号は **Phase 0 適用前**（10,760行時点）のもの。
+> Phase 0 で +61行されているため、6,712行目以降は最大 +61 ずれる。
+> 現在の行番号は §11 の Phase 0 適用結果を参照。
+
+---
+
+## 11. 進捗記録
+
+### 2026-07-28
+
+#### Phase 0 — 完了・本番デプロイ済み
+
+コミット `e3e5461`（`main`）。`index.html` +71 / -10、10,760 → 10,821行。
+挙動変化ゼロ。本番 `eli.markan.co.jp` / `hacchu-kanri-v2.vercel.app` で
+ログイン・実描画まで確認済み。
+
+適用後の行番号:
+
+| 内容 | 行 |
+|---|---|
+| `HI_CSS` の `notifFlash` | 3552 |
+| 管理者 `<style>` の `notifFlash` | 10570 |
+| 顧客バブル `data-msg-id` | 5521 |
+| 管理者バブル `data-msg-id` | 8739 |
+| 変更履歴行 `data-log-id` | 8483 |
+| `DetailPanel` シグネチャ（`initialTab` / `tabSeq`） | 7356 |
+| 同 useEffect | 7448-7455 |
+| `AdminApp` の state | 10047-10048 |
+| `DetailPanel` 呼び出し | 10667 |
+| 管理者 select 列追加 | 10072 / 10084 / 10108 |
+| 顧客 select 列追加 | 5747 / 5777 |
+| `buildNotificationFeed()` | 6712-6757 |
+
+計画書 §6 との差分: `tabSeq` を Phase 0 時点で追加した。`initialTab` だけだと
+同じタブを連続指定したときに useEffect が再発火しないため。
+
+#### Phase 1 — 途中まで完了
+
+**完了したもの**
+
+- `order_change_logs.read_by text[] NOT NULL DEFAULT '{}'` 追加済み
+  - 全13行が空（`{}`）。backfill は未実行
+  - `confirmed_by` は無傷（設定済み13 / NULL 0）
+- `profiles.eli_notification_excluded boolean NOT NULL DEFAULT false` 追加済み
+  - `info@markan.co.jp` を `true` に設定済み
+  - backfill 対象は 8名 → **7名** で確定
+
+**調査で確定した事実**
+
+| 項目 | 結果 |
+|---|---|
+| ロールの格納場所 | `auth.users.raw_app_meta_data ->> 'role'` が正（`user_metadata` ではない） |
+| admin/manager | 8名。`info@markan.co.jp` は `manager` |
+| `profiles` 行が無い admin/manager | **0件** |
+| `order_change_logs` | 13件、すべて `confirmed_by` 設定済み・未確認0件 |
+| `messages` | **259行**。GIN インデックスは不要と判断 |
+| `messages.read_by` | メール文字列の残骸 **0件**（クリーン） |
+| `is_system` の UUID | `7893dda8-bee1-4e6f-8cd4-3514ef5db2e4` = `info@markan.co.jp` = 「インフォ さん」の三重一致を確認 |
+
+**§2-4 からの設計変更（実データを見て判断を変えた点）**
+
+1. **インデックスは作らない。** `order_change_logs` 13行・`messages` 259行では
+   プランナが Seq Scan を選ぶため、GIN は使われず INSERT コストだけが増える。
+   1,000行を超えた時点で `CREATE INDEX CONCURRENTLY` で追加する（DDL は
+   `add_order_change_logs_read_by.sql` STEP 3 にコメントで用意済み）。
+2. **backfill の条件を `changed_at < now()` から `confirmed_by IS NOT NULL` に変更。**
+   調査から実行までの間に顧客が現場情報を変更した場合、その新規行まで
+   既読化して見逃すため。未確認の行は自動的に対象外になり未読で残る。
+3. **通知除外は `is_system` 流用ではなく `eli_notification_excluded` 新設（案B）。**
+   `profiles` は3システム共有で、各システムは接頭辞付き列を使う規約
+   （`seed_note_excluded` / `mk_connect_role`）。`is_system` は唯一の
+   無接頭辞列であり、E-Li 固有の意味を載せると他システムから
+   意図せず書き換えられる経路ができる。また `is_system=true` は
+   メンション候補からの除外（`add_mention_candidates_rpc.sql:105,124`）を
+   伴うため、将来「人間だが通知不要」なアカウントに流用すると副作用が出る。
+   両者は併存させる。
+
+#### 次回の再開地点
+
+**`add_order_change_logs_read_by.sql` の STEP 2（backfill）から。**
+
+- 271-286行 → **273-288行**（コメント2行追加により2行ずれている）のコメントを外し、
+  **その UPDATE だけを選択して実行**する
+- 7名の UUID を13件のログの `read_by` に投入する
+- **第1回（STEP 0 / STEP 1 / STEP 1.5）は実行済み。再実行不要**
+- 実行後 `UPDATE 13` を確認 → STEP 4（352行目以降）の確認 SELECT へ
+- STEP 4 ②の「8名以上入った行」は除外方針決定前の基準でズレている。
+  **「read_by が空の行 = 0」と ⑤のサンプル13行の要素数（7〜9）で判断する**
+
+**Phase 1 の残り**: RPC 2本（`mark_message_read` / `mark_change_log_read`、§2-5）は未着手。
+
+#### 未コミットのまま残す SQL ファイル 4本
+
+| ファイル | 内容 | 実行状況 |
+|---|---|---|
+| `check_role_storage.sql` | ロール格納場所の調査（読み取り専用） | 実行済み |
+| `check_is_system.sql` | `is_system` と `info@` の調査（読み取り専用） | 実行済み |
+| `add_profiles_eli_notification_excluded.sql` | 通知除外列の追加 | 実行済み |
+| `add_order_change_logs_read_by.sql` | `read_by` 追加・backfill・確認 | STEP 0/1/1.5 のみ実行済み |
+
+Phase 1 が完了した時点でまとめてコミットする。
+
+---
+
+## 12. 将来拡張：メール通知（ベル完成後）
+
+通知ベル（Phase 0〜5）が完成したあとに着手する。**現時点では未着手・未設計の記録のみ。**
+
+### 目的
+
+E-Li 上でアクションが発生したときに、顧客へメールで気づいてもらう。
+ベルはログインしていないと見えないため、ログイン導線としてのメールが要る。
+
+### 仕様の骨子
+
+| 項目 | 内容 |
+|---|---|
+| トリガー | チャット送信 / 日程確定 / キャンセル / 変更 |
+| 宛先 | 主に顧客 |
+| 本文 | 「新着あり」＋ リンクのみ。**メッセージ本文は載せない** |
+| タイミング | 都度送信 |
+| 基盤 | 既存の Resend Edge Function を流用 |
+
+**本文を載せない理由**: メールは転送・誤送信・端末での閲覧が制御できないため、
+案件情報や会話内容をメール本文に含めない。リンク先で認証を通してから見せる。
+
+**基盤について**: パスワードリセットで Resend の実績がある
+（`edge-function-send-reset-email.ts`）。新規にメール基盤を立てる必要はない。
+
+### 設計方針
+
+**通知ベルのイベント検知（`buildNotificationFeed`）の上に乗せる。**
+
+ベルとメールで「何が通知対象か」の判定を1箇所に集約する。
+別々に条件を書くと、片方だけ通知される・両方来ないといった不整合が必ず起きる。
+
+日程確定・キャンセルはベルのフィードに `type` を追加して拡張する。
+`NotificationItem`（§1-1）は最初から `type` 拡張可能な形にしてあるので、
+`'schedule_fixed'` / `'cancelled'` などを足せばフィードとメールの両方に載る。
+
+これは §0 の非ゴールに挙げた「`status_logs` / `schedule_history` のフィード統合」
+（Phase 5）と同じ作業になるため、まとめて実施するのが効率的。
+
+### 懸念：Resend の送信数無料枠
+
+案件規模は月 350〜400 訪問。1訪問あたり数通なら当面は無料枠内に収まる想定だが、
+チャットの往復が多い案件では都度送信が積み上がる。
+
+**超えそうな場合の対策**: 「未読のときだけ送信」に切り替える。
+`read_by` に受信者が入っていない状態が一定時間続いた場合のみ送る、
+という判定にすれば送信数を大幅に減らせる。この判定に必要なデータは
+Phase 1 で入れた `read_by` にすべて揃っている。
+
+**着手前にやること**: Resend の現在の送信数と無料枠の上限を実測で確認する。
