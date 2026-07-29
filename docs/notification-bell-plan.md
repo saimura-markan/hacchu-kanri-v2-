@@ -857,12 +857,121 @@ GRANT EXECUTE ON FUNCTION public.mark_message_read(bigint) TO authenticated;
 | 関数 | SECURITY | anon 実行 | 評価 |
 |---|---|---|---|
 | `mark_messages_read(text,text)` | — | — | **DROP 済み**でリスト外。解消済み |
-| `get_mention_candidates(text)` | DEFINER | **可** | **要調査**（下記） |
-| `get_my_role()` | INVOKER | 可 | 実害なし。自分の JWT を見るだけ |
+| `get_mention_candidates(text)` | DEFINER | 可 | 調査 →「低」で確定 → **剥奪済み** |
+| `get_my_role()` | INVOKER | 可 | 実害なし。**剥奪済み** |
 
 `mark_messages_read` が消えていたことで、`read_by` への UUID 以外の
 混入経路（email 追記）は塞がっている。§2-5 の「Phase 5 で削除候補」は
 対応済みとして扱う。
+
+#### `get_mention_candidates` の調査と対処（`check_get_mention_candidates.sql`）
+
+**結論: 危険度「低」。情報漏洩は成立していなかった。多層防御として anon を剥奪した。**
+
+調査対象は3点。
+
+**① 何を返す関数か（個人情報の範囲）**
+
+`RETURNS TABLE (id uuid, name text, kind text, company_name text)`
+＝ **氏名と会社名**を返す。`profiles` には `phone` 列があるが参照していない。
+メール・電話・住所は返さない。ただし `kind='staff'` 側は案件に紐づかず
+**社内スタッフ全員**を返す設計のため、破られれば社内名簿が丸ごと出る。
+
+**② anon で本当に 0 行か**
+
+| 検証 | 方法 | 結果 |
+|---|---|---|
+| DB 内シミュレーション B-1 | `SET LOCAL ROLE anon` + claims あり | 0 行 |
+| DB 内シミュレーション B-2 | 同上 + claims なし | 0 行 |
+| **本番 HTTP 実測（STEP E）** | publishable key で `POST /rest/v1/rpc/...` | **`[]`（空配列）** |
+| 疎通確認 | 同経路で `get_my_role` | `null` が返り経路は生きていた |
+| **剥奪後の再実測** | 同経路で `get_my_role` | `null` → **`{"code":"42501"}`** |
+
+最後の行が対処の効果を示している。剥奪前は `null` を返していた
+`get_my_role` が、剥奪後は本番 HTTP 経路で
+`permission denied for function get_my_role` に変わった。
+＝ `REVOKE` が PostgREST の経路まで確かに効いている。
+
+`get_mention_candidates` 自体は剥奪後に直接叩いていないが、
+同一ファイル・同一形式の `REVOKE` を同時に適用し、
+`fix_rpc_anon_grants.sql` STEP 3 のアサーションと STEP 4 の
+`has_function_privilege()` で両関数とも anon = 権限なしを確認済み。
+
+DB 内シミュレーションだけでは PostgREST のロール切替・JWT 検証を
+通らないため、本番 HTTP 実測を決定的な証拠とした。
+疎通確認を先に行い、`[]` が「認可が効いた 0 行」であって
+「鍵や URL の誤りによる失敗」ではないことを担保している。
+
+**③ `authorized` CTE は anon を弾く設計か**
+
+**結果的に閉じているが、明示されていない。**
+
+本プロジェクトの公開鍵は `sb_publishable_...` 形式（`index.html:311`）で
+旧来の JWT 形式 anon キーではないが、いずれにせよ未ログインでは
+`app_metadata` と `sub` が存在しない。よって
+
+- `get_my_role()` → NULL（`auth.jwt() -> 'app_metadata'` が NULL）
+- `auth.uid()` → NULL
+
+となり、`CASE` のどの `WHEN` にも該当せず `ELSE false` に落ちる。
+`auth.uid() IS NULL` の明示チェックは存在しない。
+**今は閉じているが、`CASE` に条件が1つ足された時や `get_my_role()` の
+実装が変わった時に静かに開く構造**であり、SECURITY DEFINER で氏名を
+返す関数をその状態で anon に開けたままにする理由が無い。
+
+**対処（`fix_rpc_anon_grants.sql`）**
+
+`get_mention_candidates(text)` と `get_my_role()` から
+`REVOKE ALL ... FROM PUBLIC, anon` を実施。`authenticated` は
+`GRANT EXECUTE` で維持（メンション候補ピッカーが使う：
+`index.html:5220 / 6822 / 7431`）。`service_role` / `postgres` は
+サーバー側の信頼済みロールなので触らない。
+
+**`get_my_role()` の剥奪には副作用の可能性があった。**
+この関数は RLS ポリシーの内側から呼ばれており
+（`fix_rls_policies_comprehensive.sql` の `orders` / `schedules` /
+`messages` / `sites` ほか）、ポリシー式は呼び出し元の権限で評価される。
+anon から剥奪すると該当テーブルへの anon クエリが「0 行」ではなく
+`permission denied for function get_my_role` で落ちる。
+
+未ログインで発行されるテーブルクエリは **`index.html:1071`
+（新規登録の企業ID照合）の1箇所だけ**で、対象の `companies` の
+SELECT ポリシー（`add_company_is_active.sql:14-21`）は
+`auth.jwt()` を直接参照し `get_my_role()` を経由しない。
+これを見込みで済ませず、`fix_rpc_anon_grants.sql` STEP 1 に
+**トランザクション内で REVOKE → anon で登録フローのクエリ実行 → ROLLBACK**
+のドライランを入れて実証してから本番適用した。
+
+剥奪後の性質変化として、将来 anon から `orders` 等を引く実装が入ると
+「0 行」ではなく「エラー」になる。fail-closed であり望ましい方向だが
+認識しておくこと。
+
+#### 【未対応・別途調査】anon 実行可能な public 関数の棚卸し
+
+`fix_rpc_anon_grants.sql` STEP 0 ② の全件列挙で、今回対処した2本の他にも
+anon から実行可能な関数が残っていることが判明した。
+今回のスコープ外のため**対処していない**。次回の作業項目とする。
+
+大半はトリガー関数や他システム由来で、引数から値を生成するだけ／
+DB のデータを読まないため無害と判断した。
+一部に呼び出し元の特定が必要なものがある。
+
+> ⚠️ **本リポジトリは public。個別の関数名と評価はここに書かない。**
+> 対象の一覧と所見は Notion「Claude Memory」に記録している。
+> 未監査の関数名を公開リポジトリに列挙すると、`anon` からは
+> 本来列挙できない情報を与えることになるため。
+> 今日 `get_mention_candidates` を「修正してから公開する」順序に
+> したのと同じ理由。
+
+> ⚠️ この Supabase プロジェクトは E-Li / MK Daily / Seed Note の
+> 3システムで `auth.users` / `profiles` を共有している。
+> 残っている関数には E-Li のものではないものが含まれるため、
+> 権限を変更すると**他システムを壊しうる**。
+> どのシステムのどの画面が呼んでいるかを特定してから触ること。
+> E-Li 側の判断だけで剥奪しない。
+
+判断基準は「DB のデータを読む関数かどうか」。
+`gen_random_uuid` のような純粋関数は対象外。
 
 #### 次回の再開地点
 
@@ -870,31 +979,26 @@ GRANT EXECUTE ON FUNCTION public.mark_message_read(bigint) TO authenticated;
 > ロゴ・キャラ画像の最適化は低リスクかつ効果が大きく、先に片付ける。
 > 7/28 時点の判断のまま据え置き。
 
-**最優先（ベル作業より前・§13 より前）: `get_mention_candidates` の調査**
+**Phase 1 は完了。次回は Phase 2（管理者ベル + パネル・表示のみ）から。**
 
-`SECURITY DEFINER` + 個人情報を返す + 推測可能な引数、の3つが揃っている。
-
-- `RETURNS TABLE (id uuid, name text, kind text, company_name text)`
-  ＝ **氏名と会社名を返す**（`add_mention_candidates_rpc.sql:57-62`）
-- 引数は `p_order_id text` の1つだけ。`orders.id` は `B-2024-101` 形式
-  （CLAUDE.md データ構造）で連番を含むため第三者による推測は容易
-- anon キーは `index.html` に埋め込まれた公開情報
-
-関数内の `authorized` CTE（同ファイル:77-93）が `get_my_role()` と
-`auth.uid()` を参照しており、anon ではどちらも NULL になるため
-**0 行で返る「はず」**。ただしこの条件下で「はず」で済ませない。
-
-対処の順序:
-
-1. **実測**: anon キーで `rpc('get_mention_candidates', { p_order_id: '実在案件番号' })`
-   を叩き、返却行数と中身を確認する
-2. **権限剥奪**: `add_mention_candidates_rpc.sql:131` を
-   `REVOKE ALL ... FROM PUBLIC, anon;` に修正して再実行
-3. 1 で行が返っていた場合、関数内の認可を
-   「`auth.uid() IS NULL` なら即 0 行」で明示的に閉じる
-
-**その後: Phase 2（管理者ベル + パネル・表示のみ）から。**
 `index.html` への変更は Phase 0 以来の再開になる。§6 Phase 2 を参照。
+Phase 2 の要点:
+
+- サイドバーに 🔔 追加、`adjCount+soudCount` バッジを 📋 直下へ移動 + `title` 付与
+- `fetchNotifications()` をフィード生成に統合（クエリ本数を増やさない、§7-1）
+- 通知パネル（ドロワー）を実装、フィルタチップ・空状態込み
+- 一覧カードのバッジをフィード由来に差し替え
+- **この時点ではクリックしても遷移しない**（表示確認のみ）
+
+Phase 0 で `buildNotificationFeed()`（`index.html:6712-6757`）を
+定義済みだが UI 未接続なので、そこから繋ぐ。
+
+**積み残し（ベル本体とは独立）**:
+
+1. 上記「anon 実行可能な public 関数の棚卸し」の調査
+   （対象一覧は Notion「Claude Memory」を参照。呼び出し元の特定が先）
+2. §13-1 ロゴ・キャラ画像の最適化（配信 12.9 MB → 数十 KB）
+3. §13-2 Supabase Usage の確認
 
 #### Phase 1 で追加・実行した SQL ファイル（コミット対象）
 
@@ -905,8 +1009,18 @@ GRANT EXECUTE ON FUNCTION public.mark_message_read(bigint) TO authenticated;
 | `add_profiles_eli_notification_excluded.sql` | 通知除外列の追加 | 実行済み |
 | `add_order_change_logs_read_by.sql` | `read_by` 追加・backfill・確認 | **STEP 0/1/1.5/2/4 実行済み**（STEP 3 インデックスは意図的に未実行） |
 | `add_notification_rpcs.sql` | RPC 2本・権限・確認 | **全 STEP 実行済み** |
+| `check_get_mention_candidates.sql` | 既存 RPC の露出調査（読み取り専用） | 実行済み（STEP A〜E） |
+| `fix_rpc_anon_grants.sql` | 既存 RPC 2本の anon 剥奪 | **全 STEP 実行済み** |
 
 **Phase 1 は DB のみの変更。`index.html` は Phase 0 のまま無変更で動く。**
+
+#### この日の作法上の学び（CLAUDE.md へ Phase 5 で反映）
+
+`public` スキーマに RPC を追加するときは必ず
+`REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon;` を書く。
+`FROM public` だけでは Supabase の `ALTER DEFAULT PRIVILEGES` による
+anon への明示付与が残る。加えて `has_function_privilege()` による
+アサーションを併記し、目視確認に頼らない。
 
 ---
 
