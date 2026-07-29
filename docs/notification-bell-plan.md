@@ -2,7 +2,10 @@
 
 **対象ファイル**: `index.html`（単一HTML / Babel standalone JSX、10,760行 / 558KB）
 **作成日**: 2026-07-28
-**ステータス**: 計画確定。コード変更・SQL実行は未着手。
+**ステータス**: Phase 0（下地・2026-07-28）/ Phase 1（DB migration・2026-07-29）完了。
+次は §11「次回の再開地点」を参照（`get_mention_candidates` 調査 → §13 画像最適化 → Phase 2）。
+§2-4 / §2-5 のコード片は**当初案**であり、実データを見て変更した点がある。
+実装の正はコミット済みの SQL ファイルと §11 の記録。
 **要決定事項**: §8 の5点すべてユーザー承認済み（本文に反映済み）
 
 ---
@@ -721,33 +724,189 @@ order_change_logs : id, field_name, old_value, new_value
    伴うため、将来「人間だが通知不要」なアカウントに流用すると副作用が出る。
    両者は併存させる。
 
+#### 次回の再開地点（→ 2026-07-29 に実施済み）
+
+`add_order_change_logs_read_by.sql` の STEP 2（backfill）から再開する予定だった。
+実施結果は次節「2026-07-29」を参照。
+
+---
+
+### 2026-07-29
+
+#### Phase 1 — 完了
+
+**① backfill（`add_order_change_logs_read_by.sql` STEP 2）**
+
+273-288行のコメントを外して UPDATE のみを実行。`UPDATE 13`。
+
+STEP 4 の確認 SELECT 結果:
+
+| 確認項目 | 結果 |
+|---|---|
+| `read_by` が空の行 | **0**（13件すべてに投入） |
+| `read_by` 要素数の最小〜最大 | **8 〜 8**（管理者7名 + `changed_by` 1名） |
+| `confirmed_by` 不変チェック | 設定済み13 / NULL 0（backfill 前と同一） |
+| メール文字列の混入 | 0 |
+| UUID 形式でない要素 | 0 |
+| `messages` 行数 | 269 → GIN インデックスは不要と再確認 |
+
+要素数が一律8だったのは、13件すべてで `confirmed_by` が
+通知対象7名のいずれかと重複し、`changed_by`（顧客）1名だけが
+上乗せされたため。7/28 の予想「8〜10」の下限に収まっており想定内。
+
+**② RPC 2本（`add_notification_rpcs.sql` 新規）**
+
+`mark_message_read(bigint)` / `mark_change_log_read(uuid)` を作成。
+どちらも `RETURNS void` / `LANGUAGE plpgsql` / `SET search_path = public, auth, pg_temp`。
+
+#### §2-5 からの設計変更（3点・ユーザー承認済み）
+
+**1. `mark_message_read` は SECURITY INVOKER にした（DEFINER ではない）**
+
+§2-5 では2本とも DEFINER で書いていたが、実際の RLS を確認して変更した。
+
+- `messages` の UPDATE ポリシー `messages_update`
+  （`fix_rls_policies_comprehensive.sql:158-175`）は
+  「自分の注文 OR `get_my_role()` が admin/manager/staff」を許可している
+- 顧客側 `fetchOrders` は `.eq('user_id', user.id)`（`index.html:5732`）で
+  自分の注文しか取らない
+- → **通知に出る＝クリックし得る全員が、既に UPDATE 権を持っている**
+
+権限を広げる必要が無いのに DEFINER にすると RLS が丸ごとバイパスされ、
+認可を関数内に書き直す責任が発生する。書き直した認可がポリシーとズレた
+瞬間に穴になる。INVOKER のままなら認可は RLS ポリシー1箇所に残り、
+ポリシーを直せば RPC も自動的に追随する。
+
+**RPC にする本質的な理由は権限ではなく原子性。**
+`array_append` を1文の UPDATE にすれば、READ COMMITTED の行ロックにより
+lost update は原理的に発生しない（後続 UPDATE は先行トランザクションの
+コミットを待って WHERE を再評価し、更新後の `read_by` を読み直す）。
+これは DEFINER / INVOKER と無関係に得られる。
+
+**2. `mark_change_log_read` は DEFINER 必須のまま**
+
+`order_change_logs` の UPDATE ポリシーは admin/manager 限定
+（`add_order_change_logs.sql:35-38`）で staff が既読を打てない。
+ポリシーを staff に広げると `confirmed_by` / `confirmed_at` まで
+書き換え可能になり、§2-2 で分離した意味が崩れる。
+→ ポリシーは広げず、`read_by` だけを触る DEFINER の RPC 1本を穴として開ける。
+認可は関数内に明示（述語は `get_mention_candidates` の
+`authorized` CTE と同形）。
+
+**3. 自分除外は `messages` 側のみ**
+
+`mark_message_read` には `sender_id IS DISTINCT FROM auth.uid()` を入れた。
+`read_by` は「既読 N」表示の根拠でもあり（`index.html:6959-6960`）、
+自分を入れると送信者が自分のメッセージの既読数に数えられる。
+既存 `markChatRead` も `sender_id.neq.${uid}`（`index.html:10523`）で
+同じ除外をしている。
+
+`mark_change_log_read` には入れない。こちらは「既読 N」表示が無く
+`read_by` は純粋に未読判定専用で、かつ backfill で `changed_by` を
+投入済み（自分の変更は自分にとって既読）のため、
+自己除外を入れると backfill と規約が食い違う。
+
+#### 実行時に判明した問題：`REVOKE ... FROM public` では anon を剥がせない
+
+RPC 作成後の確認で、**両関数とも `anon` に EXECUTE が残っていた。**
+
+原因は Supabase プロジェクトの初期設定に含まれるデフォルト権限:
+
+```sql
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT ALL ON FUNCTIONS TO postgres, anon, authenticated, service_role;
+```
+
+これにより `public` スキーマに関数を作った瞬間、`anon` に**明示的な**
+EXECUTE 権が付与される。一方 `REVOKE ALL ON FUNCTION ... FROM public` が
+剥がすのは PUBLIC 疑似ロール経由の**暗黙の**権限だけで、
+`anon` への直接の GRANT には届かない。
+REVOKE が効かなかったのではなく、別のものを剥がしていた。
+
+**対処**（`add_notification_rpcs.sql` STEP 3）:
+
+```sql
+REVOKE ALL ON FUNCTION public.mark_message_read(bigint) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mark_message_read(bigint) TO authenticated;
+```
+
+`PUBLIC` も残すのは、将来この既定設定が変わって暗黙付与に戻った場合に
+効かせるため。どちらの経路で付いているかに依存しない書き方にした。
+`service_role` / `postgres` は意図的に残す（§12 のメール通知バッチから
+呼ぶ可能性があるため）。
+
+**加えて STEP 3.5 に `has_function_privilege()` によるアサーションを新設。**
+「成功したように見えて権限が残る」が実際に起きたため、目視確認だけに
+頼らず機械的に止める。`has_function_privilege()` は PUBLIC 経由・
+ロール継承経由も含めた実効権限を返すため、経路によらず判定できる。
+
+再実行後、`anon` = 両関数とも権限なし / `authenticated`・`service_role` = あり
+を確認。
+
+> **プロジェクト全体の作法として**: `public` スキーマに RPC を追加するときは
+> 必ず `REVOKE ALL ON FUNCTION ... FROM PUBLIC, anon;` を書く。
+> CLAUDE.md への追記は Phase 5。
+> 根治として `ALTER DEFAULT PRIVILEGES` 自体を変える手もあるが、
+> Supabase の標準設定を書き換えると PostgREST のスキーマキャッシュ等に
+> 影響が及ぶ可能性があるため、関数ごとの明示 REVOKE を方針とする。
+
+#### 既存 RPC の権限診断（STEP 4 ④）
+
+同じ原因が過去の RPC にも効いているはずなので診断した。
+
+| 関数 | SECURITY | anon 実行 | 評価 |
+|---|---|---|---|
+| `mark_messages_read(text,text)` | — | — | **DROP 済み**でリスト外。解消済み |
+| `get_mention_candidates(text)` | DEFINER | **可** | **要調査**（下記） |
+| `get_my_role()` | INVOKER | 可 | 実害なし。自分の JWT を見るだけ |
+
+`mark_messages_read` が消えていたことで、`read_by` への UUID 以外の
+混入経路（email 追記）は塞がっている。§2-5 の「Phase 5 で削除候補」は
+対応済みとして扱う。
+
 #### 次回の再開地点
 
 > ⚠️ **ベル作業の前に §13「次回優先タスク」を実施する。**
 > ロゴ・キャラ画像の最適化は低リスクかつ効果が大きく、先に片付ける。
+> 7/28 時点の判断のまま据え置き。
 
-**（ベル再開時）`add_order_change_logs_read_by.sql` の STEP 2（backfill）から。**
+**最優先（ベル作業より前・§13 より前）: `get_mention_candidates` の調査**
 
-- 271-286行 → **273-288行**（コメント2行追加により2行ずれている）のコメントを外し、
-  **その UPDATE だけを選択して実行**する
-- 7名の UUID を13件のログの `read_by` に投入する
-- **第1回（STEP 0 / STEP 1 / STEP 1.5）は実行済み。再実行不要**
-- 実行後 `UPDATE 13` を確認 → STEP 4（352行目以降）の確認 SELECT へ
-- STEP 4 ②の「8名以上入った行」は除外方針決定前の基準でズレている。
-  **「read_by が空の行 = 0」と ⑤のサンプル13行の要素数（7〜9）で判断する**
+`SECURITY DEFINER` + 個人情報を返す + 推測可能な引数、の3つが揃っている。
 
-**Phase 1 の残り**: RPC 2本（`mark_message_read` / `mark_change_log_read`、§2-5）は未着手。
+- `RETURNS TABLE (id uuid, name text, kind text, company_name text)`
+  ＝ **氏名と会社名を返す**（`add_mention_candidates_rpc.sql:57-62`）
+- 引数は `p_order_id text` の1つだけ。`orders.id` は `B-2024-101` 形式
+  （CLAUDE.md データ構造）で連番を含むため第三者による推測は容易
+- anon キーは `index.html` に埋め込まれた公開情報
 
-#### 未コミットのまま残す SQL ファイル 4本
+関数内の `authorized` CTE（同ファイル:77-93）が `get_my_role()` と
+`auth.uid()` を参照しており、anon ではどちらも NULL になるため
+**0 行で返る「はず」**。ただしこの条件下で「はず」で済ませない。
+
+対処の順序:
+
+1. **実測**: anon キーで `rpc('get_mention_candidates', { p_order_id: '実在案件番号' })`
+   を叩き、返却行数と中身を確認する
+2. **権限剥奪**: `add_mention_candidates_rpc.sql:131` を
+   `REVOKE ALL ... FROM PUBLIC, anon;` に修正して再実行
+3. 1 で行が返っていた場合、関数内の認可を
+   「`auth.uid() IS NULL` なら即 0 行」で明示的に閉じる
+
+**その後: Phase 2（管理者ベル + パネル・表示のみ）から。**
+`index.html` への変更は Phase 0 以来の再開になる。§6 Phase 2 を参照。
+
+#### Phase 1 で追加・実行した SQL ファイル（コミット対象）
 
 | ファイル | 内容 | 実行状況 |
 |---|---|---|
 | `check_role_storage.sql` | ロール格納場所の調査（読み取り専用） | 実行済み |
 | `check_is_system.sql` | `is_system` と `info@` の調査（読み取り専用） | 実行済み |
 | `add_profiles_eli_notification_excluded.sql` | 通知除外列の追加 | 実行済み |
-| `add_order_change_logs_read_by.sql` | `read_by` 追加・backfill・確認 | STEP 0/1/1.5 のみ実行済み |
+| `add_order_change_logs_read_by.sql` | `read_by` 追加・backfill・確認 | **STEP 0/1/1.5/2/4 実行済み**（STEP 3 インデックスは意図的に未実行） |
+| `add_notification_rpcs.sql` | RPC 2本・権限・確認 | **全 STEP 実行済み** |
 
-Phase 1 が完了した時点でまとめてコミットする。
+**Phase 1 は DB のみの変更。`index.html` は Phase 0 のまま無変更で動く。**
 
 ---
 
