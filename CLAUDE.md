@@ -23,8 +23,12 @@ eli-guide.html        お客様ご利用ガイド
 privacy-policy.html   プライバシーポリシー（/privacy-policy）
 security-guide.html   セキュリティ・利用ガイド（/security）
 vercel.json           Vercelルーティング設定
-eli_img.png           イーライくんマスコット画像
-logo_img.png          E-Liロゴ画像
+eli_img.webp          イーライくんマスコット画像（400×600 / 44KB）
+logo_img.webp         E-Liロゴ画像（480×320 / 13KB）
+ariri_yojo.webp       発注フォーム 作業区分アイコン（133×200 / 各12〜14KB）
+ariri_barashi.webp
+ariri_hakobii.webp
+ariri_pikaai.webp
 v3-login.tsx          元ファイル（参照用、アプリ未使用）
 v4-admin-v2.tsx
 v4-history-v3.tsx
@@ -224,10 +228,29 @@ AdminApp:    AD（例: ADStatusBadge, AD_ORDERS）
 
 ### 画像パス
 ```js
-const ELI_IMG  = "./eli_img.png";
-const LOGO_IMG = "./logo_img.png";
+const ELI_IMG    = "./eli_img.webp";
+const LOGO_IMG   = "./logo_img.webp";
+const ARIRI_YOJO    = "./ariri_yojo.webp";
+const ARIRI_KAITAI  = "./ariri_barashi.webp";
+const ARIRI_SANPAI  = "./ariri_hakobii.webp";
+const ARIRI_SOUJI   = "./ariri_pikaai.webp";
 ```
 base64埋め込みは削除済み（ファイルサイズ削減のため）。
+
+**画像を差し替えるときの注意（2026-07-30）**
+- **WebP 単体。PNG フォールバックは持たない**（iOS14+/Android で対応済み）。
+  `<picture>` を導入すると48箇所の `<img>` を触ることになり、
+  定数6行の差し替えで済む利点が消えるため採用しない。
+- **参照は `index.html` だけではない。** `eli-guide.html`（4箇所）・
+  `privacy-policy.html`（2箇所）・`security-guide.html`（2箇所）も
+  同じファイルを直接参照している。差し替え時は4ファイル全部を直すこと。
+- サイズは「最大表示サイズ × 2（Retina）」。最大表示は
+  `eli_img`=300px（`.login-libot` / eli-guide `.hero-libot`）、
+  `logo_img`=160px、`ariri_*`=100px（`index.html:2300` の1箇所のみ）。
+- **`ariri_*` は `mixBlendMode:"multiply"` で合成される。** lossy 圧縮の
+  エッジのにじみが色付き輪郭として出るため、他より品質を上げる（q=90）。
+- 変換手段は `sharp`（npm）。このマシンは `cwebp`・Homebrew が未インストールで、
+  `sips` は WebP を書けない。
 
 ### role の受け渡し
 `App` → `HistoryApp(role)` → `DetailScreen(role)` / `ChatScreen(role)` / `HiOrderCard(role)`
@@ -253,8 +276,8 @@ handleStatusChange(id, newStatus)
 
 ## 今後の追加候補（未実装）
 
-- eli_img.png（LiBotキャラ）差し替え — 新しいキャラ画像ファイルを置いて差し替え
-- ロゴ・キャラ画像の最適化 — eli_img.png（2.3MB）/ logo_img.png（2.0MB）は全ページで毎回読み込むため Egress 削減効果が大きい。リポジトリ内の静的画像なので Supabase transform ではなくファイル自体を圧縮 or WebP 化する
+- eli_img.webp（LiBotキャラ）差し替え — 新しいキャラ画像ファイルを置いて差し替え（上記「画像を差し替えるときの注意」を参照）
+- ~~ロゴ・キャラ画像の最適化~~ → **2026-07-30 完了**（配信 12.79MB → 108.6KB / 99.17%減）。詳細は `docs/notification-bell-plan.md` §11「2026-07-30」
 - ログイン画面デザイン改善 — UI刷新
 - クレーム報告機能（ユーザーから管理者へのクレーム送信）
 - 見積依頼機能（発注前の見積もり依頼フロー）
