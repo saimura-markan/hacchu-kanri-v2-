@@ -6754,6 +6754,172 @@ function buildNotificationFeed({ msgRows = [], logRows = [], orders = [], uid, m
   return items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
+// 通知の相対時刻。24時間以内は「N分前 / N時間前」、それ以降は日付を出す。
+function notifAgo(iso) {
+  if (!iso) return '';
+  const d    = new Date(iso);
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  const hhmm = String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  if (mins < 1)    return 'たった今';
+  if (mins < 60)   return mins + '分前';
+  if (mins < 1440) return Math.floor(mins/60) + '時間前';
+  if (mins < 2880) return '昨日 ' + hhmm;
+  return (d.getMonth()+1) + '/' + d.getDate() + ' ' + hhmm;
+}
+
+// 通知の type ごとの見た目。色は既存の一覧カードのバッジに合わせる（計画書 §3-3）。
+const AD_NOTIF_META = {
+  mention: { label:'@メンション', color:'#e63946', icon:'🔴' },
+  chat:    { label:'チャット',    color:'#f07800', icon:'💬' },
+  change:  { label:'変更',        color:'#1a5fbf', icon:'🔔' },
+};
+
+// ── 通知パネル（管理者・サイドバー直右のドロワー）─────────
+//   未読のみを表示し、項目をクリックすると該当案件を開いたうえで既読になり、その場で消える。
+//   欄内スクロール（該当メッセージ・該当ログまでの移動）は未実装。
+function AdNotifPanel({ feed, onClose, onOpen, onMarkAllRead }) {
+  useTimer();                                   // 相対時刻の更新に相乗り（60秒ごと）
+  const [chip,    setChip]    = useState('all');
+  const [details, setDetails] = useState({});   // key -> { excerpt, actorName }
+
+  // 表示用の本文はパネルを開いた時だけ取りに行く（計画書 §7-2 二段構え）。
+  // 3秒ポーリングの側では text を一切ネットワークに乗せない。
+  useEffect(() => {
+    const msgIds = feed.filter(n => n.messageId && !details[n.key]).map(n => n.messageId);
+    const logIds = feed.filter(n => n.logId     && !details[n.key]).map(n => n.logId);
+    if (!msgIds.length && !logIds.length) return;
+    let alive = true;
+    (async () => {
+      const next = {};
+      if (msgIds.length) {
+        const { data } = await sb.from('messages')
+          .select('id, text, sender_name').in('id', msgIds);
+        (data || []).forEach(m => {
+          const t = m.text || '';
+          next['msg:'+m.id] = {
+            excerpt:   t.length > 60 ? t.slice(0,60) + '…' : t,
+            actorName: m.sender_name || '',
+          };
+        });
+      }
+      if (logIds.length) {
+        const { data } = await sb.from('order_change_logs')
+          .select('id, field_name, old_value, new_value').in('id', logIds);
+        (data || []).forEach(l => {
+          next['chg:'+l.id] = {
+            excerpt: l.old_value
+              ? l.field_name + '：' + l.old_value + ' → ' + l.new_value
+              : l.field_name + '：追加 ' + l.new_value,
+            actorName: '',
+          };
+        });
+      }
+      if (alive) setDetails(prev => ({ ...prev, ...next }));
+    })();
+    return () => { alive = false; };
+  }, [feed]);
+
+  const CHIPS = [
+    { key:'all',     label:'すべて' },
+    { key:'mention', label:'@メンション' },
+    { key:'chat',    label:'💬 チャット' },
+    { key:'change',  label:'🔔 変更' },
+  ];
+  const shown = chip === 'all' ? feed : feed.filter(n => n.type === chip);
+
+  return (
+    <React.Fragment>
+      {/* 背面クリックで閉じる（CompanyPanel / StaffPanel と z-index 帯を揃える） */}
+      <div onClick={onClose}
+        style={{ position:"fixed", inset:0, background:"transparent", zIndex:149 }} />
+      <div style={{ position:"fixed", left:60, top:0, width:360, height:"100vh",
+        background:C.white, borderRight:"2px solid "+C.grayL,
+        boxShadow:"4px 0 20px rgba(0,0,0,0.12)", zIndex:150,
+        display:"flex", flexDirection:"column" }}>
+
+        {/* ヘッダー */}
+        <div style={{ padding:"14px 16px", borderBottom:"1px solid "+C.grayL,
+          display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+          <div style={{ fontSize:14, fontWeight:800, color:C.navy, flex:1 }}>
+            🔔 通知　<span style={{ color:C.gray, fontWeight:700 }}>(未読 {feed.length})</span>
+          </div>
+          {feed.length > 0 && (
+            <button onClick={onMarkAllRead}
+              style={{ fontSize:11, fontWeight:700, color:C.blue, background:C.blueL,
+                border:"1px solid "+C.grayL, borderRadius:6, padding:"4px 8px",
+                cursor:"pointer", fontFamily:"inherit" }}>
+              すべて既読
+            </button>
+          )}
+          <button onClick={onClose}
+            style={{ fontSize:16, color:C.gray, background:"none", border:"none",
+              cursor:"pointer", padding:"0 2px", lineHeight:1 }}>
+            ×
+          </button>
+        </div>
+
+        {/* フィルタチップ */}
+        <div style={{ padding:"10px 12px", borderBottom:"1px solid "+C.grayL,
+          display:"flex", gap:6, flexWrap:"wrap", flexShrink:0 }}>
+          {CHIPS.map(c => (
+            <button key={c.key} onClick={()=>setChip(c.key)}
+              style={{ fontSize:11, fontWeight:700, fontFamily:"inherit", cursor:"pointer",
+                padding:"5px 10px", borderRadius:14,
+                border:"1px solid "+(chip===c.key ? C.blue : C.grayL),
+                background: chip===c.key ? C.blue : C.white,
+                color:      chip===c.key ? C.white : C.gray }}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+
+        {/* 一覧 */}
+        <div style={{ flex:1, overflowY:"auto" }}>
+          {shown.length === 0 && (
+            <div style={{ padding:"48px 20px", textAlign:"center", color:C.gray }}>
+              <div style={{ fontSize:32, marginBottom:10 }}>📭</div>
+              <div style={{ fontSize:13, fontWeight:700 }}>新しい通知はありません</div>
+            </div>
+          )}
+          {shown.map(n => {
+            const meta = AD_NOTIF_META[n.type] || AD_NOTIF_META.chat;
+            const det  = details[n.key] || {};
+            const who  = det.actorName || n.actorName || '';
+            return (
+              <div key={n.key} onClick={()=>onOpen(n)}
+                title="クリックで案件を開いて既読にします"
+                style={{ padding:"10px 14px 10px 10px", borderBottom:"1px solid "+C.grayL,
+                  background:"#fffaf5", cursor:"pointer",
+                  display:"flex", gap:8, alignItems:"flex-start" }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:meta.color,
+                  flexShrink:0, marginTop:5 }} />
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:meta.color, marginBottom:2 }}>
+                    {meta.icon} {meta.label}
+                  </div>
+                  <div style={{ fontSize:12, fontWeight:700, color:C.navy,
+                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {n.siteName || n.orderId}{who ? "　·　" + who : ""}
+                  </div>
+                  {det.excerpt && (
+                    <div style={{ fontSize:11, color:C.gray, lineHeight:1.6, marginTop:2,
+                      wordBreak:"break-all" }}>
+                      {n.type === 'change' ? det.excerpt : "「" + det.excerpt + "」"}
+                    </div>
+                  )}
+                  <div style={{ fontSize:10, color:C.gray, marginTop:3 }}>
+                    {notifAgo(n.createdAt)}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </React.Fragment>
+  );
+}
+
 // @メンションをハイライト表示
 function renderMentions(text) {
   if (!text || !text.includes('@')) return text;
@@ -7542,10 +7708,14 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return;
     const now = new Date().toISOString();
+    const targetIds = changeLogs.filter(l => !l.confirmed_by).map(l => l.id);
     await sb.from('order_change_logs')
       .update({ confirmed_by: user.id, confirmed_at: now })
       .eq('order_id', order.id)
       .is('confirmed_by', null);
+    // 件数バッジは read_by（個人の既読）で数えているため、確認と同時に既読も打つ。
+    // これが無いと「確認済みにする」を押してもバッジが消えない。
+    await Promise.all(targetIds.map(id => sb.rpc('mark_change_log_read', { p_log_id: id })));
     setChangeLogs(prev => prev.map(l => l.confirmed_by ? l : { ...l, confirmed_by: user.id, confirmed_at: now }));
     onChangeLogsConfirm && onChangeLogsConfirm(order.id);
   };
@@ -10045,8 +10215,15 @@ function AdminApp({ role, onLogout, onMyPage }) {
   const [changeLogCounts,  setChangeLogCounts]  = useState({});
   const [detailInitialTab, setDetailInitialTab] = useState(null);   // 通知クリック時のタブ指定（Phase 3 で使用）
   const [detailTabSeq,     setDetailTabSeq]     = useState(0);      // 同一タブ再指定時の再発火用
+  const [notifFeed,   setNotifFeed]   = useState([]);               // 統合通知フィード（自分未読のみ）
+  const [showNotif,   setShowNotif]   = useState(false);
   const pendingDeletes  = useRef(new Set());
   const adminNameRef    = useRef('');
+  // fetchNotifications は [] の useEffect から3秒ポーリングされるため、
+  // orders を state 経由で読むと初回レンダーの空配列に固定される（stale closure）。
+  // buildNotificationFeed は orders に無い order_id を捨てる仕様なので、
+  // ref を経由しないとフィードが常に空になる。
+  const ordersRef       = useRef([]);
 
   const fetchOrders = async () => {
     const { data, error } = await sb
@@ -10060,41 +10237,27 @@ function AdminApp({ role, onLogout, onMyPage }) {
     setDbError(null);
   };
 
+  // フィードを唯一の真実として、ベルと一覧カードのバッジを同時に更新する（計画書 §3-4）。
+  // 個別既読を打てば両方が必ず同時に1減る。二重管理の余地を残さない。
+  const applyFeed = (feed) => {
+    setNotifFeed(feed);
+    const byType = (t) => {
+      const c = {};
+      feed.filter(n => n.type === t).forEach(n => { c[n.orderId] = (c[n.orderId] || 0) + 1; });
+      return c;
+    };
+    setUnreadCounts(byType('chat'));
+    setMentionCounts(byType('mention'));
+    setChangeLogCounts(byType('change'));
+  };
+
   const fetchNotifications = async () => {
     const { data: { user } } = await sb.auth.getUser();
     const uid    = user?.id;
     const myName = adminNameRef.current;
 
-    // ①お客様→管理者の未読（自分がread_byに入っていないもの＝自分未読）
-    if (uid) {
-      const { data: unread } = await sb.from('messages')
-        .select('id, order_id, from_role, sender_id, created_at')
-        .eq('from_role', 'user')
-        .or(`sender_id.neq.${uid},sender_id.is.null`)
-        .not('read_by', 'cs', `{${uid}}`);
-      const counts = {};
-      (unread || []).forEach(m => { counts[m.order_id] = (counts[m.order_id] || 0) + 1; });
-      setUnreadCounts(counts);
-    }
-
-    // ②スタッフ間メンション（自分宛のメンション＆自分未読・自分が送ったものは除外）
-    if (uid && myName) {
-      const { data: staffMsgs } = await sb.from('messages')
-        .select('id, order_id, from_role, sender_id, mentions, created_at')
-        .eq('from_role', 'staff')
-        .neq('sender_id', uid)
-        .not('read_by', 'cs', `{${uid}}`);
-      const mentCounts = {};
-      (staffMsgs || []).forEach(m => {
-        // 新方式=UUID一致。旧データ（氏名文字列）は myName で救済
-        if (m.mentions?.includes(uid) || (myName && m.mentions?.includes(myName))) {
-          mentCounts[m.order_id] = (mentCounts[m.order_id] || 0) + 1;
-        }
-      });
-      setMentionCounts(mentCounts);
-    }
-
     // 管理者未確認の現場情報変更数（order_id別）
+    //   site_history 由来。フィードには載せず現行どおり（計画書 §3-4）。
     const { data: siteChanges } = await sb.from('site_history')
       .select('order_id')
       .eq('seen_by_admin', false);
@@ -10102,13 +10265,80 @@ function AdminApp({ role, onLogout, onMyPage }) {
     (siteChanges || []).forEach(h => { siteCounts[h.order_id] = (siteCounts[h.order_id] || 0) + 1; });
     setSiteChangeCounts(siteCounts);
 
-    // 管理者未確認の変更ログ件数（order_id別）
-    const { data: changeLogs } = await sb.from('order_change_logs')
+    if (!uid) return;
+
+    // ①自分未読のメッセージ。計画書 §7-1 により from_role で2本に分けず1本にまとめ、
+    //   mention / chat の判定は buildNotificationFeed（JS側）に寄せる。
+    //   本文（text）は取らない。パネルを開いた時だけ引く（§7-2 二段構え）。
+    //   from_role は 'user'（お客様）と 'staff'（社内）のみ。'eli' を外すのは必須で、
+    //   LiBot の自動メッセージは sender_id を持たないまま insert される
+    //   （index.html:4553, 10477 ほか）ため、除外しないと
+    //   sender_id.is.null 側の条件に全部引っかかって全管理者に通知が飛ぶ。
+    //   統合前の2クエリ（from_role='user' / from_role='staff'）の範囲と一致させている。
+    const { data: msgRows } = await sb.from('messages')
+      .select('id, order_id, from_role, sender_id, sender_name, mentions, created_at')
+      .in('from_role', ['user', 'staff'])
+      .or(`sender_id.neq.${uid},sender_id.is.null`)
+      .not('read_by', 'cs', `{${uid}}`)
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    // ②自分未読の変更ログ
+    //   confirmed_by（＝業務上の確認・案件単位で誰か1人が押す）ではなく
+    //   read_by（＝個人の既読）で数える。2026-07-29 の backfill で changed_by を
+    //   read_by に投入済みなので、自分が書いた変更は最初から既読として除外される。
+    const { data: logRows } = await sb.from('order_change_logs')
       .select('id, order_id, changed_by, changed_at')
-      .is('confirmed_by', null);
-    const logCounts = {};
-    (changeLogs || []).forEach(l => { logCounts[l.order_id] = (logCounts[l.order_id] || 0) + 1; });
-    setChangeLogCounts(logCounts);
+      .not('read_by', 'cs', `{${uid}}`)
+      .order('changed_at', { ascending: false })
+      .limit(100);
+
+    // ※ 上の .limit(100) により、未読が各テーブル100件を超えるとバッジも100で頭打ちになる。
+    //    計画書 §7-3 の「リミット必須」を優先した結果の既知の上限。
+    applyFeed(buildNotificationFeed({
+      msgRows: msgRows || [], logRows: logRows || [],
+      orders: ordersRef.current, uid, myName,
+    }));
+  };
+
+  // 個別既読（Phase 1 で作成した RPC を使う。array_append 1文なので lost update が起きない）
+  const markNotifRead = async (n) => {
+    applyFeed(notifFeed.filter(x => x.key !== n.key));   // A案: パネルは未読のみ表示 → 即座に消す
+    if (n.type === 'change') await sb.rpc('mark_change_log_read', { p_log_id: n.logId });
+    else                     await sb.rpc('mark_message_read',    { p_message_id: n.messageId });
+    fetchNotifications();
+  };
+
+  // 通知から案件を開く単一エントリポイント（計画書 §4-1）。通知経由の遷移はここだけを通す。
+  //   受注一覧のカードクリック（OrderList の onSelect＝setSelected, index.html:7508/10885）と
+  //   同じ経路に合流させる。カードは order オブジェクトを渡すので、
+  //   通知が持つ orderId から state 上の実体を引き当ててから渡す。
+  const openNotification = (n) => {
+    const order = ordersRef.current.find(o => o.id === n.orderId);
+    if (!order) {
+      // buildNotificationFeed が orders に無い案件を捨てているため通常は起きない。
+      // フィード構築後に案件が消えたレースのための保険（計画書 §4-1）。
+      window.alert('この案件は見つかりませんでした。削除された可能性があります。');
+      return;
+    }
+    setShowNotif(false);
+    setSelected(order);                                            // ①案件を開く
+    setDetailInitialTab(n.type === 'change' ? 'detail' : 'chat');  // ②タブを決める
+    setDetailTabSeq(v => v + 1);                                   //   同じタブの連続指定でも再発火させる
+    markNotifRead(n);                                              // ③既読。await しない（UI を止めない）
+  };
+
+  const markAllNotifRead = async () => {
+    if (!notifFeed.length) return;
+    if (!window.confirm(`未読 ${notifFeed.length} 件をすべて既読にします。よろしいですか？`)) return;
+    const targets = notifFeed;
+    applyFeed([]);
+    await Promise.all(targets.map(n =>
+      n.type === 'change'
+        ? sb.rpc('mark_change_log_read', { p_log_id: n.logId })
+        : sb.rpc('mark_message_read',    { p_message_id: n.messageId })
+    ));
+    fetchNotifications();
   };
 
   const handleSiteHistorySeen = (orderId) => {
@@ -10148,6 +10378,9 @@ function AdminApp({ role, onLogout, onMyPage }) {
     });
     return () => { if (channel) sb.removeChannel(channel); subscription.unsubscribe(); };
   }, []);
+
+  // ポーリング側の fetchNotifications から最新の orders を読むための同期
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
 
   // 通知（未読チャット・現場情報変更）を定期取得（3秒ポーリング）
   useEffect(() => {
@@ -10580,11 +10813,40 @@ function AdminApp({ role, onLogout, onMyPage }) {
           borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>
           📋
         </div>
+
+        {/* 要対応（調整中・相談中）の件数。未読ではないのでベルとは統合しない（計画書 §3-1）。
+            以前は 🗑️ の直下にあり、ゴミ箱の通知だと誤読される位置だった。 */}
+        {(adjCount+soudCount)>0 && (
+          <div title="要対応（調整中・相談中）"
+            style={{ background:C.red, color:C.white, borderRadius:"50%",
+            width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:12, fontWeight:900, animation:"urgentPulse 2s ease-in-out infinite", flexShrink:0 }}>
+            {adjCount+soudCount}
+          </div>
+        )}
+
+        {/* 通知ベル（admin/manager/staff 共通） */}
+        <div title="通知"
+          onClick={()=>{ setShowComp(false); setShowStaff(false); setShowNotif(v=>!v); }}
+          style={{ width:36, height:36, position:"relative",
+            background:showNotif?"rgba(41,82,200,0.4)":"rgba(255,255,255,0.08)",
+            borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
+            fontSize:18, cursor:"pointer", flexShrink:0 }}>
+          🔔
+          {notifFeed.length > 0 && (
+            <div style={{ position:"absolute", top:-4, right:-4, background:C.red, color:C.white,
+              borderRadius:9, minWidth:18, height:18, padding:"0 4px", display:"flex",
+              alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:900 }}>
+              {notifFeed.length > 99 ? "99+" : notifFeed.length}
+            </div>
+          )}
+        </div>
+
         {role === "admin" && (
           <div title="企業ID管理"
             style={{ width:36, height:36, background:"rgba(255,255,255,0.08)",
             borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:18, cursor:"pointer" }} onClick={()=>setShowComp(true)}>
+            fontSize:18, cursor:"pointer" }} onClick={()=>{ setShowNotif(false); setShowComp(true); }}>
             🏢
           </div>
         )}
@@ -10592,7 +10854,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
           <div title="スタッフ管理"
             style={{ width:36, height:36, background:showStaff?"rgba(41,82,200,0.4)":"rgba(255,255,255,0.08)",
             borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:18, cursor:"pointer" }} onClick={()=>setShowStaff(true)}>
+            fontSize:18, cursor:"pointer" }} onClick={()=>{ setShowNotif(false); setShowStaff(true); }}>
             👷
           </div>
         )}
@@ -10603,13 +10865,6 @@ function AdminApp({ role, onLogout, onMyPage }) {
               borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
               fontSize:18, cursor:"pointer" }} onClick={()=>setShowDeleted(d=>!d)}>
             🗑️
-          </div>
-        )}
-        {(adjCount+soudCount)>0 && (
-          <div style={{ background:C.red, color:C.white, borderRadius:"50%",
-            width:28, height:28, display:"flex", alignItems:"center", justifyContent:"center",
-            fontSize:12, fontWeight:900, animation:"urgentPulse 2s ease-in-out infinite" }}>
-            {adjCount+soudCount}
           </div>
         )}
         <div style={{ flex:1 }}/>
@@ -10668,6 +10923,12 @@ function AdminApp({ role, onLogout, onMyPage }) {
 
       {showComp  && <CompanyPanel onClose={()=>setShowComp(false)} />}
       {showStaff && <StaffPanel  onClose={()=>setShowStaff(false)} />}
+      {showNotif && (
+        <AdNotifPanel feed={notifFeed}
+          onClose={()=>setShowNotif(false)}
+          onOpen={openNotification}
+          onMarkAllRead={markAllNotifRead} />
+      )}
     </div>
   );
 }
