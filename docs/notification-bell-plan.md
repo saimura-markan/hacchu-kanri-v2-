@@ -793,6 +793,27 @@ lost update は原理的に発生しない（後続 UPDATE は先行トランザ
 認可は関数内に明示（述語は `get_mention_candidates` の
 `authorized` CTE と同形）。
 
+> ⚠️ **【2026-07-31 追記】この判断の前提「staff もベルを使う」は、
+> 現行コードでは成立していない。**
+> `staff` は `AdminApp` に到達できない。関門が3つあり、いずれも
+> `admin` / `manager` だけを通す:
+>
+> | # | 箇所 | staff の行き先 |
+> |---|---|---|
+> | 1 | `index.html:10957` `handleLogin` | 顧客画面（履歴） |
+> | 2 | `index.html:10943-10947` `onAuthStateChange` | 顧客画面（履歴） |
+> | 3 | `index.html:10345` `AdminApp` init | `onLogout()` で強制退出 |
+>
+> ロールの参照元は3箇所とも `app_metadata.role`。
+> CLAUDE.md は「`user_metadata.role` で管理」と書いており食い違っている
+> （既知の「ロール二重管理の食い違い」の一部）。
+>
+> **RPC 側は変更しない。** DEFINER は安全側の選択であり、
+> `read_by` しか触らないため `confirmed_by` の保護は保たれている。
+> ロールゲートを staff に開放したときに前提が復活する設計として、
+> そのまま残す。ここは「根拠が現状に合っていない」ことの記録であって、
+> 修正の指示ではない。
+
 **3. 自分除外は `messages` 側のみ**
 
 `mark_message_read` には `sender_id IS DISTINCT FROM auth.uid()` を入れた。
@@ -1127,6 +1148,115 @@ UI 未接続なので、そこから繋ぐ。
    「Claude Memory」。呼び出し元の特定が先。3システム共有のため
    E-Li 判断だけで剥奪しない）
 2. §13-2 Egress 再測定（上記のとおり数日後）
+
+---
+
+### 2026-07-31
+
+#### Phase 2 完了 ＋ Phase 3 の主要部完了・本番デプロイ済み
+
+コミット `dbd7ebc`（`index.html` 1ファイル・+305 / -44）を `main` に push。
+本番 https://hacchu-kanri-v2.vercel.app が同内容であることを byte 一致で確認済み
+（574,761 bytes / `diff` なし）。
+
+**Phase 2（管理者ベル＋パネル）**
+
+- サイドバー 📋 直下に 🔔 を追加。未読数バッジ付き（100件超は `99+`）
+- `adjCount+soudCount` バッジを 🗑️ 直下から 📋 直後へ移動し
+  `title="要対応（調整中・相談中）"` を付与（§3-1 のとおり）
+- 通知パネル `AdNotifPanel` を新設（ドロワー・`left:60 / width:360 / z-index:150`）。
+  ヘッダー（未読 N ／すべて既読／×）、フィルタチップ4種、空状態 📭、
+  相対時刻 `notifAgo()`、本文抜粋（60字）
+- 🔔 / 🏢 / 👷 は同時に開かない
+- `fetchNotifications()` を `buildNotificationFeed()` に接続。
+  一覧カードのバッジもフィードから導出し、ベルとカードを同期（§3-4）
+- ポーリングのクエリ **4本 → 3本**（§7-1 のとおり `messages` を1本に統合）
+- 本文はパネルを開いた時だけ `in('id', ids)` で取得（§7-2 二段構え）
+
+**Phase 3 のうち実装した範囲**
+
+- `openNotification(n)` を単一エントリポイントとして実装（§4-1）。
+  順序は **①案件を開く → ②タブを決める → ③既読**（ユーザー指定）。
+  既存の受注一覧カードの経路（`OrderList` の `onSelect` ＝ `setSelected`,
+  `index.html:7508` / `10885`）にそのまま合流させた。
+  カードは order オブジェクトを渡すので、通知の `orderId` から
+  `ordersRef.current` で実体を引き当ててから渡している
+- タブ指定は Phase 0 で用意済みの `detailInitialTab` / `detailTabSeq` を利用
+  （`DetailPanel` 側の受けは `index.html:7616-7620`）。
+  `change` → `detail` タブ、`chat` / `mention` → `chat` タブ
+- 個別既読は Phase 1 の RPC（`mark_message_read` / `mark_change_log_read`）。
+  「すべて既読」は確認ダイアログ付き
+
+**Phase 3 で未実装**：欄内スクロール（`scrollTarget`・§4-4 の `bottomRef`
+自動最下部スクロールの抑止・ハイライト演出）。ユーザー判断で次段階へ送った。
+
+#### 実装中に判明した事実・設計判断
+
+**1. `from_role='eli'` の除外は必須だった**
+
+§7-1 の「`from_role` の絞り込みを外して1本にまとめる」をそのまま実行すると、
+LiBot の自動メッセージが全管理者に通知として飛ぶ。
+LiBot は `sender_id` を持たないまま insert されるため
+（`index.html:4553` / `10477` ほか）、`sender_id.is.null` の条件に全件が
+引っかかる。`.in('from_role', ['user','staff'])` を入れて
+統合前の2クエリの範囲と一致させた。§7-1 の記述は
+「`from_role` の絞り込みを外す」ではなく
+「**`user` と `staff` の2値に絞ったうえで1本にする**」が正しい。
+
+**2. `order_change_logs` の未読判定を `confirmed_by` → `read_by` に切替**
+
+`index.html:10106` の一覧カード用クエリは `confirmed_by IS NULL` のままだった。
+`read_by` に切り替えると意味が「誰も確認していない」から「自分が読んでいない」に
+変わるが、これは §2-2 の意味分離のとおり。
+ただし切り替えるとバッジを消す唯一の経路だった
+「✅ 確認済みにする」で消えなくなるため、`handleConfirmChanges`
+（`index.html:7541`）でも `mark_change_log_read` を打つようにした。
+
+**3. `.limit(100)` による頭打ち（既知の上限）**
+
+§7-3 の「リミット必須」に従って両クエリに `.limit(100)` を付けた。
+バッジ件数はフィードから導出しているため、
+**未読が各テーブル100件を超えるとバッジも100で頭打ちになる。**
+現状の実データでは到達しないが、仕様として記録しておく。
+
+**4. `ordersRef` が必要だった（stale closure）**
+
+`fetchNotifications()` は `useEffect([])` から3秒ポーリングされるため、
+`orders` を state から読むと初回レンダーの空配列に固定される。
+`buildNotificationFeed()` は `orders` に無い `order_id` を捨てる仕様なので、
+ref を経由しないとフィードが常に空になる。
+`useEffect(() => { ordersRef.current = orders }, [orders])` で同期している。
+
+**5. チャットタブの案件一括既読との相互作用**
+
+チャットタブが開くと既存の effect（`index.html:7622-7625`）が
+`onMarkChatRead(order.id)` を呼び、その案件の未読メッセージが全件既読になる。
+したがって**チャット通知を1件クリックすると同案件の他のチャット通知もまとめて消える**。
+§5（Phase 5）の「一括は維持」という決定どおりなので、そのままとした。
+変更ログ側にはこの一括処理が無く、クリックした1件だけが消える。
+
+**6. staff は `AdminApp` に到達できない**
+
+§2-5「2. `mark_change_log_read` は DEFINER 必須のまま」に追記したとおり。
+このため「staff に消せないバッジが残る」という
+デプロイ前の懸念は発生しないことを確認したうえでデプロイした。
+
+#### 未実施・積み残し
+
+1. Phase 3 の残り（欄内スクロール・`bottomRef` 抑止・ハイライト演出）
+2. Phase 4（顧客側のベル）
+3. anon 実行可能な public 関数の棚卸し（残12関数。対象一覧は Notion
+   「Claude Memory」。呼び出し元の特定が先。3システム共有のため
+   E-Li 判断だけで剥奪しない）
+4. §13-2 Egress 再測定
+5. `add_user_companies.sql` は untracked のまま据え置き（今回もスコープ外）
+6. `add_notification_rpcs.sql` 冒頭17行目の「★ このファイルはまだ実行しないこと」は
+   実行前に書かれたまま残っている。実際は全 STEP 実行済み（§11 の表 `add_notification_rpcs.sql` 参照）
+
+#### 次回の再開地点
+
+**Phase 3 の残り（欄内スクロール）から。** §4-2 / §4-3 / §4-4 を参照。
+§4-4 の `bottomRef` 自動最下部スクロールの抑止を**最初に**実装すること。
 
 ---
 
