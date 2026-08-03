@@ -305,6 +305,56 @@ handleStatusChange(id, newStatus)
 
 ## 変更履歴
 
+### 2026-08-01 — 顧客メール通知（日程確定）本番稼働
+
+**`index.html` は無変更。**DB トリガー＋Edge Function のみで実現している。
+
+詳細な設計判断・教訓・積み残しは `docs/notification-bell-plan.md` §11「2026-08-01」に記録。
+
+#### 構成
+
+```
+orders.status → 日程確定
+  → trg_eli_notify_schedule_fixed（AFTER UPDATE OF status）
+  → net.http_post（pg_net・非同期）
+  → Edge Function send-order-notification（Verify JWT OFF）
+  → Resend
+```
+
+#### 追加したもの
+
+| 種別 | 名前 |
+|---|---|
+| ソース控え | `edge-function-send-order-notification.ts` |
+| マイグレーション | `add_email_notification_schedule_fixed.sql` |
+| テーブル | `public.eli_email_log`（送信ログ。宛先はドメインのみ保存） |
+| 関数 | `public.eli_notify_schedule_fixed()`（SECURITY DEFINER） |
+| トリガー | `trg_eli_notify_schedule_fixed` on `public.orders` |
+| Vault | `eli_notify_secret` / `eli_notify_url` |
+| Function Secrets | `ELI_NOTIFY_SECRET` / `APP_URL`（追加）|
+
+#### 注意事項
+
+- **シークレットは1つの値を Vault と Edge Function の両方に貼ること。**
+  別々に生成すると `401 unauthorized` になる
+- **トリガー関数は `EXCEPTION WHEN OTHERS` で例外を握り潰す。**
+  業務操作を止めないための設計だが、異常時に `net._http_response` が0行になり
+  「発火していない」ように見える。切り分けは `net.http_post` を直接叩く
+- メール本文に案件情報を載せない方針（確定日付も書かない）
+- 自動完了ループ（`index.html:10443`）は `完了` にするだけなのでこのトリガーは
+  発火しない。全管理者のブラウザで60秒ごとに走る箇所なので、
+  ここに送信を足していたら端末数だけ重複送信になっていた
+- **キャリアメール（`@docomo.ne.jp` 等）には未着。**
+  Resend のドメイン認証（SPF/DKIM）未完了が原因。Gmail には着信確認済み
+
+#### 既知の別件バグ（未対応）
+
+**`cases` の RLS がアプリと別の場所を見ている。**
+アプリは `user_companies.is_primary` → `profiles.company_id` の順で会社を解決するが
+（`index.html:3276-3290`）、`cases` の RLS は `profiles.company_id` しか見ない
+（`fix_cases_rls_insert.sql:11-17`）。`user_companies` にだけ紐付けがあるユーザーは
+発注時に RLS 違反になる。根本対応は別タスク。
+
 ### 2026-07-31 — 統合通知ベル（管理者側）Phase 2 完了・Phase 3 主要部完了
 
 **コミット**: `dbd7ebc`（本番デプロイ済み・byte 一致で確認）
