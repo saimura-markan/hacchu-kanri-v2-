@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <title>E-Li 工事受発注システム</title>
+  <meta name="theme-color" content="#2952c8">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="E-Li">
   <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"
     onerror="showLoadError('React')"></script>
   <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"
@@ -11076,6 +11084,22 @@ function AdminApp({ role, onLogout, onMyPage }) {
           'white-space:pre-wrap;border:1px solid #e63946;line-height:1.6;overflow:auto">' +
           msg + '</pre></div>';
       }
+    })();
+  </script>
+  <script>
+    /* PWA: Service Worker 登録（Phase 1）
+       - アプリ本体（Babel コンパイル）より後に独立して置く
+       - 失敗しても console に出るだけでアプリには一切影響しない */
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+      window.addEventListener('load', function () {
+        try {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .catch(function (err) { console.warn('[PWA] SW register failed:', err); });
+        } catch (err) {
+          console.warn('[PWA] SW register error:', err);
+        }
+      });
     })();
   </script>
 </body>
