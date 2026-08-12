@@ -1718,3 +1718,313 @@ Supabase ダッシュボード → Settings → Usage で現在値を確認し�
 
 §12 のメール通知で Resend の無料枠を確認する必要があるため、
 そちらとまとめて見ると効率がよい。
+
+---
+
+## 14. PWA + Web Push（2026-08-11 着手）
+
+### 14-0. 位置づけ ★これが最重要
+
+**この施策は「機能追加」ではなく「ポーリング撲滅の手段」である。**
+
+全システム共通の絶対原則「Supabase の負担は限りなく減らす」（正本 `~/.claude/CLAUDE.md`）に
+照らすと、E-Li の Supabase 負荷はほぼ全部が3秒ポーリングに由来する。
+Web Push はこれを置き換えるための手段であって、通知機能そのものが目的ではない。
+
+**Phase 1〜3 だけでは負荷は微増する。負荷が下がるのは Phase 4 に到達したときだけ。**
+この点は承認済み（2026-08-11）。
+
+### 14-1. 現状把握（2026-08-11 調査）
+
+#### PWA 資産はゼロ
+
+`manifest.json` / `*.webmanifest` / `sw.js` / `service-worker.js` はいずれも存在しない。
+`index.html` に `serviceWorker` / `pushManager` / `Notification` / VAPID の参照は **1件も無い**。
+`apple-mobile-web-app-*` / `theme-color` の meta も無い。
+192/512 のアイコン素材も無い（既存は webp のみ・`logo_img.webp` は 480×320）。
+
+#### 構成
+
+- `index.html` … **574,761 bytes / 11,081 行**の単一ファイル
+- `<script id="jsx-source" type="text/jsx-source">`（306行目）に JSX、11,063行目で `Babel.transform`
+- CDN 4本：React 18.2.0（固定）／ReactDOM 18.2.0（固定）／
+  **@babel/standalone 7.23.6（固定・約2.7MB）**／`@supabase/supabase-js@2`（**浮動**）
+
+#### ★ポーリングの実態（負荷の主因）
+
+`setInterval` は7箇所。うち**3秒間隔が4本**。
+
+| 場所 | 行 | 間隔 | 1回あたりの Supabase 往復 |
+|---|---|---|---|
+| 管理者 `fetchNotifications` | 10388 | 3秒 | `getUser` + `site_history` + `messages` + `order_change_logs` = 4 |
+| 管理者 選択案件チャット | 10416 | 3秒 | `messages.select('*')` = 1 |
+| 顧客 `pollUnread` | 5792 | 3秒 | `getUser` + `orders` + `messages` = 3 |
+| 顧客 ChatScreen | 5295 | 3秒 | `messages.select('*')` = 1 |
+| 自動完了・tick | 5810 / 7259 / 10473 | 60秒 | 0〜1 |
+
+概算（**未実測・Phase 0 で計測すること**）：管理者タブ1枚で 4,800〜6,000 リクエスト/時、
+顧客タブ1枚で 3,600〜4,800/時。管理者7名×8時間だけで約27万リクエスト/日。
+
+**別件の即効改善：`sb.auth.getUser()` は Auth サーバーへの往復が発生する
+（`getSession()` はローカル読み）。** ポーリング内で毎回呼んでいるので、
+`getSession()` に替えるだけで3秒ごとの往復が2本消える。Push とは独立に効く。
+
+#### 開発環境
+
+- **Deno 未インストール／Supabase CLI 未インストール／`supabase/` ディレクトリ無し**
+- → Edge Function は**ダッシュボード運用**（本番ソースのヘッダにも明記あり）
+- Node v20.20.2 / npm 10.8.2 は利用可
+- 検証で CLI や Deno を新規導入すると環境構築という別のリスクを負うため、
+  既存のダッシュボード方式に乗せる方針とした
+
+### 14-2. 承認済みプラン（2026-08-11）
+
+| Phase | 内容 | Supabase 負荷 |
+|---|---|---|
+| **Phase 0** | 計測（DevTools Network ＋ Usage）。推定値は使わない | 変更なし |
+| **Phase 1** | PWA化。manifest / アイコン / **キャッシュしない sw.js** / vercel.json に no-cache ヘッダ | **影響ゼロ** |
+| **Phase 2** | Push土台。VAPID を Vault へ／`eli_push_subscriptions`／購読UI | 書き込みのみ |
+| **Phase 3** | 送信。既存 `send-order-notification` に相乗り（新トリガーを作らない） | 微増 |
+| **Phase 4** | ★本命：3秒ポーリングを停止／緩和 | **桁で減少** |
+
+承認済みの4点：①Phase 4 で負荷が下がる位置づけでよい ②管理者7名から先行
+③Phase 1 の SW はキャッシュ完全無しで始める ④Deno での Push 技術検証を最優先
+
+### 14-3. SW の置き方（この構成特有の地雷）
+
+1. **`index.html` を絶対にキャッシュしない。** アプリ全体が index.html 1枚なので、
+   precache するとデプロイしても古いアプリが出続ける。単一ファイル構成では
+   SW の precache が最大の事故要因。
+2. SW は必ずリポジトリ直下 `/sw.js`（scope `/`）。
+   `eli-guide.html` / `privacy-policy.html` / `security-guide.html` も配下に入る。
+3. **`sw.js` 自体に `Cache-Control: no-cache` が要る。**
+   これが無いと SW の更新が届かず、Push ハンドラを直せなくなる。
+   `vercel.json` は現状 `rewrites` のみなので `headers` の追加が必要。
+4. キャッシュを導入するとしても Phase 1 の後、**バージョン固定された CDN 3本だけ**。
+   `supabase-js@2` は浮動なので対象外（固定すると古い版に貼り付く）。
+   Babel standalone 2.7MB の再取得が消えるので体感が大きく変わる。
+   これは Vercel/CDN の話で **Supabase 負荷はゼロ**。
+
+### 14-4. 購読テーブル設計（Phase 2 で作る・未実装）
+
+```sql
+create table public.eli_push_subscriptions (
+  endpoint    text        primary key,          -- ★PK を endpoint に
+  user_id     uuid        not null references auth.users(id) on delete cascade,
+  p256dh      text        not null,
+  auth        text        not null,
+  ua          text,
+  created_at  timestamptz not null default now(),
+  last_ok_at  timestamptz,
+  fail_count  smallint    not null default 0
+);
+create index on public.eli_push_subscriptions (user_id);
+```
+
+負荷を最小にする要点は**テーブル定義より運用側**にある。
+
+1. **PK を `endpoint` にする** → クライアントは SELECT 無しの `upsert` 1本で済む
+2. **★クライアントは「変わったときだけ」書く。** `localStorage` に前回の endpoint を持ち、
+   一致したら upsert を発行しない。素直に実装すると全ページロードで upsert が飛ぶ。
+   **単独で最大の削減点。**
+3. **このテーブルをクライアントから読まない。** client=書き込み専用／
+   Edge Function(service_role)=読み取り専用。RLS は `eli_email_sent` と同じで
+   `authenticated` に SELECT ポリシーを作らない
+4. **死んだ購読は Edge Function が消す**（404/410 でその場で delete）。
+   **pg_cron の掃除ジョブは作らない**（定期実行自体が恒常負荷）
+5. **通知の既読テーブルを新設しない。** 既存の `messages.read_by` /
+   `order_change_logs.read_by` で足りる
+6. **送信トリガーを新設しない。** 既存 `eli_notify_event()` ＋ Edge Function に相乗りし、
+   1回の `net.http_post` でメール＋Push を両方さばく。DB 側の追加負荷は実質ゼロ
+
+> 行数は端末込みでも数十行規模。endpoint のハッシュ化や凝った分割は**この規模では過剰**で、
+> 複雑さという別の重さを持ち込むだけなので採らない。
+
+### 14-5. ★技術検証の結果（2026-08-11・合格）
+
+**問い：Supabase Edge Functions の Deno で Web Push を送れるか。**
+
+`jose` だけでは半分しか解決しない。①VAPID 認証（ES256 JWT）と
+②ペイロード暗号化（RFC 8291 / ECDH P-256 + HKDF + AES-128-GCM）は別問題で、
+`jose` は①のみ。`npm:web-push` は①②を両方やる。
+**想定していた失敗要因は「Deno の Node 互換層で `crypto.createECDH` が未実装」**
+（`web-push` は `http_ece@1.2.0` 経由でこれを使う）。
+
+#### 検証方法
+
+使い捨て Edge Function `push-test` をダッシュボードに作成。
+**本番 `send-order-notification` には一切触れていない。**
+DB オブジェクトは1つも作らず、購読はコードに直書き（**Supabase の DB 負荷ゼロ**）。
+Secrets は `PUSHTEST_` 接頭辞で新設し、既存 Secrets は上書きしていない。
+
+**切り分けの仕掛け（重要）**
+- **`npm:web-push` を動的 import にした。** 静的 import が失敗すると関数自体が起動できず
+  原因不明の500になる。`await import()` を try/catch で包めば理由を持ち帰れる
+- **ペイロード無しの Push は暗号化を通らない**（`sendNotification(sub, null)` は
+  `http_ece` を経由しない）。これで①と②を完全に分離できる
+- 3モード：`mode=diag`（診断のみ）／`mode=1`（ペイロード無し）／`mode=2`（ペイロード有り）
+
+#### 結果 — すべて合格
+
+| モード | HTTP | Push サービス | 関数内 | 判定 |
+|---|---|---|---|---|
+| `diag` | 200 | — | 23ms | import OK・`createECDH` **利用可**（65バイト） |
+| `mode=1` | 200 | **201 Created** | 276ms | VAPID + 転送 合格 |
+| `mode=2` | 200 | **201 Created** | 180ms | **暗号化まで合格** |
+
+- ランタイム：`supabase-edge-runtime-1.74.3 (compatible with Deno v2.1.4)` / V8 11.6.189.12 / TS 5.1.6
+- `npm:web-push@3.6.7` の import は **23ms** で成功
+- **想定していた最大のリスク（`createECDH` 未実装）は存在しなかった**
+
+#### 結論
+
+**`npm:web-push@3.6.7` は Supabase Edge Functions でそのまま動く。**
+`jose` での自前実装は**不要**。プラン全体は変更なしで進められる。
+
+#### レイテンシの実測（Phase 3 の見積もりに使う）
+
+初回 1.58秒（**コールドスタート**）、2回目以降 0.3〜0.7秒。
+DB トリガーからは `pg_net` で非同期に投げるので業務操作は待たされないが、
+通知の到達遅延としては現れる。
+
+### 14-6. ★未確認事項：ブラウザでの通知表示
+
+**Push の送信は成功（FCM 201）したが、Mac に通知が表示されなかった。**
+
+#### 切り分けで判明していること
+
+**Push を一切使わないローカル通知テスト（`registration.showNotification()` を
+直接呼ぶだけ）でも表示されなかった。** したがって
+**送信・暗号化・転送の経路は無関係で、原因は macOS / Chrome の表示層に限定される。**
+集中モードはオフだった。
+
+#### Phase 1 で確認すること
+
+- macOS システム設定 → 通知 → **Chrome** の通知許可
+- Chrome の サイトごとの通知設定
+- 本番 HTTPS 環境（`eli.markan.co.jp`）での再確認
+
+**201 は「Push サービスが受け取った」までしか保証しない。**
+経路全体が通ったと言えるのは SW がペイロードを復号して表示できたときなので、
+**この確認は Phase 1 の完了条件に含めること。**
+
+#### 実装上の注意（今回踏んだもの）
+
+検証用 SW は `mode=1` と `mode=2` の通知に**同じ `tag` を付けていた**ため、
+2通目が1通目を置き換える（Web Push の仕様）。
+本番の SW では通知ごとに `tag` を分けるか、意図的にまとめる場合は明示すること。
+
+### 14-7. スコープ外（重要）
+
+**この検証は Chrome デスクトップのみの結果で、iOS/Safari が通った証明にはならない。**
+
+- Apple のエンドポイント（`web.push.apple.com`）は別実装
+- **iOS の Web Push は iOS 16.4+ かつ「ホーム画面に追加」済みでないと購読すらできない**
+- ホーム画面追加には HTTPS 配信が要る → **Phase 1 完了後でないと試せない**
+- → **iOS 検証は Phase 1 の後に独立したマイルストーンとして置く**
+- 顧客15名の iOS バージョン分布は未調査。顧客側 Push の採用可否はこれ次第
+
+### 14-8. 次回
+
+**Phase 1（PWA化）から。** Supabase には触れない。
+
+1. 192/512 のアイコン生成（`sharp`。このマシンは cwebp / Homebrew 未インストール）
+2. `manifest.json` 新設
+3. `index.html` の `<head>` に `link rel=manifest` と iOS 用 meta を数行
+4. **キャッシュしない `sw.js`** を root に
+5. `vercel.json` に `sw.js` の no-cache ヘッダ
+6. デプロイ後、**14-6 の通知表示の確認**と、ホーム画面追加の動作確認
+
+### 14-9. ★kill switch — SW を全端末から撤去する手順
+
+**Service Worker は一度登録すると利用者の端末に居座る。**
+壊れた SW を配ると全員が壊れた状態に固定されるため、撤去手段を先に用意しておく。
+
+#### 手順
+
+**Step 1.** `sw.js` の中身を**下記に全置換**して deploy する。
+
+```js
+/* E-Li Service Worker — KILL SWITCH（撤去版）
+   これを deploy すると、次回アクセスした端末から SW が自動的に外れる。 */
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((key) => caches.delete(key)));
+    await self.registration.unregister();
+    const clients = await self.clients.matchAll({ type: 'window' });
+    clients.forEach((client) => client.navigate(client.url));
+  })());
+});
+```
+
+**Step 2.** 全端末で撤去されたことを確認する（管理者7名分。DevTools → Application → Service Workers が空）。
+
+**Step 3.** その**後で** `index.html` 末尾の SW 登録スクリプト（`navigator.serviceWorker.register('/sw.js')` のブロック）を削除して deploy する。
+
+#### ★順序を間違えないこと
+
+登録スクリプトを先に消すと、**既に登録済みの端末には撤去版 sw.js が届かず、古い SW が残り続ける**。
+必ず「撤去版を配る → 撤去を確認 → 登録スクリプトを消す」の順。
+
+#### なぜ効くのか
+
+`vercel.json` で `/sw.js` に `Cache-Control: no-cache` を付けてあるため、
+ブラウザは毎回サーバへ再検証しにいき、差し替えた sw.js が確実に届く。
+**このヘッダが無いと kill switch 自体が届かず、撤去できなくなる。**
+Phase 2/3 で push ハンドラを修正できるのも同じ理由による。
+
+#### 個別端末の応急処置
+
+DevTools → Application → Service Workers → **Unregister**。
+その端末1台だけの対処であり、他の端末には影響しない。
+
+### 14-10. Phase 1 実施記録（2026-08-12・実装完了／未デプロイ）
+
+**Supabase には一切触れていない。**DB・RPC・RLS・Edge Function・Secrets・Vault すべて無変更。
+`index.html` の Supabase 呼び出しと `setInterval` 7本も1行も変更していない（Phase 4 の担当）。
+
+#### 追加したファイル
+
+| ファイル | 内容 |
+|---|---|
+| `manifest.json` | `start_url` `/` ／ `scope` `/` ／ `display: standalone` ／ `theme_color: #2952c8` ／ `background_color: #ffffff` |
+| `sw.js` | キャッシュ無し。`install`=skipWaiting ／ `activate`=全キャッシュ削除＋claim ／ `fetch`=空ハンドラ |
+| `icon-192.png` | 192×192 / 4.1 KB |
+| `icon-512.png` | 512×512 / 15.3 KB |
+| `icon-maskable-512.png` | 512×512 / 14.2 KB（セーフゾーン検証済み） |
+| `apple-touch-icon.png` | 180×180 / 3.8 KB |
+
+アイコン合計 37.3 KB。Vercel 配信のみで **Supabase 負荷はゼロ**。
+
+#### 変更したファイル
+
+- `index.html` … `<head>` に8行（manifest / theme-color / icon / apple 系 meta）、
+  `</body>` 直前に SW 登録スクリプト。**追加のみで既存行の変更は0**
+- `vercel.json` … `headers` を追加（`/sw.js` = `no-cache`、`/manifest.json` = `max-age=300`）。
+  既存 `rewrites` は無変更
+
+#### アイコン生成の実際（次に差し替えるとき用）
+
+`logo_img.webp` は 480×320 で**周囲が透明**。生ピクセルを走査してロゴ本体の外接矩形を実測すると
+**`(63,97)` から `333×110`（縦横比 3.03）**。ここだけを `extract` して白い正方形キャンバスに合成する。
+
+- `purpose: any` は canvas 幅の **74%**、`maskable` は **70%**（中央80%の円に収める必要があるため）
+- PNG は **256色パレット＋ディザリング**。フルカラー 50.1 KB → 15.3 KB でグラデーションの劣化は視認できない
+- **アルファ無しで出力する**（iOS はアイコンの透過を嫌う）
+- `sharp` はこのマシンに未インストール。scratchpad に `npm i sharp` して使い、リポジトリには入れない
+
+#### 設計判断（迷ったら読む）
+
+- **`orientation` を manifest に入れない。** `portrait` にすると管理者画面
+  （サイドバー＋一覧＋詳細パネルの横並び）がタブレット横向きで使えなくなる
+- **`Content-Type: application/manifest+json` の上書きをしない。** Vercel 既定の
+  `application/json` を Chrome / Safari は受け付ける。ヘッダ上書きという余計なリスクを取らない
+- **`Service-Worker-Allowed` ヘッダは不要。** `sw.js` がルート直下なので scope `/` は既定で取れる
+- **`no-store` ではなく `no-cache`。** 毎回再検証させる方が SW 更新の仕様に合う
+- `fetch` ハンドラは**空にする**。`respondWith` を呼ばないので全リクエストは素通りし、
+  Supabase への通信を傍受も再送もしない。置いてあるのは、インストール可能判定が
+  fetch ハンドラの存在を要求する場合への保険
+- `window.open(url,'_blank')` 4箇所はすべて Supabase の署名付きURL（別オリジン・scope 外）なので
+  standalone でもブラウザで開く。現行と同じ挙動で問題ない
