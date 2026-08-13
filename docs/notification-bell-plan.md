@@ -1830,6 +1830,9 @@ create index on public.eli_push_subscriptions (user_id);
 3. **このテーブルをクライアントから読まない。** client=書き込み専用／
    Edge Function(service_role)=読み取り専用。RLS は `eli_email_sent` と同じで
    `authenticated` に SELECT ポリシーを作らない
+   → ★**この方針は 2026-08-13 に修正した。`upsert`（`ON CONFLICT DO UPDATE`）は
+   SELECT ポリシーを要求するため、作らないと必ず 403 になる。実際に
+   「自分の行だけ」の SELECT ポリシーを1本追加した。詳細は §14-11。**
 4. **死んだ購読は Edge Function が消す**（404/410 でその場で delete）。
    **pg_cron の掃除ジョブは作らない**（定期実行自体が恒常負荷）
 5. **通知の既読テーブルを新設しない。** 既存の `messages.read_by` /
