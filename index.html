@@ -6782,6 +6782,151 @@ const AD_NOTIF_META = {
   change:  { label:'変更',        color:'#1a5fbf', icon:'🔔' },
 };
 
+// ── Web Push 購読（Phase 2）─────────────────────────────
+//   計画書 §14-4 の負荷設計をそのまま守る。
+//     ・このテーブルをクライアントから読まない（SELECT を1回も投げない）
+//     ・localStorage と突き合わせ、変わったときだけ upsert を1本だけ出す
+//     ・.select() を呼ばない（supabase-js v2 は Prefer: return=minimal になり、
+//       応答本文も作らせない）
+//   3秒ポーリングには一切手を入れない（負荷削減は Phase 4 の担当）。
+//   定常状態での Supabase へのリクエスト増加はゼロ。
+
+// VAPID 公開鍵。仕様上おおやけにする値（購読時にブラウザ経由で Push サービスへ渡る）。
+// 秘密鍵は Supabase の Secrets（ELI_VAPID_PRIVATE_KEY）にのみ置く。
+const PUSH_PUBLIC_KEY = 'BBX-bQycivZiw87Y7lkGx8JjBk9yTox4Bnv4EQhqx-qdl24tWqd-PSdqX_oSMo9azdH9e-vPltQKfeZAYpmjRpc';
+
+// localStorage のキー。値は "<user_id>|<endpoint>"。
+// ★user_id を含めるのが要点。共用 PC でアカウントが替わると endpoint は
+//   同じまま user_id だけ変わるので、endpoint だけで比較すると行が前の人の
+//   ままになる。含めておけば、その1回だけ upsert が流れて持ち主が移る
+//   （RLS の UPDATE ポリシーを USING (true) にしてあるのはこのため）。
+const PUSH_LS_KEY = 'eli_push_endpoint';
+
+const pushSupported = () =>
+  'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+// iOS はホーム画面に追加した PWA でないと購読すらできない（§14-5）
+const pushIsIOS = () => /iP(hone|ad|od)/.test(navigator.userAgent);
+const pushIsStandalone = () =>
+  window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
+const pushB64ToUint8 = (s) => {
+  const pad = '='.repeat((4 - s.length % 4) % 4);
+  const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+};
+
+// 購読を確保し、前回から変わっているときだけ upsert を1本出す。
+//   opts.subscribe=false … 既存購読の確認だけ（許可ダイアログを出さない）
+//   opts.subscribe=true  … クリック起点。ここでだけ requestPermission を呼ぶ
+// 戻り値: 'unsupported' | 'ios-needs-home' | 'denied' | 'default' | 'subscribed' | 'error'
+async function ensurePushSubscription(opts) {
+  const subscribe = !!(opts && opts.subscribe);
+
+  if (!pushSupported())
+    return (pushIsIOS() && !pushIsStandalone()) ? 'ios-needs-home' : 'unsupported';
+  if (Notification.permission === 'denied') return 'denied';
+  if (Notification.permission !== 'granted') {
+    if (!subscribe) return 'default';                    // ★勝手にダイアログを出さない
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') return perm === 'denied' ? 'denied' : 'default';
+  }
+
+  const reg = await navigator.serviceWorker.ready;       // ローカル
+  let sub   = await reg.pushManager.getSubscription();   // ローカル
+  if (!sub) {
+    if (!subscribe) return 'default';
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: pushB64ToUint8(PUSH_PUBLIC_KEY),
+    });
+  }
+
+  // ここまでネットワークは0回。getSession はローカル読み（getUser は Auth へ往復する）。
+  const { data: { session } } = await sb.auth.getSession();
+  const uid = session && session.user && session.user.id;
+  if (!uid) return 'error';
+
+  // ★単独で最大の削減点。素直に書くと全ページロードで upsert が飛ぶ。
+  const stamp = uid + '|' + sub.endpoint;
+  if (localStorage.getItem(PUSH_LS_KEY) === stamp) return 'subscribed';
+
+  const keys = sub.toJSON().keys || {};
+  const { error } = await sb.from('eli_push_subscriptions').upsert({
+    endpoint: sub.endpoint,
+    user_id:  uid,
+    p256dh:   keys.p256dh,
+    auth_key: keys.auth,
+    ua:       (navigator.userAgent || '').slice(0, 300),
+  }, { onConflict: 'endpoint' });                        // ★.select() を呼ばない
+  if (error) { console.warn('[push] upsert failed:', error.message); return 'error'; }
+
+  localStorage.setItem(PUSH_LS_KEY, stamp);
+  return 'subscribed';
+}
+
+// 通知パネルのヘッダー直下に出す1行。状態は Notification.permission の3値で出し分ける。
+// パネルを開いたときに一度だけ静かに整合を取るが、endpoint が変わっていなければ
+// Supabase へは1回も出ない（すべてローカル処理）。
+function PushOptIn() {
+  const [state, setState] = useState('checking');
+  const [busy,  setBusy]  = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    ensurePushSubscription({ subscribe: false })
+      .then(s => { if (alive) setState(s); })
+      .catch(e => { console.warn('[push]', e); if (alive) setState('error'); });
+    return () => { alive = false; };
+  }, []);
+
+  const onAllow = async () => {
+    setBusy(true);
+    try { setState(await ensurePushSubscription({ subscribe: true })); }
+    catch (e) { console.warn('[push]', e); setState('error'); }
+    setBusy(false);
+  };
+
+  if (state === 'checking' || state === 'unsupported') return null;
+
+  const box = (bg, color, body) => (
+    <div style={{ padding:"8px 16px", borderBottom:"1px solid "+C.grayL,
+      background:bg, color:color, fontSize:11, fontWeight:700, lineHeight:1.5,
+      display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+      {body}
+    </div>
+  );
+
+  if (state === 'subscribed')
+    return box(C.blueL, C.navy, <span>✅ この端末で通知を受け取ります</span>);
+
+  if (state === 'denied')
+    return box("#fff4f4", C.red,
+      <span>🔕 ブラウザ側で通知がブロックされています。アドレスバーの 🔒 から「通知」を許可してください</span>);
+
+  if (state === 'ios-needs-home')
+    return box("#fffaf0", "#8a6d3b",
+      <span>📱 iPhone / iPad では、共有ボタンから「ホーム画面に追加」した E-Li で開くと通知を受け取れます</span>);
+
+  if (state === 'error')
+    return box("#fff4f4", C.red,
+      <span>⚠️ 通知の登録に失敗しました。時間をおいてもう一度お試しください</span>);
+
+  return box(C.white, C.navy, (
+    <React.Fragment>
+      <span style={{ flex:1 }}>🔔 この端末で通知を受け取る</span>
+      <button onClick={onAllow} disabled={busy}
+        style={{ fontSize:11, fontWeight:700, fontFamily:"inherit", color:C.white,
+          background: busy ? C.gray : C.blue, border:"none", borderRadius:6,
+          padding:"5px 10px", cursor: busy ? "default" : "pointer", flexShrink:0 }}>
+        {busy ? '設定中…' : '通知を許可'}
+      </button>
+    </React.Fragment>
+  ));
+}
+
 // ── 通知パネル（管理者・サイドバー直右のドロワー）─────────
 //   未読のみを表示し、項目をクリックすると該当案件を開いたうえで既読になり、その場で消える。
 //   欄内スクロール（該当メッセージ・該当ログまでの移動）は未実装。
@@ -6865,6 +7010,9 @@ function AdNotifPanel({ feed, onClose, onOpen, onMarkAllRead }) {
             ×
           </button>
         </div>
+
+        {/* この端末で通知を受け取る（Phase 2）。Supabase へは endpoint が変わったときしか出ない */}
+        <PushOptIn />
 
         {/* フィルタチップ */}
         <div style={{ padding:"10px 12px", borderBottom:"1px solid "+C.grayL,

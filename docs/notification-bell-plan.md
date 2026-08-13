@@ -2028,3 +2028,141 @@ DevTools → Application → Service Workers → **Unregister**。
   fetch ハンドラの存在を要求する場合への保険
 - `window.open(url,'_blank')` 4箇所はすべて Supabase の署名付きURL（別オリジン・scope 外）なので
   standalone でもブラウザで開く。現行と同じ挙動で問題ない
+
+### 14-11. Phase 2 実施記録（2026-08-13・実装完了／未デプロイ）
+
+**Supabase に初めて触れた回。** DB は本番反映済み、`index.html` は未デプロイ。
+
+#### やったこと
+
+1. **前回の検証用ゴミの撤去**（`push-test` 関数・`PUSHTEST_` Secrets 4件）。
+   ダッシュボードで削除済みを確認。既存の `send-order-notification` /
+   `send-reset-email` と既存 Secrets は無傷
+2. **VAPID 本番鍵の生成**。8/11 の検証用鍵は破棄し、流用しない
+3. **`eli_push_subscriptions` を本番に作成**（`add_eli_push_subscriptions.sql`）
+4. **購読 UI を `index.html` に追加**（追加のみ +148行 / −0行）
+
+#### VAPID 鍵の扱い
+
+- **依存パッケージ無しで生成した。** Node 標準 `crypto` の
+  `generateKeyPairSync('ec', {namedCurve:'prime256v1'})` で `web-push` の
+  `generateVAPIDKeys()` と同形式（P-256 / base64url）が出る。
+  公開鍵＝非圧縮点65バイト（先頭 `0x04`）→ 87文字、秘密鍵＝32バイト → 43文字
+- 生成スクリプトは **8つの健全性チェック**を通してから書き出す。
+  とくに**秘密鍵から公開鍵を導出し直して一致するか**と
+  **JWK の `x‖y` から再構成して一致するか**の2つは、
+  エンコードの取り違えをその場で検出できるので必ず入れる
+- **公開鍵は `index.html` に直書きする。** 仕様上おおやけにする値
+  （購読時にブラウザ経由で Push サービスへ渡る）なので public リポジトリで問題ない
+- **秘密鍵は scratchpad に 0600 で置き、端末にも会話にも表示しない。**
+  Secrets への投入は `pbcopy` 経由。★サンドボックス内では `pbcopy` が
+  **無言で失敗する**ので、最初からサンドボックスを外して実行し、
+  `pbpaste | shasum -a 1` で照合してから貼る
+- Supabase Secrets に3件登録：`ELI_VAPID_PUBLIC_KEY` /
+  `ELI_VAPID_PRIVATE_KEY` / `ELI_VAPID_SUBJECT`。
+  **Phase 2 では誰も参照しない。** 読むのは Phase 3 の Edge Function
+- 秘密鍵はパスワードアプリへ退避済み。**紛失すると全端末の購読が無効になり、
+  鍵の再生成と全員の購読やり直しになる**
+
+#### テーブル（§14-4 からの変更点は1つだけ）
+
+`add_eli_push_subscriptions.sql` を STEP A / B / C に分けて個別実行。
+発行された文は13個で、**すべて `eli_push_subscriptions` を対象**。既存オブジェクトへの変更は0。
+
+**★列名を `auth` ではなく `auth_key` にした。** これが §14-4 からの唯一の逸脱。
+PostgreSQL は `x.y()` を「スキーマ `x` の関数 `y`」とも解釈しうるため、
+`auth` という列があると RLS 内の `auth.uid()` の解決が壊れる可能性がある。
+回避コストは1単語、外した場合のコストは本番のポリシー不正動作なので避ける側に倒した。
+（結果として C-4 で `auth.uid()` が正しく効いていることを確認済み）
+
+権限まわりの判断：
+
+- **`SELECT` は権限だけ付与し、ポリシーは作らない。**
+  `INSERT ... ON CONFLICT DO UPDATE` は更新式で読む列に SELECT **権限**を要求するため、
+  外すと upsert が `42501` で落ちうる。ただし SELECT **ポリシー**が0本なので
+  実際に読める行は常に0行。§14-4 の「クライアントから読まない」は RLS 側で担保する。
+  **権限と RLS の二段構えで、片方だけ見て判断しないこと**
+- **`DELETE` は権限もポリシーも与えない。** 利用者が通知を止めるときは
+  `unsubscribe()` で endpoint が無効になり、次の送信で Edge Function が 410 を受けて消す。
+  行を消すためだけに攻撃面を広げない
+- **UPDATE ポリシーを `USING (true)` にした。** 共用 PC でアカウントが替わると
+  endpoint は同じまま `user_id` だけ変わる。`USING (user_id = auth.uid())` だと
+  その端末では以後ずっと購読できず、しかも原因が分かりにくい。
+  endpoint は当該端末からしか取得できない秘匿値なので引き継ぎを許す側に倒す。
+  `WITH CHECK (user_id = auth.uid())` で「他人名義の行は作れない」は維持
+- **`ON DELETE CASCADE` で掃除ジョブを不要にした。** 退職者のアカウント削除で
+  購読行も消える。pg_cron を持ち込まずに後始末が済む
+- `last_ok_at` は**送信成功のたびに書かない**旨を COMMENT に明記した。
+  書くと「通知1件 × 端末数」の UPDATE が恒常的に発生して絶対原則に反する
+
+#### 検証（STEP C・7項目すべて合格）
+
+| | 内容 | 結果 |
+|---|---|---|
+| C-1 | RLS 有効 | `relrowsecurity = true` / `relforcerowsecurity = false` |
+| C-2 | **anon の4権限** | **すべて false**（最重要） |
+| C-3 | authenticated の権限 | SELECT / INSERT / UPDATE = true、**DELETE = false** |
+| C-4 | ポリシー | **2本のみ**（INSERT / UPDATE）。SELECT / DELETE / ALL は無し |
+| C-5 | トリガー | **0本** |
+| C-6 | インデックス | PK(endpoint) と user_id の**2本のみ** |
+| C-7 | 列構成 | 8列。**`auth` という列が無い** |
+
+★**新規テーブルは既定権限で anon に4権限が自動で付く。** RLS を有効にしただけでは
+足りず `REVOKE ALL ... FROM PUBLIC, anon, authenticated` が要る。
+STEP A と B の間は、押したボタンによってはテーブルが開いた状態になる。
+**A を流したら B は続けて流すこと。**
+
+★Supabase の SQL Editor は複数文をまとめると最後の SELECT しか表示しない。
+STEP C の7つは1つずつ流す。各ブロックは `pbcopy` + sha1 照合で渡した。
+
+#### `index.html`（追加のみ +148行 / −0行）
+
+ハンクは2つだけ。既存行の変更・削除は0。
+
+- `AD_NOTIF_META` の直後 … 定数2つ・ヘルパー4つ・`ensurePushSubscription()`・`PushOptIn`
+- `AdNotifPanel` のヘッダー直下 … `<PushOptIn />` の1行
+
+**`AdNotifPanel` 本体に手を入れず独立コンポーネントにした。**
+既存の通知パネルのロジックは1文字も変わっていない。
+
+負荷設計（§14-4 の実装）：
+
+- `serviceWorker.ready` / `getSubscription()` / `Notification.permission` は**すべてローカル**。
+  ネットワークに出ない
+- **`localStorage['eli_push_endpoint']` と一致したらその場で return し、upsert を出さない。**
+  単独で最大の削減点
+- ★**保存する値は endpoint 単体ではなく `"<user_id>|<endpoint>"`。**
+  共用 PC でアカウントが替わると endpoint は同じまま `user_id` だけ変わるので、
+  endpoint だけで比較すると**行が前の利用者のまま残り、新しい利用者に通知が届かない**。
+  この形なら切り替わった1回だけ upsert が流れる（UPDATE を `USING (true)` にした理由と対）
+- **`getUser()` ではなく `getSession()`。** 前者は Auth サーバーへ往復する
+- **`.select()` を呼ばない。** supabase-js v2 は `Prefer: return=minimal` になり応答本文も作らない
+- `setInterval` 7本は無変更。`sb.` 参照は 185 → 187（`getSession` と `upsert` の2つだけ）
+- **定常状態での Supabase へのリクエスト増加はゼロ。** 生涯で端末あたり数回の upsert のみ
+
+UI は `Notification.permission` の3値＋iOS 非 standalone＋エラーの5表示。
+**`requestPermission()` はクリックハンドラ内でのみ呼ぶ**（ページ読み込み時に勝手に出さない）。
+
+#### ★JSX 構文チェックの方法（今後も使う）
+
+アプリ全体が `index.html` 1枚なので、**構文エラー＝全画面停止**。デプロイ前に必ず通す。
+
+scratchpad に `npm i @babel/standalone` して、`jsx-source` ブロックを抜き出し
+**アプリ本体と同じ設定**（`index.html:11220` の `Babel.transform(src, {presets:['react']})`）
+でコンパイルできることを確認する。528,225 bytes / 10,902行が通ることを確認済み。
+`sharp` と同じくリポジトリには入れない。
+
+#### 未確認・次回
+
+- ★**実機未確認。** ブラウザでの購読動作・iPhone（ホーム画面の E-Li）での購読は未実施。
+  §14-6 の「通知が表示されない」問題も未解決のまま
+- **未デプロイ。** `index.html` の変更は push した時点で本番に出る（Vercel の git 自動デプロイ）
+- **把握している穴**：`navigator.serviceWorker.ready` は SW 登録が失敗している端末では
+  解決しない。その場合 `state` は `'checking'` のままで **UI が何も表示されない**
+  （エラーは出ないが購読导線も出ない）。実機で問題が出たらタイムアウトを入れる
+- **`pushsubscriptionchange` は未対応。** ブラウザが endpoint をローテートすると
+  静かに届かなくなる。SW からは Supabase のセッションが使えないので設計判断が要る。Phase 3 で扱う
+- Phase 3（送信）… 既存 `eli_notify_event()` ＋ `send-order-notification` に相乗りし、
+  1回の `net.http_post` でメール＋Push を両方さばく。DB 側の追加負荷は実質ゼロ。
+  **成功時に `last_ok_at` を書かない**こと。404/410 はその場で DELETE
+- ★**Supabase 負荷が下がるのは Phase 4 に到達したときだけ。** Phase 1〜3 は微増する（承認済み）
