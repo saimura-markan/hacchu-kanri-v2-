@@ -2152,11 +2152,106 @@ scratchpad に `npm i @babel/standalone` して、`jsx-source` ブロックを�
 でコンパイルできることを確認する。528,225 bytes / 10,902行が通ることを確認済み。
 `sharp` と同じくリポジトリには入れない。
 
+#### ★本番で起きた不具合と対処（2026-08-13・解決済み）
+
+**デプロイ後、本番 Chrome で購読を許可すると upsert が 403 で落ちた。**
+
+```
+new row violates row-level security policy for table "eli_push_subscriptions"
+```
+
+**原因：`upsert` は `INSERT ... ON CONFLICT DO UPDATE` を発行する。
+`ON CONFLICT DO UPDATE` が付くと、競合行を扱うために PostgreSQL は
+SELECT ポリシーも適用する。素の INSERT では評価されない経路。**
+
+このテーブルは §14-4 の「クライアントから読ませない」を
+**SELECT ポリシーを1本も作らない**ことで実現していた。適用可能な SELECT ポリシーが
+存在しない＝全拒否なので、行の内容や `auth.uid()` の値と無関係に upsert は必ず落ちる。
+**テーブルが0行でも落ちる**（競合行の有無ではなく、ポリシーの不在が理由）。
+
+★**設計時の見落とし**：`ON CONFLICT` が要求するのは SELECT **権限**だけだと考え、
+権限は付与し（C-3 で `a_select = true` を確認）ポリシーは作らなかった。
+**権限とポリシーは別物で、両方要る。**
+
+##### 切り分けの経過（推測で潰さず、実測で1つずつ消した）
+
+最初に疑ったのは「認証コンテキストの欠落」だったが、**すべて反証された**。
+遠回りに見えるが、この順で消したから原因が一意に定まった。
+
+| 疑い | 検証 | 結果 |
+|---|---|---|
+| クライアントが送る `user_id` が違う | DevTools の Payload を確認 | 本人の UUID で正しい |
+| Authorization が載っていない | DevTools の Request Headers | 載っている |
+| ロールが `anon` になっている | エラーコード | **反証。** `anon` なら INSERT 権限が無いので `42501 permission denied` になる。実際は RLS violation ＝権限は通っている |
+| `auth.uid()` がプロジェクト全体で壊れている | 案件に写真を1枚追加 | **反証。** `order_change_logs` への INSERT（`with check (changed_by = auth.uid())`）が成功し、変更通知まで生成された |
+
+★**`get_my_role()` を「`auth.uid()` の疎通確認」に使ったのは誤りだった。**
+この関数の実装は `auth.jwt() -> 'app_metadata' ->> 'role'`（`fix_rls_policies_comprehensive.sql:58`）で、
+**`auth.uid()` を一切参照しない**。切り分けに使う関数は、必ず定義を読んでから選ぶこと。
+
+★**最終的に効いたのは「動いている隣のテーブルとの差分比較」。**
+`order_change_logs`（成功）と `eli_push_subscriptions`（失敗）を並べると、
+構造的な違いは2点しか残らなかった。
+
+| | `order_change_logs` | `eli_push_subscriptions` |
+|---|---|---|
+| 発行される文 | 素の INSERT | **INSERT ... ON CONFLICT DO UPDATE** |
+| WITH CHECK 式 | `changed_by = auth.uid()` | `user_id = auth.uid()`（同型） |
+| 値の入れ方 | クライアントが明示送信 | クライアントが明示送信（同じ） |
+| **SELECT ポリシー** | **あり** | **無し** ← ★ |
+
+##### 対処（`fix_push_select_policy.sql`）
+
+```sql
+CREATE POLICY eli_push_sub_select ON public.eli_push_subscriptions
+  FOR SELECT TO authenticated
+  USING (user_id = auth.uid());
+```
+
+**ポリシー1本を足しただけ。`index.html` は変更していない**（`user_id` は明示送信のまま、
+コミット `4c70113` と同一）。権限・列・インデックス・既存2本のポリシーも無変更。
+
+読めるのは `user_id = auth.uid()` の行だけ、つまり**自分の端末の購読だけ**で、
+その中身（endpoint と鍵）は**その端末のブラウザが既に持っている値**。
+他人の購読は読めない。anon は権限ごと剥奪済みで全遮断のまま。
+
+★**§14-4 の「このテーブルをクライアントから読まない」の担保方法が変わった。**
+
+- これまで … ポリシーが無いから読めない（DB が強制）
+- これから … **クライアントに読むコードを書かない**（規約で守る）
+
+実装は `.select()` を1度も呼んでおらず、`ensurePushSubscription()` が出すのは
+upsert 1本だけ。**負荷は不変。**
+
+##### 不採用にした案
+
+- **`ALTER COLUMN user_id SET DEFAULT auth.uid()`** … `auth.uid()` が正常だと判明した時点で
+  この不具合とは無関係。原因は WITH CHECK ではなく SELECT ポリシーの不在なので、
+  既定値を付けても同じく落ちる。作りかけた `fix_push_user_id_default.sql` は削除した
+- **`upsert` をやめて「INSERT して 23505 なら UPDATE」** … クライアントのコードが増え、
+  衝突時に往復が2回になる。ポリシー1本で済む話に見合わない
+
+##### 結果
+
+`fix_push_select_policy.sql` 実行後、本番で購読が成功。
+**`eli_push_subscriptions` は 1行**（`rows=1` / `with_user=1` / `latest=2026-08-13 14:29:47`）、
+UI も「✅ この端末で通知を受け取ります」に変わった。**Phase 2 完了。**
+
+##### 教訓（次にテーブルを作るとき）
+
+- **`upsert` を使うテーブルには SELECT ポリシーが要る。** 「クライアントに読ませない」を
+  ポリシーの不在で表現すると upsert が壊れる。読ませたくないなら
+  **自分の行だけの SELECT ポリシー**を置き、読まないことはクライアント側の規約で守る
+- **権限（GRANT）とポリシー（RLS）は別の壁。** 片方だけ見て「閉じている/開いている」を判断しない
+- **切り分けに使う関数は定義を読んでから選ぶ**（`get_my_role()` の件）
+- **動いている隣の実装との差分比較が最短。** 同じ `auth.uid()` を使うのに
+  一方が通り一方が落ちるなら、違いは有限個しかない
+
 #### 未確認・次回
 
-- ★**実機未確認。** ブラウザでの購読動作・iPhone（ホーム画面の E-Li）での購読は未実施。
+- ★**購読は本番 Chrome で確認済み（2026-08-13）。iPhone は未確認。**
+  ホーム画面の E-Li からの購読は未実施。
   §14-6 の「通知が表示されない」問題も未解決のまま
-- **未デプロイ。** `index.html` の変更は push した時点で本番に出る（Vercel の git 自動デプロイ）
 - **把握している穴**：`navigator.serviceWorker.ready` は SW 登録が失敗している端末では
   解決しない。その場合 `state` は `'checking'` のままで **UI が何も表示されない**
   （エラーは出ないが購読导線も出ない）。実機で問題が出たらタイムアウトを入れる
