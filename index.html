@@ -10481,7 +10481,12 @@ function AdminApp({ role, onLogout, onMyPage }) {
     setSelected(order);                                            // ①案件を開く
     setDetailInitialTab(n.type === 'change' ? 'detail' : 'chat');  // ②タブを決める
     setDetailTabSeq(v => v + 1);                                   //   同じタブの連続指定でも再発火させる
-    markNotifRead(n);                                              // ③既読。await しない（UI を止めない）
+    // ③既読。await しない（UI を止めない）
+    // ★SW 由来の通知は notifFeed に無く messageId / logId を持たない。
+    //   ガード無しだと p_message_id: undefined で無駄な RPC が飛び、
+    //   さらに fetchNotifications() でもう1往復する（Supabase 負荷を増やさない原則）。
+    //   既読は次回のフィード取得で解決するため、ここではスキップしてよい。
+    if (n.messageId || n.logId) markNotifRead(n);
   };
 
   const markAllNotifRead = async () => {
@@ -10537,6 +10542,56 @@ function AdminApp({ role, onLogout, onMyPage }) {
 
   // ポーリング側の fetchNotifications から最新の orders を読むための同期
   useEffect(() => { ordersRef.current = orders; }, [orders]);
+
+  // 通知クリック経由の遷移でも openNotification を唯一の入口として通す（計画書 §4-1）。
+  // ★ref 経由にする理由：openNotification は毎レンダー再生成される。useEffect([]) で
+  //   直接掴むと初回の古いクロージャに固定され、deps に入れるとリスナーが毎レンダー
+  //   貼り直しになる。ordersRef / adminNameRef と同じ書き方に揃えてある。
+  const openNotificationRef = useRef(openNotification);
+  useEffect(() => { openNotificationRef.current = openNotification; });
+
+  // ── ① SW からの通知クリックを受ける（sw.js の postMessage）
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event) => {
+      const d = event.data;
+      if (!d || d.source !== 'eli-sw' || d.type !== 'notification-click') return;
+      if (!d.id) return;
+      openNotificationRef.current({
+        orderId:   d.id,
+        type:      d.kind === 'change' ? 'change' : 'chat',
+        key:       null,
+        messageId: null,
+        logId:     null,
+      });
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, []);
+
+  // ── ② 初回ロード時に ?order= を拾う（タブが無い状態から openWindow された場合）
+  //    ★①と判定式を完全に対称にしてある。kind が無ければ両方とも 'chat' に倒れる。
+  const orderParamRef = useRef(false);
+  useEffect(() => {
+    if (loading || orderParamRef.current) return;   // orders の取得完了を待つ（fetchOrders は非同期）
+    orderParamRef.current = true;                   // 拾うのは初回の1度だけ
+    const params = new URLSearchParams(window.location.search);
+    const id   = params.get('order');
+    if (!id) return;
+    const kind = params.get('kind');                // ①の d.kind と同じ役割
+    // ★先に URL を掃除する。リロード・戻る操作での再発火を防ぐ。
+    params.delete('order');
+    params.delete('kind');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+    openNotificationRef.current({
+      orderId:   id,
+      type:      kind === 'change' ? 'change' : 'chat',
+      key:       null,
+      messageId: null,
+      logId:     null,
+    });
+  }, [loading]);
 
   // 通知（未読チャット・現場情報変更）を定期取得（3秒ポーリング）
   useEffect(() => {
