@@ -23,6 +23,17 @@
 //   APP_URL            : https://eli.markan.co.jp
 //                        （メール文面で eli.markan.co.jp を明示するため、
 //                          vercel.app ではなくこちらに揃える）
+//   ── Web Push（Phase 3 で参照開始・2026-08-16）────────────────
+//   ELI_VAPID_PUBLIC_KEY  : VAPID 公開鍵（P-256 / base64url・87文字）。
+//                           ★index.html:6794 に直書きしてある値と同一のもの。
+//                           食い違うと Push サービスが 403 を返し全端末で失敗する
+//   ELI_VAPID_PRIVATE_KEY : VAPID 秘密鍵（43文字）。★紛失すると全端末の購読が
+//                           無効になり、鍵の再生成と全員の購読やり直しになる
+//   ELI_VAPID_SUBJECT     : 連絡先。★`mailto:` か `https:` で始まること。
+//                           形式違反だと setVapidDetails() が例外を投げる
+//                           （sendPush の catch が拾うのでメールは止まらないが、
+//                             Push は push:'error' になり静かに飛ばなくなる）
+//   ※3件とも 2026-08-11 に登録済み（§14-11）。Phase 3 が初めての参照者。
 //
 // ----------------------------------------------------------------
 // 2026-08-03 第2段階：4イベント対応
@@ -61,6 +72,24 @@ const FROM_EMAIL         = Deno.env.get('FROM_EMAIL') ?? 'noreply@markan.co.jp';
 const NOTIFY_SECRET      = Deno.env.get('ELI_NOTIFY_SECRET')!;
 const APP_URL            = Deno.env.get('APP_URL') ?? 'https://eli.markan.co.jp';
 const APP_NAME           = 'E-Li 工事受発注システム';
+
+// ----------------------------------------------------------------
+// Web Push（Phase 3・2026-08-16）
+// ----------------------------------------------------------------
+// ★ ?? '' にする。! だと未設定時の型だけ黙らせることになり、
+//   欠落を実行時まで持ち越す。sendPush 冒頭で明示的に skipped にする。
+const VAPID_PUBLIC  = Deno.env.get('ELI_VAPID_PUBLIC_KEY')  ?? '';
+const VAPID_PRIVATE = Deno.env.get('ELI_VAPID_PRIVATE_KEY') ?? '';
+const VAPID_SUBJECT = Deno.env.get('ELI_VAPID_SUBJECT')     ?? '';
+
+// ★ 案件情報（現場名・住所・日付・顧客名）を一切含めない汎用文言のみ。
+//   Push はロック画面に出るぶんメールより慎重に扱う（§14-6 / 8-1 メール方針）。
+const PUSH_TEXT: Record<string, { title: string; body: string }> = {
+  order_received:   { title: 'E-Li 新しいご依頼', body: '新しいご依頼が届きました' },
+  schedule_fixed:   { title: 'E-Li 日程確定',     body: '日程が確定した案件があります' },
+  cancelled:        { title: 'E-Li キャンセル',   body: 'キャンセルになった案件があります' },
+  schedule_consult: { title: 'E-Li 日程相談',     body: '日程相談中の案件があります' },
+};
 
 // リンク注記に出すドメイン。APP_URL から導出する。
 //   ハードコードすると APP_URL を変えたときに
@@ -289,6 +318,118 @@ async function writeLog(
   if (error) console.error('[eli_email_log]', error.message);
 }
 
+// ----------------------------------------------------------------
+// Push 送信（Phase 3）
+// ----------------------------------------------------------------
+// ★ この関数は絶対に throw しない。呼び出し元（メール送信の後ろ）に
+//   例外を返した瞬間、writeLog と同じ「本処理を止めない」原則が破れる。
+// ★ eli_email_log には書かない。1通知あたりのログ行が倍になるため。
+//   結果は console と応答 JSON にだけ出す。
+type PushOutcome = {
+  result: 'sent' | 'skipped' | 'error';
+  detail: string;
+  sent: number;
+  removed: number;
+};
+
+async function sendPush(
+  admin: ReturnType<typeof createClient>,
+  orderId: string,
+  eventKey: string,
+): Promise<PushOutcome> {
+  const none = (result: PushOutcome['result'], detail: string): PushOutcome =>
+    ({ result, detail, sent: 0, removed: 0 });
+
+  try {
+    if (!VAPID_PUBLIC || !VAPID_PRIVATE || !VAPID_SUBJECT) {
+      return none('skipped', 'vapid secrets missing');
+    }
+    const text = PUSH_TEXT[eventKey];
+    if (!text) return none('skipped', `no push text for ${eventKey}`);
+
+    // ── 購読の読み取り（service_role で全行を読む）──────
+    //   ★ user_id で絞らない。メールの宛先は顧客、Push の宛先は管理者で、
+    //     両者は別物（§14-2 承認済み②「管理者7名から先行」／
+    //     購読UI PushOptIn は AdNotifPanel＝AdminApp 内にしか無い）。
+    //   ★ 必要な3列だけ引く。ua / last_ok_at / fail_count は使わない。
+    //     想定行数は数十行なので LIMIT も不要。
+    const { data: subs, error: subsErr } = await admin
+      .from('eli_push_subscriptions')
+      .select('endpoint, p256dh, auth_key');
+
+    if (subsErr) return none('error', `subs select: ${subsErr.message}`);
+    if (!subs || subs.length === 0) return none('skipped', 'no subscriptions');
+
+    // ── ★動的 import ────────────────────────────────────
+    //   静的 import が失敗すると関数自体が起動できず、
+    //   既存のメール送信まで道連れになる（§14-5）。
+    const webpush = (await import('npm:web-push@3.6.7')).default;
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+
+    // ── ★ペイロードは id と kind だけ。url は送らない ──────────
+    //   url を送ると &kind= が付かず、②経路（openWindow）が chat に倒れて
+    //   ①経路（postMessage）と非対称になる（2026-08-15 確定）。
+    //   URL の組み立ては sw.js の parsePushPayload が行う。
+    //   tag も送らない（sw.js が `${kind}-${id}` を導出する）。
+    const payload = JSON.stringify({
+      title: text.title,
+      body:  text.body,
+      kind:  'change',   // 4イベントとも案件詳細タブへ
+      id:    orderId,
+    });
+
+    const results = await Promise.allSettled(
+      subs.map((row) =>
+        webpush.sendNotification(
+          {
+            endpoint: row.endpoint as string,
+            // ★★DB 列は auth_key。web-push が要求するのは keys.auth。
+            //   素通しにすると auth が undefined になり暗号化が落ちる。
+            //   列名を auth にできない理由は add_eli_push_subscriptions.sql の
+            //   COMMENT（auth 列があると RLS 内の auth.uid() の解決が壊れうる）。
+            keys: { p256dh: row.p256dh as string, auth: row.auth_key as string },
+          },
+          payload,
+        )
+      )
+    );
+
+    // ── 404 / 410 はその場で DELETE ────────────────────────
+    //   pg_cron の掃除ジョブは作らない（定期実行そのものが恒常負荷・§14-4）。
+    //   ★ DELETE は endpoint をまとめて1クエリ。端末ごとに1本ずつ打たない。
+    const dead: string[] = [];
+    let sent = 0;
+
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') { sent++; return; }
+      const code = (r.reason as { statusCode?: number } | undefined)?.statusCode;
+      if (code === 404 || code === 410) {
+        dead.push(subs[i].endpoint as string);
+      } else {
+        // 一時エラー。endpoint は消さない。
+        // ★ fail_count も書かない（通知×端末数の UPDATE を増やさない）。
+        console.error('[push] send failed', code ?? '(no status)', String(r.reason).slice(0, 200));
+      }
+    });
+
+    if (dead.length > 0) {
+      const { error: delErr } = await admin
+        .from('eli_push_subscriptions')
+        .delete()
+        .in('endpoint', dead);
+      if (delErr) console.error('[push] delete failed:', delErr.message);
+    }
+
+    // ★ last_ok_at は書かない。成功のたびに UPDATE すると
+    //   通知1件 × 端末数の書き込みが恒常的に発生し絶対原則に反する。
+    return { result: 'sent', detail: 'ok', sent, removed: dead.length };
+
+  } catch (e) {
+    console.error('[push] unexpected:', e);
+    return none('error', String(e).slice(0, 200));
+  }
+}
+
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
     status,
@@ -340,7 +481,8 @@ Deno.serve(async (req) => {
 
     if (orderErr) throw new Error(`orders select: ${orderErr.message}`);
 
-    // ── 5. 送信可否のガード ──────────────────────────────
+    // ── 5. 共通の前提ガード（メールも Push も止める） ────────────
+    //   ここで止まる理由は「案件そのものが対象外」なので Push も送らない。
     //   どれも「送らない」が正常系なので 200 を返す。
     //   pg_net 側にエラーを積まないため。
     const skip = async (detail: string) => {
@@ -353,76 +495,118 @@ Deno.serve(async (req) => {
 
     if (!order)             return await skip('order not found');
     if (order.deleted_at)   return await skip('order deleted');
-    // ★ user_id が無い案件には送らない。宛先を推測しない。
-    if (!order.user_id)     return await skip('order has no user_id');
     // ★ 状態の再確認。トリガー発火後に変えられていたら送らない。
     if (order.status !== ev.expectedStatus) {
       return await skip(`status changed to ${order.status}`);
     }
 
-    // ── 6. 通知除外フラグ ＋ 宛名（profiles を1回だけ引く） ──────
-    //   通知ベル・未読集計と同じ除外規約に従う。
-    //   name は宛名の差し込みにのみ使う。ログには残さない。
-    const { data: prof, error: profErr } = await admin
-      .from('profiles')
-      .select('eli_notification_excluded, name')
-      .eq('id', order.user_id)
-      .maybeSingle();
+    // ── 6〜8. メール送信（顧客宛） ────────────────────────────
+    //   ★ ここから先の「送らない」は顧客側の事情であって、
+    //     管理者宛の Push を止める理由にならない。
+    //     よって handler を return せず、結果を変数に落として先へ流す。
+    //   ★ 例外もここで受け止める。外の catch まで投げると Push が実行されない。
+    const mail: {
+      result: 'sent' | 'skipped' | 'error';
+      detail: string;
+      toDomain: string | null;
+    } = await (async () => {
+      try {
+        // ★ user_id が無い案件には送らない。宛先を推測しない。
+        if (!order.user_id) {
+          return { result: 'skipped' as const, detail: 'order has no user_id', toDomain: null };
+        }
 
-    if (profErr) throw new Error(`profiles select: ${profErr.message}`);
-    if (prof?.eli_notification_excluded) {
-      return await skip('eli_notification_excluded');
-    }
+        // 通知除外フラグ ＋ 宛名（profiles を1回だけ引く）
+        //   通知ベル・未読集計と同じ除外規約に従う。
+        //   name は宛名の差し込みにのみ使う。ログには残さない。
+        const { data: prof, error: profErr } = await admin
+          .from('profiles')
+          .select('eli_notification_excluded, name')
+          .eq('id', order.user_id)
+          .maybeSingle();
 
-    const displayName = resolveName(prof?.name as string | null | undefined);
+        if (profErr) throw new Error(`profiles select: ${profErr.message}`);
+        if (prof?.eli_notification_excluded) {
+          return { result: 'skipped' as const, detail: 'eli_notification_excluded', toDomain: null };
+        }
 
-    // ── 7. 宛先の解決（auth.users は service_role でしか読めない） ──
-    //   ★ 検索はしない。orders.user_id を主キー指定で引くだけ。
-    //     これにより E-Li に発注のあるユーザー以外には原理的に届かない。
-    const { data: userRes, error: userErr } =
-      await admin.auth.admin.getUserById(order.user_id);
+        const displayName = resolveName(prof?.name as string | null | undefined);
 
-    if (userErr) throw new Error(`getUserById: ${userErr.message}`);
+        // 宛先の解決（auth.users は service_role でしか読めない）
+        //   ★ 検索はしない。orders.user_id を主キー指定で引くだけ。
+        //     これにより E-Li に発注のあるユーザー以外には原理的に届かない。
+        const { data: userRes, error: userErr } =
+          await admin.auth.admin.getUserById(order.user_id);
 
-    const to = userRes?.user?.email;
-    if (!to) return await skip('user has no email');
+        if (userErr) throw new Error(`getUserById: ${userErr.message}`);
 
-    const toDomain = to.slice(to.indexOf('@'));   // ログにはドメインのみ残す
+        const to = userRes?.user?.email;
+        if (!to) {
+          return { result: 'skipped' as const, detail: 'user has no email', toDomain: null };
+        }
 
-    // ── 8. Resend で送信（html + text の2本立て） ───────────
-    const resendRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: `${APP_NAME} <${FROM_EMAIL}>`,
-        to: [to],
-        subject: `${SUBJECT_PREFIX}${ev.subject}`,
-        html: buildHtml(ev, displayName),
-        text: buildText(ev, displayName),
-      }),
-    });
+        const toDomain = to.slice(to.indexOf('@'));   // ログにはドメインのみ残す
 
-    if (!resendRes.ok) {
-      const errBody = await resendRes.text();
-      console.error('Resend error:', resendRes.status, errBody);
-      await writeLog(admin, {
-        order_id: orderId, event: eventKey, result: 'error',
-        detail: `resend ${resendRes.status}: ${errBody.slice(0, 200)}`,
-        to_domain: toDomain,
-      });
-      // 500 を返してもトリガー側は何もしない（pg_net は再送しない）。
-      // 記録のためにステータスだけ正直に返す。
-      return json({ error: 'resend failed' }, 500);
-    }
+        // Resend で送信（html + text の2本立て）
+        const resendRes = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            from: `${APP_NAME} <${FROM_EMAIL}>`,
+            to: [to],
+            subject: `${SUBJECT_PREFIX}${ev.subject}`,
+            html: buildHtml(ev, displayName),
+            text: buildText(ev, displayName),
+          }),
+        });
 
+        if (!resendRes.ok) {
+          const errBody = await resendRes.text();
+          console.error('Resend error:', resendRes.status, errBody);
+          return {
+            result: 'error' as const,
+            detail: `resend ${resendRes.status}: ${errBody.slice(0, 200)}`,
+            toDomain,
+          };
+        }
+
+        return { result: 'sent' as const, detail: 'ok', toDomain };
+
+      } catch (e) {
+        console.error('[mail] error:', e);
+        return { result: 'error' as const, detail: String(e).slice(0, 300), toDomain: null };
+      }
+    })();
+
+    // ── 9. Push 送信（管理者宛）★必ずメールの後ろ ─────────────
+    //   前に置くと web-push の動的 import や Push サービスへの往復で
+    //   メール送信が遅れる。sendPush は throw しない契約。
+    const push = await sendPush(admin, orderId, eventKey);
+
+    // ── 10. ログ1行 ＋ 単一 return ──────────────────────────
+    //   eli_email_log の行数はこれまでどおり1呼び出しにつき1行。
     await writeLog(admin, {
-      order_id: orderId, event: eventKey, result: 'sent',
-      detail: 'ok', to_domain: toDomain,
+      order_id: orderId, event: eventKey,
+      result: mail.result, detail: mail.detail, to_domain: mail.toDomain,
     });
-    return json({ success: true }, 200);
+
+    console.log('[push]', push.result, push.detail, 'sent=', push.sent, 'removed=', push.removed);
+
+    // 500 を返してもトリガー側は何もしない（pg_net は再送しない）。
+    // 記録のためにステータスだけ正直に返す。
+    return json(
+      {
+        mail: mail.result,
+        mail_detail: mail.detail,
+        push: push.result,
+        push_sent: push.sent,
+        push_removed: push.removed,
+      },
+      mail.result === 'error' ? 500 : 200,
+    );
 
   } catch (e) {
     console.error('Unexpected error:', e);
