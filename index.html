@@ -10351,6 +10351,27 @@ function DeletedPanel({ onClose, onRestore, onHardDelete }) {
   );
 }
 
+// ── OS アプリバッジ（Badging API）─────────────────────────────
+// ★状態を持たない。未読数の真実は notifFeed ただ1つで、ここはその写しを OS に出すだけ。
+//   SW 側（sw.js の push）は引数なし setAppBadge() でドットのみ出し、数字は持たない。
+// ★'setAppBadge' in navigator のガード必須。Chrome for Android / Firefox には
+//   このAPIが存在せず、無ガードだと TypeError でこの先の処理ごと止まる。
+// ★返り値の Promise は環境により reject する。握り潰して本処理を止めない
+//   （writeLog / sendPush と同じ「失敗しても本処理を止めない」契約）。
+// ★インストール済み（standalone）でないと OS 側が黙って無視する。例外は出ない。
+function setEliAppBadge(count) {
+  if (!('setAppBadge' in navigator)) return;
+  try {
+    if (count > 0) navigator.setAppBadge(count).catch(() => {});
+    else           navigator.clearAppBadge().catch(() => {});
+  } catch (e) { /* 同期例外も握る */ }
+}
+
+function clearEliAppBadge() {
+  if (!('clearAppBadge' in navigator)) return;
+  try { navigator.clearAppBadge().catch(() => {}); } catch (e) { /* noop */ }
+}
+
 // ── メイン ───────────────────────────────────────────────
 function AdminApp({ role, onLogout, onMyPage }) {
   const [orders,    setOrders]   = useState([]);
@@ -10542,6 +10563,25 @@ function AdminApp({ role, onLogout, onMyPage }) {
 
   // ポーリング側の fetchNotifications から最新の orders を読むための同期
   useEffect(() => { ordersRef.current = orders; }, [orders]);
+
+  // OS アプリバッジ＝ベルのバッジ（notifFeed.length）と常に一致させる。
+  // ★deps は notifFeed そのものではなく length（数値）。
+  //   配列にすると3秒ポーリングが毎回新しい配列を作るため、件数が変わっていなくても
+  //   3秒ごとに setAppBadge を叩くことになる。
+  // ★siteChangeCounts（現場情報変更）と adjCount+soudCount（要対応）は
+  //   フィードに載せない決定（計画書 §3-1 / §3-4）なのでバッジにも含めない。
+  //   含めると「ベルは0なのにアイコンに数字が残る」二重管理になる。
+  // ★通知パネルを開いた時にはクリアしない。パネルは未読のみ表示（A案）で
+  //   開いても既読化しないため、消すと3秒後のポーリングで復活してチラつく。
+  useEffect(() => { setEliAppBadge(notifFeed.length); }, [notifFeed.length]);
+
+  // ログアウト時のクリア。AdminApp は onLogout → setScreen("login")（index.html:11233）で
+  // アンマウントされるので、クリーンアップに置けばサイドバーのログアウトボタン（11105）・
+  // ロール不一致ゲート（10525）・onAuthStateChange のセッション失効（10538）の
+  // 3経路すべてを1か所でカバーできる。
+  // ★上の useEffect にクリーンアップを付けてはいけない。件数が変わるたびに
+  //   clear → set が走ってバッジが点滅する。deps [] の別 useEffect に分ける。
+  useEffect(() => () => clearEliAppBadge(), []);
 
   // 通知クリック経由の遷移でも openNotification を唯一の入口として通す（計画書 §4-1）。
   // ★ref 経由にする理由：openNotification は毎レンダー再生成される。useEffect([]) で

@@ -13,7 +13,7 @@
  * Phase 2/3 で push / notificationclick ハンドラをここに追加する。
  */
 
-const SW_VERSION = 'phase3-2026-08-15';
+const SW_VERSION = 'phase4-badge-2026-08-17';
 
 self.addEventListener('install', () => {
   // precache しない。即座に次バージョンへ入れ替われるようにする
@@ -89,19 +89,30 @@ self.addEventListener('push', (event) => {
   // ★waitUntil で包まないと、showNotification の解決前に SW が停止して
   //   通知が出ないことがある。
   event.waitUntil(
-    self.registration.showNotification(p.title, {
-      body: p.body,
-      tag:  p.tag,
-      // 同じ tag の通知が既にあっても、置き換え時に再度知らせる
-      renotify: true,
-      // ★badge は Android のステータスバーで単色シルエットに潰される。
-      //   icon-192 は通常アイコンなので白い塊になりうる。
-      //   Chrome デスクトップでは badge 自体が無視されるため今週末は影響なし。
-      //   単色の badge-72.png は来週の実機確認とあわせて作る（TODO）。
-      icon:  '/icon-192.png',
-      badge: '/icon-192.png',
-      data:  { url: p.url, kind: p.kind, id: p.id, tag: p.tag, v: SW_VERSION },
-    })
+    Promise.all([
+      self.registration.showNotification(p.title, {
+        body: p.body,
+        tag:  p.tag,
+        // 同じ tag の通知が既にあっても、置き換え時に再度知らせる
+        renotify: true,
+        // ★badge は Android のステータスバーで単色シルエットに潰される。
+        //   icon-192 は通常アイコンなので白い塊になりうる。
+        //   Chrome デスクトップでは badge 自体が無視されるため今週末は影響なし。
+        //   単色の badge-72.png は来週の実機確認とあわせて作る（TODO）。
+        icon:  '/icon-192.png',
+        badge: '/icon-192.png',
+        data:  { url: p.url, kind: p.kind, id: p.id, tag: p.tag, v: SW_VERSION },
+      }),
+      // ★OS アプリバッジは「引数なし」で呼ぶ＝数字なしのドットのみ。
+      //   SW は正確な未読数を知らないので、ここで数を持つと index.html の
+      //   notifFeed と二重管理になる。数字はアプリを開いた時に
+      //   setEliAppBadge(notifFeed.length) が上書きし、0 なら消える。
+      // ★ガード必須（Chrome for Android / Firefox に API が無い）。
+      //   reject も握る（Push 本体の表示を絶対に止めない）。
+      ('setAppBadge' in self.navigator)
+        ? self.navigator.setAppBadge().catch(() => {})
+        : Promise.resolve(),
+    ])
   );
 });
 
