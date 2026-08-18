@@ -5801,6 +5801,27 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
     return () => clearInterval(id);
   }, []);
 
+  // ── OS アプリバッジ（顧客側）─────────────────────────────
+  // 管理者側（AdminApp）と同じ「画面に出ている未読数＝バッジ」の一貫性を保つ。
+  // 顧客側に統合フィード（notifFeed）は無いので、真実は unreadCounts の合計ただ1つ。
+  // ★deps は unreadCounts（オブジェクト）ではなく合計値（数値）にする。
+  //   pollUnread は3秒ごとに毎回新しいオブジェクトを作るため、オブジェクトを
+  //   deps にすると件数が変わっていなくても3秒ごとに setAppBadge を叩くことになる。
+  //   管理者側で notifFeed ではなく notifFeed.length を deps にしたのと同じ理由。
+  // ★初回マウント時は合計0で走るので clearAppBadge が呼ばれる。
+  //   これでアプリを閉じている間に SW が付けたドット（sw.js の引数なし
+  //   setAppBadge()）が、アプリを開いた時点で消える。SW は数を持たない
+  //   （二重管理回避）ので、正確な数字はここが唯一の出所。
+  // ★Supabase のクエリ増減はゼロ。既存の3秒ポーリングの結果に相乗りするだけ。
+  const unreadTotal = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
+  useEffect(() => { setEliAppBadge(unreadTotal); }, [unreadTotal]);
+
+  // ログアウト時のクリア。HistoryApp は onLogout → setScreen("login") で
+  // アンマウントされるため、クリーンアップに置けば1か所でカバーできる。
+  // ★上の useEffect にクリーンアップを付けてはいけない。件数が変わるたびに
+  //   clear → set が走ってバッジが点滅する（管理者側と同じ理由）。
+  useEffect(() => () => clearEliAppBadge(), []);
+
   useEffect(() => {
     const autoComplete = (os) => {
       const nowMs = Date.now();
@@ -5891,8 +5912,15 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
 
       <div className="hi-main-content">
 
+        {/* この端末で通知を受け取る（管理者側 :7015 と同じ PushOptIn を再利用）*/}
+        {/* ★同一の ensurePushSubscription を通るので user_id は session.user.id
+            ＝ログイン中の本人。RLS の WITH CHECK (user_id = auth.uid()) と一致する。*/}
+        {/* ★通知の宛先決定は Edge Function 側の責務。
+            ここでは誰に届くかを一切決めない。*/}
+        <PushOptIn />
+
         {/* E-Liのメッセージ */}
-        <EliMessage orders={orders} totalUnread={Object.values(unreadCounts).reduce((a,b)=>a+b,0)} />
+        <EliMessage orders={orders} totalUnread={unreadTotal} />
 
         {/* フィルター */}
         <div style={{ display:"flex", gap:8, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
