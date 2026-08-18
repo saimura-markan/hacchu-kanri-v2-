@@ -347,18 +347,18 @@ async function sendPush(
     const text = PUSH_TEXT[eventKey];
     if (!text) return none('skipped', `no push text for ${eventKey}`);
 
-    // ── 購読の読み取り（service_role で全行を読む）──────
-    //   ★ user_id で絞らない。メールの宛先は顧客、Push の宛先は管理者で、
-    //     両者は別物（§14-2 承認済み②「管理者7名から先行」／
-    //     購読UI PushOptIn は AdNotifPanel＝AdminApp 内にしか無い）。
-    //   ★ 必要な3列だけ引く。ua / last_ok_at / fail_count は使わない。
-    //     想定行数は数十行なので LIMIT も不要。
+    // ── 宛先の解決 ─────────────────────────────────────
+    //   宛先の決定は DB 側の RPC に委ねる。対象の判定と除外の適用は
+    //   RPC の責務で、ここでは判定しない（同じ規則を2箇所に持たない）。
+    //   ★ 往復は1回。返るのは endpoint / p256dh / auth_key の3列だけで、
+    //     ua / last_ok_at / fail_count は使わない（従来どおり）。
     const { data: subs, error: subsErr } = await admin
-      .from('eli_push_subscriptions')
-      .select('endpoint, p256dh, auth_key');
+      .rpc('get_push_targets', { p_order_id: orderId });
 
     if (subsErr) return none('error', `subs select: ${subsErr.message}`);
-    if (!subs || subs.length === 0) return none('skipped', 'no subscriptions');
+    //   ★ 'no push targets' … 購読が0件という意味ではない。
+    //     購読はあってもこの案件の宛先に該当しない場合もここに来る。
+    if (!subs || subs.length === 0) return none('skipped', 'no push targets');
 
     // ── ★動的 import ────────────────────────────────────
     //   静的 import が失敗すると関数自体が起動できず、
@@ -581,7 +581,7 @@ Deno.serve(async (req) => {
       }
     })();
 
-    // ── 9. Push 送信（管理者宛）★必ずメールの後ろ ─────────────
+    // ── 9. Push 送信（管理者全員＋発注者1名）★必ずメールの後ろ ──────
     //   前に置くと web-push の動的 import や Push サービスへの往復で
     //   メール送信が遅れる。sendPush は throw しない契約。
     const push = await sendPush(admin, orderId, eventKey);
