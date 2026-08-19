@@ -13,7 +13,7 @@
  * Phase 2/3 で push / notificationclick ハンドラをここに追加する。
  */
 
-const SW_VERSION = 'phase4-badge-2026-08-17';
+const SW_VERSION = 'phase5-badgediag-2026-08-19';
 
 self.addEventListener('install', () => {
   // precache しない。即座に次バージョンへ入れ替われるようにする
@@ -84,8 +84,76 @@ function parsePushPayload(event) {
   };
 }
 
+/* ───────────────────────────────────────────────────────────────
+ * バッジ診断（2026-08-19 追加）
+ *
+ *   なぜ要るか
+ *     iOS でアプリを閉じている間に届いた Push でバッジが付かない。
+ *     アプリを開くと（index.html の setEliAppBadge 経由で）付くので、
+ *     ページスコープは動いていて SW スコープだけが効いていない。
+ *     しかし従来のコードは
+ *         ('setAppBadge' in self.navigator) ? …setAppBadge().catch(()=>{}) : Promise.resolve()
+ *     という形で、次の2つが完全に無言で区別できなかった。
+ *       (a) SW スコープに setAppBadge が無い       → supported=false
+ *       (b) 呼べたが iOS が引数なしフラグを描画しない → supported=true / result=ok
+ *     結果を data と postMessage の両方に出して切り分ける。
+ *
+ *   ★通知の title / body は一切変えない。ユーザーに見える文言は無変更。
+ *   ★バッジの呼び方も変えない（従来どおり引数なし＝ドット）。
+ *   ★診断が失敗しても通知表示は絶対に止めない。
+ * ─────────────────────────────────────────────────────────────── */
+
+// バッジ結果を待つ上限。setAppBadge は本来ミリ秒で解決するが、
+// 万一ハングしても通知表示をこれ以上遅らせない。
+const BADGE_DIAG_TIMEOUT_MS = 1000;
+
+async function tryAppBadgeWithDiag() {
+  const supported = ('setAppBadge' in self.navigator);
+  if (!supported) return { supported: false, result: 'unsupported', error: null };
+  try {
+    // ★呼び方は従来と同じ「引数なし」。挙動は変えない。
+    const r = self.navigator.setAppBadge();
+    if (!r || typeof r.then !== 'function') {
+      // Promise を返さない実装だった場合もここで分かる
+      return { supported: true, result: 'ok-no-promise', error: null };
+    }
+    const settled = r.then(
+      () => ({ result: 'ok', error: null }),
+      (e) => ({ result: 'rejected', error: String((e && e.message) || e).slice(0, 200) })
+    );
+    const timeout = new Promise((res) =>
+      setTimeout(() => res({ result: 'timeout', error: null }), BADGE_DIAG_TIMEOUT_MS)
+    );
+    const won = await Promise.race([settled, timeout]);
+    return { supported: true, result: won.result, error: won.error };
+  } catch (e) {
+    // 同期例外
+    return { supported: true, result: 'threw', error: String((e && e.message) || e).slice(0, 200) };
+  }
+}
+
+async function postBadgeDiag(p, diag) {
+  try {
+    const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    cs.forEach((c) => c.postMessage({
+      source: 'eli-sw',
+      type:   'badge-diag',
+      badgeSupported: diag.supported,
+      badgeResult:    diag.result,
+      badgeError:     diag.error,
+      kind: p.kind, id: p.id, v: SW_VERSION, at: Date.now(),
+    }));
+  } catch (e) { /* 診断で本処理を止めない */ }
+}
+
 self.addEventListener('push', (event) => {
   const p = parsePushPayload(event);
+  // ★badgeSupported は同期で分かるので、通知の data にはこれを載せる。
+  //   アプリを閉じている間の Push では postMessage の届け先が無いため、
+  //   data → notificationclick が結果を回収する唯一の経路になる。
+  //   （badgeError まで data に載せるには結果を待つ必要があり、
+  //     通知表示を遅らせることになるので採らない。従来どおり並列のまま。）
+  const badgeSupported = ('setAppBadge' in self.navigator);
   // ★waitUntil で包まないと、showNotification の解決前に SW が停止して
   //   通知が出ないことがある。
   event.waitUntil(
@@ -101,17 +169,22 @@ self.addEventListener('push', (event) => {
         //   単色の badge-72.png は来週の実機確認とあわせて作る（TODO）。
         icon:  '/icon-192.png',
         badge: '/icon-192.png',
-        data:  { url: p.url, kind: p.kind, id: p.id, tag: p.tag, v: SW_VERSION },
+        data:  {
+          url: p.url, kind: p.kind, id: p.id, tag: p.tag, v: SW_VERSION,
+          // ★診断（2026-08-19）。notificationclick でページへ渡す。
+          badgeSupported,
+        },
       }),
-      // ★OS アプリバッジは「引数なし」で呼ぶ＝数字なしのドットのみ。
-      //   SW は正確な未読数を知らないので、ここで数を持つと index.html の
-      //   notifFeed と二重管理になる。数字はアプリを開いた時に
-      //   setEliAppBadge(notifFeed.length) が上書きし、0 なら消える。
-      // ★ガード必須（Chrome for Android / Firefox に API が無い）。
-      //   reject も握る（Push 本体の表示を絶対に止めない）。
-      ('setAppBadge' in self.navigator)
-        ? self.navigator.setAppBadge().catch(() => {})
-        : Promise.resolve(),
+      // ★通知表示と並列。バッジの結果を待たせない（従来の契約を維持）。
+      //   結果（result / error）は postMessage で随時ページへ送る。
+      //   アプリが開いていなければ届かないが、その場合でも上の
+      //   data.badgeSupported が notificationclick 経由で回収できる。
+      (async () => {
+        let diag = { supported: badgeSupported, result: 'diag-failed', error: null };
+        try { diag = await tryAppBadgeWithDiag(); }
+        catch (e) { diag.error = String((e && e.message) || e).slice(0, 200); }
+        await postBadgeDiag(p, diag);
+      })(),
     ])
   );
 });
@@ -139,6 +212,12 @@ self.addEventListener('notificationclick', (event) => {
         type:   'notification-click',
         kind:   data.kind || null,
         id:     data.id   || null,
+        // ★診断（2026-08-19）。アプリを閉じている間の Push では postMessage の
+        //   届け先が無いため、結果は通知の data にしか残らない。タップで開いた
+        //   このタイミングがページへ渡す唯一の機会になる。
+        badgeSupported: (typeof data.badgeSupported === 'undefined') ? null : data.badgeSupported,
+        badgeResult:    data.badgeResult || null,
+        badgeError:     data.badgeError  || null,
         url,
       });
       return;

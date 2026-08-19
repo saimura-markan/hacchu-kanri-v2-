@@ -10387,17 +10387,127 @@ function DeletedPanel({ onClose, onRestore, onHardDelete }) {
 // ★返り値の Promise は環境により reject する。握り潰して本処理を止めない
 //   （writeLog / sendPush と同じ「失敗しても本処理を止めない」契約）。
 // ★インストール済み（standalone）でないと OS 側が黙って無視する。例外は出ない。
-function setEliAppBadge(count) {
-  if (!('setAppBadge' in navigator)) return;
+// ── バッジ診断（2026-08-19 追加）─────────────────────────────
+//   ★これまで setEliAppBadge も sw.js も完全に無言で、
+//     「呼ばれていない」「API が無い」「呼んだが失敗した」の3つが区別できなかった。
+//     iOS は Web Inspector 無しでは console も見えないため、画面に出せる形で残す。
+//   ★記録そのものは常時オン（メモリ上の1オブジェクトだけ）。
+//     画面表示は URL に ?diag=1 が付いているときだけ。通常利用には一切出ない。
+//   ★React の描画ツリーには触らず素の DOM で作る。11,000行の単一ファイルなので、
+//     診断のために描画へ手を入れない方が安全。
+//   ★Supabase のクエリ増減はゼロ。
+const ELI_DIAG_ON = (() => {
+  try { return new URLSearchParams(location.search).get('diag') === '1'; }
+  catch (e) { return false; }
+})();
+
+const eliBadgeDiag = {
+  // ページスコープ（この index.html）
+  pageSupported: ('setAppBadge' in navigator),
+  standalone: (() => {
+    try {
+      return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+             || navigator.standalone === true;
+    } catch (e) { return null; }
+  })(),
+  lastCall: null, lastResult: null, lastError: null, lastAt: null,
+  // SW スコープ（sw.js）。postMessage か notificationclick で入る
+  swSupported: null, swResult: null, swError: null, swAt: null, swVia: null,
+};
+
+function eliDiagRender() {
+  if (!ELI_DIAG_ON) return;
   try {
-    if (count > 0) navigator.setAppBadge(count).catch(() => {});
-    else           navigator.clearAppBadge().catch(() => {});
-  } catch (e) { /* 同期例外も握る */ }
+    if (!document.body) return;
+    let el = document.getElementById('eli-badge-diag');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'eli-badge-diag';
+      el.style.cssText =
+        'position:fixed;left:8px;bottom:8px;z-index:99999;max-width:92vw;'
+        + 'background:rgba(0,0,0,.85);color:#fff;font:11px/1.5 ui-monospace,monospace;'
+        + 'padding:8px 10px;border-radius:8px;white-space:pre-wrap;pointer-events:none;';
+      document.body.appendChild(el);
+    }
+    const d = eliBadgeDiag;
+    el.textContent =
+      'BADGE DIAG\n'
+      + 'page setAppBadge : ' + d.pageSupported + '\n'
+      + 'standalone       : ' + d.standalone + '\n'
+      + 'page last        : ' + d.lastCall + ' -> ' + d.lastResult + '\n'
+      + 'page error       : ' + (d.lastError || '-') + '\n'
+      + 'sw  setAppBadge  : ' + d.swSupported + '\n'
+      + 'sw  result       : ' + (d.swResult || '-') + '\n'
+      + 'sw  error        : ' + (d.swError || '-') + '\n'
+      + 'sw  via          : ' + (d.swVia || '-');
+  } catch (e) { /* 診断で本処理を止めない */ }
+}
+
+function eliDiagNote(call, result, error) {
+  eliBadgeDiag.lastCall   = call;
+  eliBadgeDiag.lastResult = result;
+  eliBadgeDiag.lastError  = error || null;
+  eliBadgeDiag.lastAt     = Date.now();
+  if (ELI_DIAG_ON) { try { console.log('[eli-badge]', call, result, error || ''); } catch (e) {} }
+  eliDiagRender();
+}
+
+// SW からの診断を受け取る。
+//   ・badge-diag        … アプリが開いている間に Push が来た場合
+//   ・notification-click … アプリを閉じている間の Push を、タップして開いた場合
+//                          （この経路でしか結果を回収できない）
+try {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      const m = ev.data;
+      if (!m || m.source !== 'eli-sw') return;
+      if (m.type !== 'badge-diag' && m.type !== 'notification-click') return;
+      if (typeof m.badgeSupported === 'undefined') return;
+      eliBadgeDiag.swSupported = m.badgeSupported;
+      eliBadgeDiag.swResult    = m.badgeResult || null;
+      eliBadgeDiag.swError     = m.badgeError  || null;
+      eliBadgeDiag.swAt        = m.at || Date.now();
+      eliBadgeDiag.swVia       = m.type;
+      if (ELI_DIAG_ON) { try { console.log('[eli-badge][sw]', m); } catch (e) {} }
+      eliDiagRender();
+    });
+  }
+} catch (e) { /* 診断で本処理を止めない */ }
+
+function setEliAppBadge(count) {
+  if (!('setAppBadge' in navigator)) { eliDiagNote('set(' + count + ')', 'unsupported'); return; }
+  try {
+    if (count > 0) {
+      const r = navigator.setAppBadge(count);
+      if (r && typeof r.then === 'function') {
+        r.then(() => eliDiagNote('set(' + count + ')', 'ok'),
+               (e) => eliDiagNote('set(' + count + ')', 'rejected', String((e && e.message) || e)));
+      } else {
+        eliDiagNote('set(' + count + ')', 'ok-no-promise');
+      }
+    } else {
+      const r = navigator.clearAppBadge();
+      if (r && typeof r.then === 'function') {
+        r.then(() => eliDiagNote('clear(0)', 'ok'),
+               (e) => eliDiagNote('clear(0)', 'rejected', String((e && e.message) || e)));
+      } else {
+        eliDiagNote('clear(0)', 'ok-no-promise');
+      }
+    }
+  } catch (e) { eliDiagNote('set(' + count + ')', 'threw', String((e && e.message) || e)); }
 }
 
 function clearEliAppBadge() {
-  if (!('clearAppBadge' in navigator)) return;
-  try { navigator.clearAppBadge().catch(() => {}); } catch (e) { /* noop */ }
+  if (!('clearAppBadge' in navigator)) { eliDiagNote('clear', 'unsupported'); return; }
+  try {
+    const r = navigator.clearAppBadge();
+    if (r && typeof r.then === 'function') {
+      r.then(() => eliDiagNote('clear', 'ok'),
+             (e) => eliDiagNote('clear', 'rejected', String((e && e.message) || e)));
+    } else {
+      eliDiagNote('clear', 'ok-no-promise');
+    }
+  } catch (e) { eliDiagNote('clear', 'threw', String((e && e.message) || e)); }
 }
 
 // ── メイン ───────────────────────────────────────────────
