@@ -287,6 +287,18 @@
     /* ═══════════════════════════════════════
        Tipボックス
     ═══════════════════════════════════════ */
+    .keycap {
+      display: inline-block;
+      background: #f4f7ff;
+      border: 1px solid #e4e9f5;
+      border-radius: 6px;
+      padding: 1px 8px;
+      font-weight: 700;
+      color: #0a1f5c;
+      margin: 0 1px;
+      white-space: nowrap;
+    }
+
     .tip-box {
       background: #e8f0ff;
       border: 1.5px solid #2952c8;
@@ -533,6 +545,7 @@
       .feat-title      { font-size: 13px; }
       .section-wrap    { padding: 36px 16px 0; }
       .section-title   { font-size: 18px; }
+      .keycap          { padding: 1px 6px; }
       .status-grid     { grid-template-columns: 1fr; }
       .contact-card    { flex-direction: column; gap: 20px; padding: 24px 20px; }
       .contact-libot   { height: 80px; }
@@ -569,6 +582,7 @@
   <a href="#about">E-Liとは？</a>
   <a href="#register">アカウント登録</a>
   <a href="#login">ログイン</a>
+  <a href="#notify">通知の受け取り方</a>
   <a href="#order">発注の流れ</a>
   <a href="#status">ステータス</a>
   <a href="#manage">案件管理</a>
@@ -684,6 +698,117 @@
     登録したメールアドレスとパスワードを入力してログインしてください。<br /><br />
     <strong>パスワードを忘れた場合</strong><br />
     ログイン画面の「パスワードをわすれた方はこちら」をタップすると、登録メールアドレス宛にパスワードリセットのご案内をお送りします。
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════
+     通知の受け取り方
+══════════════════════════════════════ -->
+<section class="section-wrap" id="notify">
+  <h2 class="section-title">🔔 通知の受け取り方</h2>
+
+  <div class="info-card">
+    E-Li から、ご依頼の受付や日程の確定などをスマートフォンの通知でお届けします。<br />
+    はじめに一度だけ設定してください。<br /><br />
+    <strong>お届けするお知らせ</strong><br />
+    ・ご依頼を受け付けたとき<br />
+    ・日程が確定したとき<br />
+    ・ご担当者からあなた宛にメッセージが届いたとき
+  </div>
+
+  <div class="step-card">
+    <div class="step-num">1</div>
+    <div class="step-content">
+      <div class="step-title">［iPhone］Safari で E-Li を開く</div>
+      <div class="step-desc">ホーム画面の青いコンパスのマーク（Safari）から開いてください。<strong>かならず Safari</strong> でお願いします。Chrome など他のアプリでは設定できません。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">2</div>
+    <div class="step-content">
+      <div class="step-title">下の「共有」ボタンをタップ</div>
+      <div class="step-desc">四角から上向きの矢印が出ているマーク <span class="keycap">⬆</span> です。画面の下のまん中あたりにあります。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">3</div>
+    <div class="step-content">
+      <div class="step-title">「ホーム画面に追加」を選ぶ</div>
+      <div class="step-desc">メニューを下にスクロールすると <span class="keycap">ホーム画面に追加</span> があります。選んだら、右上の <span class="keycap">追加</span> をタップします。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">4</div>
+    <div class="step-content">
+      <div class="step-title">できた「E-Li」アイコンから開く</div>
+      <div class="step-desc">Safari ではなく、<strong>新しくできた E-Li のアイコン</strong>をタップして開いてください。ここが大切です。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">5</div>
+    <div class="step-content">
+      <div class="step-title">「通知を受け取る」をタップして許可する</div>
+      <div class="step-desc">通知のご案内が出たらタップし、「許可しますか？」と聞かれたら <span class="keycap">許可</span> を選びます。</div>
+      <div class="tip-box">うまくいかないとき — E-Li のアイコンを長押しして削除し、もう一度 1 番からお試しください。iPhone の 設定 → 通知 で「E-Li」がオンかもご確認ください。</div>
+    </div>
+  </div>
+
+  <div class="step-card">
+    <div class="step-num">1</div>
+    <div class="step-content">
+      <div class="step-title">［Android］Chrome で E-Li を開く</div>
+      <div class="step-desc">ホーム画面の丸いカラフルなマーク（Chrome）から開いてください。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">2</div>
+    <div class="step-content">
+      <div class="step-title">右上の「⋮」ボタンをタップ</div>
+      <div class="step-desc">点が縦に3つ並んだマーク <span class="keycap">⋮</span> です。画面のいちばん上、右のはしにあります。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">3</div>
+    <div class="step-content">
+      <div class="step-title">「ホーム画面に追加」を選ぶ</div>
+      <div class="step-desc">メニューの中にあります。ご案内が出たら <span class="keycap">追加</span> または <span class="keycap">インストール</span> をタップします。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">4</div>
+    <div class="step-content">
+      <div class="step-title">できた「E-Li」アイコンから開く</div>
+      <div class="step-desc">新しくできた <strong>E-Li のアイコン</strong>をタップして開いてください。</div>
+    </div>
+  </div>
+  <div class="step-arrow">↓</div>
+
+  <div class="step-card">
+    <div class="step-num">5</div>
+    <div class="step-content">
+      <div class="step-title">「通知を受け取る」をタップして許可する</div>
+      <div class="step-desc">通知のご案内が出たらタップし、「通知を許可しますか？」と聞かれたら <span class="keycap">許可</span> を選びます。</div>
+      <div class="tip-box">うまくいかないとき — スマートフォンの 設定 → アプリ → E-Li → 通知 が オン かをご確認ください。オフだと通知は届きません。</div>
+    </div>
+  </div>
+
+  <div class="info-card" style="margin-top:20px;">
+    <strong>これで設定は完了です。</strong><br />
+    次にお知らせがあると、スマートフォンに通知が届きます。E-Li のアイコンを開くと、未読のお知らせの件数が表示されます。
   </div>
 </section>
 
