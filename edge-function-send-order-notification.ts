@@ -89,6 +89,9 @@ const PUSH_TEXT: Record<string, { title: string; body: string }> = {
   schedule_fixed:   { title: 'E-Li 日程確定',     body: '日程が確定した案件があります' },
   cancelled:        { title: 'E-Li キャンセル',   body: 'キャンセルになった案件があります' },
   schedule_consult: { title: 'E-Li 日程相談',     body: '日程相談中の案件があります' },
+  // ★メンションPush（2026-08-19）。案件情報も本文も一切載せない。
+  //   誰にメンションされたかも書かない（ロック画面に人名を出さないため）。
+  mention:          { title: 'E-Li メンション',   body: 'あなた宛のメッセージがあります' },
 };
 
 // リンク注記に出すドメイン。APP_URL から導出する。
@@ -332,6 +335,71 @@ type PushOutcome = {
   removed: number;
 };
 
+// ----------------------------------------------------------------
+// 送信と後片付け（①案件通知と②メンションで共有）
+// ----------------------------------------------------------------
+//   ★404/410 の DELETE 条件をここ1箇所だけに置く。2箇所に複製すると、
+//     将来条件を変えたときに片方だけ直して取り残す。
+//   ★この関数は throw しうる。呼び出し元は必ず try で囲むこと
+//     （ここで握りつぶすと送信失敗が sent=0 と区別できなくなる）。
+async function deliverToSubs(
+  admin: ReturnType<typeof createClient>,
+  subs: Array<Record<string, unknown>>,
+  payload: string,
+): Promise<PushOutcome> {
+  // ── ★動的 import ────────────────────────────────────
+  //   静的 import が失敗すると関数自体が起動できず、
+  //   既存のメール送信まで道連れになる（§14-5）。
+  const webpush = (await import('npm:web-push@3.6.7')).default;
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+
+  const results = await Promise.allSettled(
+    subs.map((row) =>
+      webpush.sendNotification(
+        {
+          endpoint: row.endpoint as string,
+          // ★★DB 列は auth_key。web-push が要求するのは keys.auth。
+          //   素通しにすると auth が undefined になり暗号化が落ちる。
+          //   列名を auth にできない理由は add_eli_push_subscriptions.sql の
+          //   COMMENT（auth 列があると RLS 内の auth.uid() の解決が壊れうる）。
+          keys: { p256dh: row.p256dh as string, auth: row.auth_key as string },
+        },
+        payload,
+      )
+    )
+  );
+
+  // ── 404 / 410 はその場で DELETE ────────────────────────
+  //   pg_cron の掃除ジョブは作らない（定期実行そのものが恒常負荷・§14-4）。
+  //   ★ DELETE は endpoint をまとめて1クエリ。端末ごとに1本ずつ打たない。
+  const dead: string[] = [];
+  let sent = 0;
+
+  results.forEach((r, i) => {
+    if (r.status === 'fulfilled') { sent++; return; }
+    const code = (r.reason as { statusCode?: number } | undefined)?.statusCode;
+    if (code === 404 || code === 410) {
+      dead.push(subs[i].endpoint as string);
+    } else {
+      // 一時エラー。endpoint は消さない。
+      // ★ fail_count も書かない（通知×端末数の UPDATE を増やさない）。
+      console.error('[push] send failed', code ?? '(no status)', String(r.reason).slice(0, 200));
+    }
+  });
+
+  if (dead.length > 0) {
+    const { error: delErr } = await admin
+      .from('eli_push_subscriptions')
+      .delete()
+      .in('endpoint', dead);
+    if (delErr) console.error('[push] delete failed:', delErr.message);
+  }
+
+  // ★ last_ok_at は書かない。成功のたびに UPDATE すると
+  //   通知1件 × 端末数の書き込みが恒常的に発生し絶対原則に反する。
+  return { result: 'sent', detail: 'ok', sent, removed: dead.length };
+}
+
 async function sendPush(
   admin: ReturnType<typeof createClient>,
   orderId: string,
@@ -360,12 +428,6 @@ async function sendPush(
     //     購読はあってもこの案件の宛先に該当しない場合もここに来る。
     if (!subs || subs.length === 0) return none('skipped', 'no push targets');
 
-    // ── ★動的 import ────────────────────────────────────
-    //   静的 import が失敗すると関数自体が起動できず、
-    //   既存のメール送信まで道連れになる（§14-5）。
-    const webpush = (await import('npm:web-push@3.6.7')).default;
-    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
-
     // ── ★ペイロードは id と kind だけ。url は送らない ──────────
     //   url を送ると &kind= が付かず、②経路（openWindow）が chat に倒れて
     //   ①経路（postMessage）と非対称になる（2026-08-15 確定）。
@@ -378,51 +440,8 @@ async function sendPush(
       id:    orderId,
     });
 
-    const results = await Promise.allSettled(
-      subs.map((row) =>
-        webpush.sendNotification(
-          {
-            endpoint: row.endpoint as string,
-            // ★★DB 列は auth_key。web-push が要求するのは keys.auth。
-            //   素通しにすると auth が undefined になり暗号化が落ちる。
-            //   列名を auth にできない理由は add_eli_push_subscriptions.sql の
-            //   COMMENT（auth 列があると RLS 内の auth.uid() の解決が壊れうる）。
-            keys: { p256dh: row.p256dh as string, auth: row.auth_key as string },
-          },
-          payload,
-        )
-      )
-    );
-
-    // ── 404 / 410 はその場で DELETE ────────────────────────
-    //   pg_cron の掃除ジョブは作らない（定期実行そのものが恒常負荷・§14-4）。
-    //   ★ DELETE は endpoint をまとめて1クエリ。端末ごとに1本ずつ打たない。
-    const dead: string[] = [];
-    let sent = 0;
-
-    results.forEach((r, i) => {
-      if (r.status === 'fulfilled') { sent++; return; }
-      const code = (r.reason as { statusCode?: number } | undefined)?.statusCode;
-      if (code === 404 || code === 410) {
-        dead.push(subs[i].endpoint as string);
-      } else {
-        // 一時エラー。endpoint は消さない。
-        // ★ fail_count も書かない（通知×端末数の UPDATE を増やさない）。
-        console.error('[push] send failed', code ?? '(no status)', String(r.reason).slice(0, 200));
-      }
-    });
-
-    if (dead.length > 0) {
-      const { error: delErr } = await admin
-        .from('eli_push_subscriptions')
-        .delete()
-        .in('endpoint', dead);
-      if (delErr) console.error('[push] delete failed:', delErr.message);
-    }
-
-    // ★ last_ok_at は書かない。成功のたびに UPDATE すると
-    //   通知1件 × 端末数の書き込みが恒常的に発生し絶対原則に反する。
-    return { result: 'sent', detail: 'ok', sent, removed: dead.length };
+    // 送信と後片付けは deliverToSubs に集約（メンションPush と共有）。
+    return await deliverToSubs(admin, subs, payload);
 
   } catch (e) {
     console.error('[push] unexpected:', e);
@@ -435,6 +454,91 @@ function json(body: unknown, status: number) {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+// ----------------------------------------------------------------
+// メンションPush（2026-08-19）
+// ----------------------------------------------------------------
+//   トリガー trg_eli_notify_mention → eli_notify_mention() が
+//   { event:'mention', message_id } を投げてくる。order_id は来ない。
+//
+//   ★メールは送らない。Push だけ。メンションでメールまで送ると通知過多になる。
+//   ★宛先の判定はしない。DB の get_push_targets_message が持つ責務
+//     （同じ規則を2箇所に持たない。get_push_targets と同じ方針）。
+//   ★エラーでも 200 を返す。pg_net 側にエラーを積まないため
+//     （既存の skip() と同じ考え方）。invalid payload だけ 400。
+async function handleMention(
+  admin: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const raw = body?.message_id;
+  const messageId =
+    typeof raw === 'string' || typeof raw === 'number' ? Number(raw) : NaN;
+
+  if (!Number.isInteger(messageId) || messageId <= 0) {
+    await writeLog(admin, {
+      order_id: null, event: 'mention',
+      result: 'error', detail: 'invalid message_id', to_domain: null,
+    });
+    return json({ error: 'invalid payload' }, 400);
+  }
+
+  const done = async (
+    result: 'sent' | 'skipped' | 'error',
+    detail: string,
+    orderId: string | null,
+  ) => {
+    await writeLog(admin, {
+      order_id: orderId, event: 'mention', result, detail, to_domain: null,
+    });
+    return json({ [result]: detail }, 200);
+  };
+
+  try {
+    if (!VAPID_PUBLIC || !VAPID_PRIVATE || !VAPID_SUBJECT) {
+      return await done('skipped', 'vapid secrets missing', null);
+    }
+
+    const text = PUSH_TEXT['mention'];
+    if (!text) return await done('skipped', 'no push text for mention', null);
+
+    // ── 宛先の解決（往復1回）────────────────────────────
+    //   ★order_id もこの RPC が返す。全行同じ値。
+    //     返さない設計にすると messages を引き直して往復が2回になる。
+    const { data: subs, error: subsErr } = await admin
+      .rpc('get_push_targets_message', { p_message_id: messageId });
+
+    if (subsErr) return await done('error', `subs select: ${subsErr.message}`, null);
+
+    // ★0件は正常系。自分しかメンションしていない／宛先が誰も購読していない、
+    //   のどちらでもここに来る。購読0件という意味ではない。
+    if (!subs || subs.length === 0) {
+      return await done('skipped', 'no push targets', null);
+    }
+
+    // ★sw.js は payload の id を ?order= に使う。
+    //   ここに message_id を入れると案件が開かない。
+    const orderId = (subs[0] as { order_id?: string }).order_id ?? null;
+    if (!orderId) return await done('error', 'rpc returned no order_id', null);
+
+    const payload = JSON.stringify({
+      title: text.title,
+      body:  text.body,
+      kind:  'chat',   // メンションはチャットタブへ（案件通知の 'change' と分ける）
+      id:    orderId,
+    });
+
+    const out = await deliverToSubs(
+      admin, subs as Array<Record<string, unknown>>, payload,
+    );
+    return await done(
+      out.result, `${out.detail} sent=${out.sent} removed=${out.removed}`, orderId,
+    );
+
+  } catch (e) {
+    console.error('[mention] unexpected:', e);
+    return await done('error', String(e).slice(0, 200), null);
+  }
 }
 
 Deno.serve(async (req) => {
@@ -453,6 +557,19 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+
+  // ── 2-b. ★メンションPush の最優先分岐（2026-08-19）───────────
+  //   ここで返すので、以降の既存メール経路には一切入らない。
+  //   既存経路は order_id 必須・EVENTS 照合・orders.status の再確認を通るが、
+  //   メンションはそのどれにも該当しない（案件の状態変化ではないため）。
+  //
+  //   ★req.clone() を使う理由：body は一度しか読めない。
+  //     既存の try 内にある `await req.json()` の行を書き換えずに済ませるため、
+  //     ここでは複製から読む。既存経路のコードは1行も変えていない。
+  const peek = await req.clone().json().catch(() => ({}));
+  if (peek?.event === 'mention') {
+    return await handleMention(admin, peek);
+  }
 
   let orderId: string | null = null;
   let eventKey = '';
