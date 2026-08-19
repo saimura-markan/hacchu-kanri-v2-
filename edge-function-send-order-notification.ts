@@ -84,14 +84,23 @@ const VAPID_SUBJECT = Deno.env.get('ELI_VAPID_SUBJECT')     ?? '';
 
 // ★ 案件情報（現場名・住所・日付・顧客名）を一切含めない汎用文言のみ。
 //   Push はロック画面に出るぶんメールより慎重に扱う（§14-6 / 8-1 メール方針）。
+// ★文面は顧客向けに中立化してある（2026-08-19）。
+//   宛先は5イベントとも「管理者全員＋その案件の発注者1名（＝顧客）」で、
+//   顧客のロック画面にも同じ文字列が出る。
+//   ・主語を出さない。「届きました」「案件があります」は受け手が管理者である
+//     前提の言い回しで、自分で発注した顧客が読むと他人事に見える。
+//     起きた事実だけを書けばどちらの立場でも成立する。
+//   ・「案件」という社内語を使わない。Push は案件ごとに1通で
+//     （tag が `${kind}-${id}`）、複数をまとめた通知ではないため単数で書く。
 const PUSH_TEXT: Record<string, { title: string; body: string }> = {
-  order_received:   { title: 'E-Li 新しいご依頼', body: '新しいご依頼が届きました' },
-  schedule_fixed:   { title: 'E-Li 日程確定',     body: '日程が確定した案件があります' },
-  cancelled:        { title: 'E-Li キャンセル',   body: 'キャンセルになった案件があります' },
-  schedule_consult: { title: 'E-Li 日程相談',     body: '日程相談中の案件があります' },
+  order_received:   { title: 'E-Li ご依頼受付', body: 'ご依頼を受け付けました' },
+  schedule_fixed:   { title: 'E-Li 日程確定',   body: '日程が確定しました' },
+  cancelled:        { title: 'E-Li キャンセル', body: 'キャンセルが確定しました' },
+  schedule_consult: { title: 'E-Li 日程調整',   body: '日程の調整を開始しました' },
   // ★メンションPush（2026-08-19）。案件情報も本文も一切載せない。
   //   誰にメンションされたかも書かない（ロック画面に人名を出さないため）。
-  mention:          { title: 'E-Li メンション',   body: 'あなた宛のメッセージがあります' },
+  //   title は「メンション」ではなく「メッセージ」。顧客に確実に通じる語にする。
+  mention:          { title: 'E-Li メッセージ', body: 'あなた宛のメッセージがあります' },
 };
 
 // リンク注記に出すドメイン。APP_URL から導出する。
