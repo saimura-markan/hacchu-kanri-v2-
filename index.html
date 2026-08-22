@@ -5917,7 +5917,9 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
             ＝ログイン中の本人。RLS の WITH CHECK (user_id = auth.uid()) と一致する。*/}
         {/* ★通知の宛先決定は Edge Function 側の責務。
             ここでは誰に届くかを一切決めない。*/}
-        <PushOptIn />
+        {/* ★2026-08-22: 顧客側だけ PushOptInBig に差し替え。
+            管理者パネル側の呼び出し（AdNotifPanel 内）は無変更のまま残してある。*/}
+        <PushOptInBig />
 
         {/* E-Liのメッセージ */}
         <EliMessage orders={orders} totalUnread={unreadTotal} />
@@ -6830,6 +6832,19 @@ const PUSH_PUBLIC_KEY = 'BBX-bQycivZiw87Y7lkGx8JjBk9yTox4Bnv4EQhqx-qdl24tWqd-PSd
 //   （RLS の UPDATE ポリシーを USING (true) にしてあるのはこのため）。
 const PUSH_LS_KEY = 'eli_push_endpoint';
 
+// 直近の失敗理由（表示用の短いコードだけ）。顧客が「できない」と言ったときに
+// スクリーンショット1枚で原因を特定できるようにするためのもの。
+//   ★ensurePushSubscription の戻り値を {state, reason} に変えない。変えると
+//     管理者パネルの PushOptIn（setState(s) で文字列を受ける）が壊れる。
+//     a55d88f の eliBadgeDiag と同じく、モジュール変数に置いて読む側だけが読む。
+//   ★読むのは PushOptInBig だけ。PushOptIn は参照しない。
+let eliPushLastReason = null;
+
+// 外部由来の文字列（Postgres の SQLSTATE、例外名）をそのまま描画しない。
+// 長文や想定外の中身が来ても箱が壊れないように、許可文字と長さで殺しておく。
+const eliPushCode = (v) =>
+  String(v == null ? '' : v).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 12) || 'unknown';
+
 const pushSupported = () =>
   'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
@@ -6875,7 +6890,7 @@ async function ensurePushSubscription(opts) {
   // ここまでネットワークは0回。getSession はローカル読み（getUser は Auth へ往復する）。
   const { data: { session } } = await sb.auth.getSession();
   const uid = session && session.user && session.user.id;
-  if (!uid) return 'error';
+  if (!uid) { eliPushLastReason = 'E-01'; return 'error'; }
 
   // ★単独で最大の削減点。素直に書くと全ページロードで upsert が飛ぶ。
   const stamp = uid + '|' + sub.endpoint;
@@ -6889,7 +6904,12 @@ async function ensurePushSubscription(opts) {
     auth_key: keys.auth,
     ua:       (navigator.userAgent || '').slice(0, 300),
   }, { onConflict: 'endpoint' });                        // ★.select() を呼ばない
-  if (error) { console.warn('[push] upsert failed:', error.message); return 'error'; }
+  if (error) {
+    // ★画面にはコードだけ。message は表や制約の名前を含むので顧客には出さない。
+    console.warn('[push] upsert failed:', error.message);
+    eliPushLastReason = 'E-02/' + eliPushCode(error.code);
+    return 'error';
+  }
 
   localStorage.setItem(PUSH_LS_KEY, stamp);
   return 'subscribed';
@@ -6951,6 +6971,186 @@ function PushOptIn() {
           padding:"5px 10px", cursor: busy ? "default" : "pointer", flexShrink:0 }}>
         {busy ? '設定中…' : '通知を許可'}
       </button>
+    </React.Fragment>
+  ));
+}
+
+// ── 顧客向け 通知オプトイン（2026-08-22 追加）───────────────
+//   ★PushOptIn（管理者パネル用・上）とは別コンポーネントにしてある。
+//     顧客側だけ大きくするのが目的で、管理者のドロワーは1行のまま保ちたい。
+//     props で出し分けると box() を共有するため、管理者側が無変更だと
+//     「読んで確かめる」しかなくなる。別にしておけば git の差分で示せる。
+//   ★処理は ensurePushSubscription を共有する（戻り値6値もそのまま）。
+//     不具合は常にそちら側に出るので、実処理を2本に割らないことを優先した。
+//   ★Supabase へのクエリは PushOptIn と同じく「マウント時に1回」。増減ゼロ。
+//     localStorage の stamp が一致すれば1本も出ないのも同じ。
+//   ★ボタンは HiBigBtn をそのまま流用する（色指定なし＝紺）。
+//     黄は「➕ 新しく工事を頼む」のもので、そちらが本業。序列を逆転させない。
+function PushOptInBig() {
+  const [state,  setState]  = useState('checking');
+  const [busy,   setBusy]   = useState(false);
+  const [reason, setReason] = useState(null);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    eliPushLastReason = null;
+    ensurePushSubscription({ subscribe: false })
+      .then(s => { if (alive.current) { setState(s); setReason(eliPushLastReason); } })
+      .catch(e => {
+        console.warn('[push]', e);
+        if (alive.current) { setReason('E-03/' + eliPushCode(e && e.name)); setState('error'); }
+      });
+    return () => { alive.current = false; };
+  }, []);
+
+  const onAllow = async () => {
+    setBusy(true);
+    eliPushLastReason = null;
+    try {
+      const s = await ensurePushSubscription({ subscribe: true });
+      setState(s); setReason(eliPushLastReason);
+    } catch (e) {
+      console.warn('[push]', e);
+      setReason('E-03/' + eliPushCode(e && e.name));
+      setState('error');
+    }
+    setBusy(false);
+  };
+
+  if (state === 'checking' || state === 'unsupported') return null;
+
+  // ★購読済みは意図的に大きくしない。成功した人にとって大きい箱は毎回の邪魔。
+  if (state === 'subscribed')
+    return (
+      <div style={{ background:C.blueL, color:C.navy, borderRadius:12,
+        padding:"9px 14px", fontSize:12, fontWeight:700, lineHeight:1.5,
+        marginBottom:12 }}>
+        ✅ この端末で通知を受け取ります
+      </div>
+    );
+
+  // カードの外枠。HiOrderCard の作法（角丸18・左帯6px・同じ影）に合わせる。
+  const card = (accent, bg, body) => (
+    <div style={{ background:bg, borderRadius:18, border:"1px solid "+C.grayL,
+      borderLeft:"6px solid "+accent, boxShadow:"0 2px 12px rgba(10,31,92,0.07)",
+      padding:16, marginBottom:12 }}>
+      {body}
+    </div>
+  );
+
+  const head = (title, desc, titleColor) => (
+    <div style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+      <img src={ELI_IMG} alt="" className="libot-float"
+        style={{ height:56, width:"auto", flexShrink:0 }} />
+      <div style={{ minWidth:0 }}>
+        <div style={{ fontSize:15, fontWeight:900, color:titleColor || C.navy,
+          lineHeight:1.5, marginBottom:4 }}>{title}</div>
+        <div style={{ fontSize:13, lineHeight:1.7, color:"#5a6b8f" }}>{desc}</div>
+      </div>
+    </div>
+  );
+
+  // items: [ [マーカー, 本文], ... ]
+  const rows = (markBg, markColor, items) => (
+    <div style={{ display:"flex", flexDirection:"column", gap:7, marginTop:12 }}>
+      {items.map((it, i) => (
+        <div key={i} style={{ display:"flex", gap:9, alignItems:"flex-start",
+          fontSize:13, fontWeight:700, color:C.navy, lineHeight:1.6 }}>
+          <span style={{ flexShrink:0, width:19, height:19, borderRadius:"50%",
+            background:markBg, color:markColor, fontSize:11, fontWeight:900,
+            display:"flex", alignItems:"center", justifyContent:"center", marginTop:2 }}>
+            {it[0]}
+          </span>
+          <span style={{ minWidth:0 }}>{it[1]}</span>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ★ガイドへの導線。これまでアプリ画面から eli-guide.html へ行く道が
+  //   1つも無く、顧客に URL を送るしか到達手段が無かった。
+  const guideLink = (
+    <a href="./eli-guide.html#notify"
+      style={{ display:"inline-block", marginTop:12, fontSize:13, fontWeight:800,
+        color:C.blue, textDecoration:"none",
+        borderBottom:"2px solid rgba(41,82,200,0.25)" }}>
+      → くわしい手順を見る
+    </a>
+  );
+
+  const keycap = (t) => (
+    <span style={{ display:"inline-block", border:"1px solid #c9b06a", borderRadius:4,
+      padding:"0 5px", background:C.white, fontSize:12, fontWeight:900, color:"#7a5c00" }}>{t}</span>
+  );
+
+  // ★iPhone の顧客が最初に必ず通る状態。ここを越えないと許可ボタンは出ない。
+  if (state === 'ios-needs-home')
+    return card(C.yellow, "#fffaf0", (
+      <React.Fragment>
+        {head("📱 あと少しで通知を受け取れます",
+              "iPhone は、ホーム画面に追加した E-Li からだけ通知を受け取れます。",
+              "#7a5c00")}
+        {rows(C.yellow, C.navy, [
+          ["1", <React.Fragment>画面下の {keycap("⬆")} 共有ボタンをタップ</React.Fragment>],
+          ["2", "「ホーム画面に追加」を選ぶ"],
+          ["3", "ホーム画面の E-Li を開いて「通知を許可する」をタップ"],
+        ])}
+        {guideLink}
+      </React.Fragment>
+    ));
+
+  // ★ボタンは置かない。一度 denied になるとブラウザは requestPermission の
+  //   ダイアログを二度と出さないので、押せるものを置くと「押しても何も
+  //   起きない」になる。OS 設定へ誘導するのが唯一の道。
+  if (state === 'denied')
+    return card(C.red, "#fff4f4", (
+      <React.Fragment>
+        {head("🔕 通知がブロックされています",
+              "端末の設定から E-Li の通知をオンにすると受け取れます。",
+              "#c1121f")}
+        {rows(C.red, C.white, [
+          ["i", "iPhone — 設定 → 通知 → E-Li をオン"],
+          ["A", "Android — 設定 → アプリ → E-Li → 通知"],
+          ["P", "パソコン — アドレスバーの 🔒 →「通知」を許可"],
+        ])}
+        {guideLink}
+      </React.Fragment>
+    ));
+
+  if (state === 'error')
+    return card(C.red, "#fff4f4", (
+      <React.Fragment>
+        {head("⚠️ 通知の設定ができませんでした",
+              "お手数ですが、もう一度お試しください。何度も出る場合は、担当者にこの番号をお伝えください。",
+              "#c1121f")}
+        <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap", marginTop:14 }}>
+          <span style={{ fontFamily:"ui-monospace,SFMono-Regular,Menlo,monospace",
+            fontSize:13, fontWeight:600, color:"#c1121f", background:C.white,
+            border:"1px dashed #e6a0a6", borderRadius:8, padding:"10px 14px",
+            letterSpacing:"0.04em" }}>
+            {reason || 'E-00'}
+          </span>
+          <button onClick={onAllow} disabled={busy}
+            style={{ border:"2px solid "+C.grayL, background:C.white, color:C.navy,
+              borderRadius:12, fontSize:13, fontWeight:800, padding:"11px 18px",
+              fontFamily:"inherit", cursor: busy ? "default" : "pointer" }}>
+            {busy ? '設定中…' : 'もう一度試す'}
+          </button>
+        </div>
+      </React.Fragment>
+    ));
+
+  // state === 'default'
+  return card(C.blue, C.white, (
+    <React.Fragment>
+      {head("🔔 通知を受け取りませんか？",
+            "日程が決まったとき・メッセージが届いたときに、この端末へお知らせします。")}
+      <div style={{ marginTop:14 }}>
+        <HiBigBtn onClick={onAllow} disabled={busy}>
+          {busy ? '設定中…' : '通知を許可する'}
+        </HiBigBtn>
+      </div>
     </React.Fragment>
   ));
 }
