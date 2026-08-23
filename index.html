@@ -5718,6 +5718,17 @@ function ChatScreen({ role, order, onBack }) {
 
 // ── メイン ───────────────────────────────────────────────
 function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDetailView, onGoChat }) {
+  // ★初回だけ通知オンボを出す。判定は localStorage と Notification.permission
+  //   だけで完結し、Supabase へは1本も出ない。role では絞らない。
+  const [showNotifyOnboard, setShowNotifyOnboard] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(ELI_ONBOARD_NOTIFY_KEY)) return;   // 既に出した
+      if (typeof Notification === 'undefined') return;            // 非対応環境で例外にしない
+      if (Notification.permission !== 'default') return;          // ★まだ何も決めていない人だけが対象
+      setShowNotifyOnboard(true);
+    } catch (e) { /* localStorage 遮断など。出さない側に倒す */ }
+  }, []);
   const [orders,     setOrders]    = useState([]);
   const [filter,     setFilter]    = useState("全て");
   const [, setTick]                = useState(0);
@@ -5960,6 +5971,11 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
             onDetail={()=>onGoDetail(order)}
             onChat={()=>{ setUnreadCounts(prev=>({...prev,[order.id]:0})); setMentionCounts(prev=>({...prev,[order.id]:0})); onGoChat(order); }} />
         ))}
+
+        {/* 初回だけの通知オンボーディング（2026-08-23）*/}
+        {showNotifyOnboard && (
+          <NotifyOnboardModal onClose={()=>setShowNotifyOnboard(false)} />
+        )}
 
         {/* 案件ピッカーシート */}
         {showPicker && (
@@ -6832,6 +6848,13 @@ const PUSH_PUBLIC_KEY = 'BBX-bQycivZiw87Y7lkGx8JjBk9yTox4Bnv4EQhqx-qdl24tWqd-PSd
 //   （RLS の UPDATE ポリシーを USING (true) にしてあるのはこのため）。
 const PUSH_LS_KEY = 'eli_push_endpoint';
 
+// 通知オンボーディングを「出したか」だけを持つフラグ。
+//   ★PUSH_LS_KEY（購読済みの意味）とは絶対に混ぜない。
+//     こちらは購読の成否と無関係で、「あとで」でも押した時点で立つ。
+//   ★_v1 を付けてあるので、将来オンボの内容を変えて出し直したくなったら
+//     _v2 にすれば全員にもう一度出せる。
+const ELI_ONBOARD_NOTIFY_KEY = 'eli_onboard_notify_v1';
+
 // 直近の失敗理由（表示用の短いコードだけ）。顧客が「できない」と言ったときに
 // スクリーンショット1枚で原因を特定できるようにするためのもの。
 //   ★ensurePushSubscription の戻り値を {state, reason} に変えない。変えると
@@ -6973,6 +6996,75 @@ function PushOptIn() {
       </button>
     </React.Fragment>
   ));
+}
+
+// ── 初回だけ出すお知らせモーダル（2026-08-23 追加）──────────────
+//   ★購読関数は呼ばない。ここは「通知が使えること」を知らせてガイドへ送るだけ。
+//     モーダルから ensurePushSubscription を呼ぶと、iPhone をホーム画面に
+//     追加していない人が押しても 'ios-needs-home' が返って何も起きないまま
+//     閉じ、フラグが立って二度と出なくなる。順番を案内する側に倒す。
+//   ★実際の購読は PushOptInBig（画面上部のカード）が担当する。役割を分ける。
+//   ★Supabase のクエリ増減はゼロ。このコンポーネントはネットワークを一切触らない。
+//   ★新規CSSは書かない。暗幕・角丸20・msgIn・影は HistoryApp の
+//     案件ピッカーシート（:5965）と同じインラインスタイルを流用。
+//   ★管理者パネルの PushOptIn とは無関係。触っていない。
+function NotifyOnboardModal({ onClose }) {
+  // 閉じる経路はすべてここを通す。★どの経路でも必ずフラグを立てて二度と出さない。
+  const finish = () => {
+    try { localStorage.setItem(ELI_ONBOARD_NOTIFY_KEY, '1'); }
+    catch (e) { /* localStorage 遮断。出し続けるよりは無視して閉じる */ }
+    onClose();
+  };
+
+  const onOpenGuide = () => {
+    // ★別タブで開く。noopener で開いた先から window.opener を触らせない。
+    try { window.open('./eli-guide.html#notify', '_blank', 'noopener,noreferrer'); }
+    catch (e) { /* ポップアップ抑止。閉じる処理は必ず続ける */ }
+    finish();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.5)",
+      display:"flex", alignItems:"center", justifyContent:"center", zIndex:200, padding:"16px" }}
+      onClick={e=>{ if (e.target===e.currentTarget) finish(); }}>
+      <div style={{ background:C.white, borderRadius:20, width:"100%", maxWidth:400,
+        animation:"msgIn 0.22s ease", boxShadow:"0 8px 40px rgba(0,0,0,0.25)",
+        padding:"22px 20px 18px", boxSizing:"border-box" }}>
+
+        <div style={{ display:"flex", alignItems:"flex-start", gap:12, marginBottom:14 }}>
+          <img src={ELI_IMG} alt="" className="libot-float"
+            style={{ height:64, width:"auto", flexShrink:0 }} />
+          <div style={{ minWidth:0 }}>
+            <div style={{ fontSize:18, fontWeight:900, color:C.navy,
+              lineHeight:1.5, marginBottom:8 }}>
+              🔔 通知が受け取れます
+            </div>
+            <div style={{ fontSize:14, lineHeight:1.8, color:"#5a6b8f" }}>
+              日程が決まったとき・メッセージが届いたときに、スマホへお知らせできます。はじめに一度だけ、かんたんな設定が必要です。
+            </div>
+          </div>
+        </div>
+
+        {/* ★順番の注意。ホーム画面に追加する前に通知設定へ進むと購読できない */}
+        <div style={{ background:"#fffaf0", color:"#7a5c00", borderRadius:10,
+          padding:"9px 12px", fontSize:12, fontWeight:700, lineHeight:1.7,
+          marginBottom:14 }}>
+          ⚠️ iPhoneの方は、先にホーム画面へ追加してから設定してください。順番がちがうと通知を受け取れません。
+        </div>
+
+        <HiBigBtn color="blue" onClick={onOpenGuide}>設定方法を見る</HiBigBtn>
+
+        <div style={{ display:"flex", justifyContent:"flex-end", marginTop:12 }}>
+          <button onClick={finish}
+            style={{ background:"none", border:"none", padding:"8px 4px",
+              fontSize:13, fontWeight:700, color:C.gray, fontFamily:"inherit",
+              textDecoration:"underline", cursor:"pointer" }}>
+            あとで
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ── 顧客向け 通知オプトイン（2026-08-22 追加）───────────────
