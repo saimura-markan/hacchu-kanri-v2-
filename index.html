@@ -9558,6 +9558,11 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 );
                 const addrFull=[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ');
                 const rows = [
+                  // ★プロワンに貼る E-Li へのリンク。受け口は AdminApp:11045 で、
+                  //   照合は orders[].id（＝受付番号 B-2026-xxx）。caseCode ではない。
+                  //   kind=change で詳細タブが開く（kind 無し・detail 指定はチャットに倒れる）。
+                  <PRow key="E-Liリンク" label="E-Liリンク"
+                        value={`https://eli.markan.co.jp/?order=${encodeURIComponent(order.id)}&kind=change`} />,
                   <PRow key="会社名"   label="会社名"   value={order.company} />,
                   <PRow key="担当者"   label="担当者"   value={order.person} />,
                   <PRow key="ふりがな" label="ふりがな" value={order.personKana} />,
