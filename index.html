@@ -10807,6 +10807,171 @@ function clearEliAppBadge() {
   } catch (e) { eliDiagNote('clear', 'threw', String((e && e.message) || e)); }
 }
 
+// ── まもなく施工（4日前確認）パネル ─────────────────────────
+// ★段階1: 取得して一覧表示するだけ。定型文・編集・チェックボックス・一斉送信は次段階。
+// ★DeletedPanel と同じ「メイン領域を丸ごと差し替える自己完結パネル」。
+//   AdminApp の fetchOrders / mapOrder / OrderList / DetailPanel には一切依存しない。
+// ★ポーリングしない。再取得は手動の 🔄 のみ（Supabase の負担を増やさないため）。
+// ★work_date は schedules 側が持つ（orders に日付カラムは無い）。
+//   親を schedules にして orders!inner で絞ると、対象日の1日ぶんだけが返る。
+
+// 「今日の N 日後」をローカル日付の YYYY-MM-DD で組む。
+// ★toISOString() は UTC なので使わない。JST の朝9時前に実行すると1日ずれる。
+//   自動完了ループが new Date(y, mo-1, d, ...) とローカル前提なのと揃えている。
+function adLocalDateAfter(days) {
+  const t = new Date();
+  t.setDate(t.getDate() + days);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+
+// カナリア用の日付上書き。?upcoming=YYYY-MM-DD が付いていればその日を見る。
+// ★陽性（実在する日）→ 行が出る / 陰性（2099-01-01）→ 0件、の2方向を確認するために使う。
+//   0件だけを見ても「壊れて常に0件」と区別できないため。
+function adUpcomingTargetDate() {
+  try {
+    const q = new URLSearchParams(location.search).get('upcoming');
+    if (q && /^\d{4}-\d{2}-\d{2}$/.test(q)) return { date: q, overridden: true };
+  } catch (e) { /* location 不可の環境では通常動作にフォールバック */ }
+  return { date: adLocalDateAfter(4), overridden: false };
+}
+
+const AD_UPCOMING_DAYS = 4;
+
+function AdUpcomingPanel({ onClose }) {
+  const [rows,     setRows]     = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState(null);   // ★握り潰さない。0件と別表示にする
+  const [fetchedAt, setFetchedAt] = useState(null);
+  const [target,   setTarget]   = useState(() => adUpcomingTargetDate());
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    const t = adUpcomingTargetDate();
+    setTarget(t);
+    const { data, error } = await sb
+      .from('schedules')
+      .select('order_id, work_date, start_time, end_time, orders!inner(id, service, status, site, company_id, companies(name))')
+      .eq('work_date', t.date)
+      .eq('orders.status', '日程確定')
+      .is('orders.deleted_at', null)
+      .order('start_time');
+    setFetchedAt(new Date());
+    setLoading(false);
+    // ★error を握り潰すと、RLS 拒否や列名ミスが画面上「0件」に化ける。
+    //   「4日後に施工なし」と「クエリが壊れている」が区別できなくなる。
+    if (error) { setError(error.message); setRows([]); return; }
+    setRows(data || []);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const fmtTime = t => (t || '').slice(0, 5);   // 'HH:MM:SS' でも 'HH:MM' でも表示は HH:MM
+  const fmtDate = d => {
+    if (!d) return '';
+    const [y, m, dd] = d.split('-').map(Number);
+    const w = ['日','月','火','水','木','金','土'][new Date(y, m - 1, dd).getDay()];
+    return `${m}月${dd}日（${w}）`;
+  };
+  const fmtStamp = dt => dt
+    ? `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`
+    : '';
+
+  return (
+    <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:C.bg }}>
+      <div style={{ background:"linear-gradient(135deg,#1a5fbf,#0a3f8f)",
+        padding:"14px 20px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+        <button onClick={onClose}
+          style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white",
+            borderRadius:8, padding:"6px 12px", fontSize:13, fontWeight:700,
+            cursor:"pointer", fontFamily:"inherit" }}>← もどる</button>
+        <div style={{ fontSize:16, fontWeight:900, color:"white", flex:1 }}>
+          📅 まもなく施工（{AD_UPCOMING_DAYS}日前確認）
+        </div>
+        <button onClick={load} disabled={loading}
+          style={{ background:"rgba(255,255,255,0.2)", border:"none", color:"white",
+            borderRadius:8, padding:"6px 12px", fontSize:13, fontWeight:700,
+            cursor:loading?"default":"pointer", opacity:loading?0.5:1, fontFamily:"inherit" }}>
+          🔄 再読込
+        </button>
+        <div style={{ fontSize:13, color:"rgba(255,255,255,0.7)" }}>{rows.length}件</div>
+      </div>
+
+      {/* ★対象日と実行時刻は常に出す。どの日を見た結果の0件なのかが画面から読めないと判定できない */}
+      <div style={{ padding:"10px 20px", background:C.white, borderBottom:"1px solid "+C.grayL,
+        display:"flex", alignItems:"center", gap:16, flexWrap:"wrap", flexShrink:0 }}>
+        <div style={{ fontSize:13, color:C.navy, fontWeight:800 }}>
+          対象日：{target.date}（{fmtDate(target.date)}）
+        </div>
+        <div style={{ fontSize:12, color:C.gray }}>
+          取得時刻：{fmtStamp(fetchedAt) || '—'}
+        </div>
+        <div style={{ fontSize:12, color:C.gray }}>条件：ステータス「日程確定」のみ</div>
+        {target.overridden && (
+          <div style={{ fontSize:12, fontWeight:800, color:C.orange,
+            background:"#fff3e8", border:"1px solid #f0b070", borderRadius:8, padding:"3px 10px" }}>
+            ⚠️ 日付を URL で上書き中（?upcoming=）
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex:1, overflowY:"auto", padding:16 }}>
+        {loading ? (
+          <div style={{ textAlign:"center", padding:40, color:C.gray }}>読み込み中…</div>
+        ) : error ? (
+          /* ★0件とはまったく別の赤い表示。ここが出たら結果は「0件」ではなく「不明」 */
+          <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:12,
+            padding:"16px 18px", maxWidth:700, margin:"0 auto" }}>
+            <div style={{ fontSize:15, fontWeight:900, color:C.red, marginBottom:8 }}>
+              ⚠️ 取得に失敗しました（0件ではありません）
+            </div>
+            <div style={{ fontSize:13, color:C.navy, marginBottom:10, lineHeight:1.7 }}>
+              このリストは信用できません。件数は「不明」です。
+            </div>
+            <div style={{ fontSize:12, color:C.red, background:C.white, border:"1px solid #f0b0b0",
+              borderRadius:8, padding:"10px 12px", fontFamily:"monospace", wordBreak:"break-all" }}>
+              {error}
+            </div>
+            <button onClick={load}
+              style={{ marginTop:12, padding:"8px 16px", fontSize:13, fontWeight:700,
+                borderRadius:8, border:"2px solid "+C.blue, background:C.blueL, color:C.blue,
+                cursor:"pointer", fontFamily:"inherit" }}>再試行</button>
+          </div>
+        ) : rows.length === 0 ? (
+          <div style={{ textAlign:"center", padding:40, color:C.gray }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>📭</div>
+            <div>{target.date} に施工予定の案件はありません</div>
+            <div style={{ fontSize:12, marginTop:6 }}>（ステータス「日程確定」のみを対象）</div>
+          </div>
+        ) : rows.map((r, i) => {
+          const o = r.orders || {};
+          return (
+            <div key={`${r.order_id}-${i}`}
+              style={{ background:C.white, border:"1px solid "+C.grayL, borderRadius:12,
+                padding:"12px 14px", marginBottom:10, display:"flex", gap:12, alignItems:"center" }}>
+              <div style={{ flexShrink:0, textAlign:"center", minWidth:64 }}>
+                <div style={{ fontSize:16, fontWeight:900, color:C.blue }}>
+                  {fmtTime(r.start_time) || '—'}
+                </div>
+                <div style={{ fontSize:11, color:C.gray }}>{fmtDate(r.work_date)}</div>
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:3 }}>
+                  {AD_SVC_ICON[o.service]} {o.site || '（現場名なし）'}
+                </div>
+                <div style={{ fontSize:12, color:C.gray }}>
+                  {o.companies?.name || '（会社名なし）'}　{o.service || ''}　{o.id}
+                </div>
+              </div>
+              <ADStatusBadge status={o.status} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── メイン ───────────────────────────────────────────────
 function AdminApp({ role, onLogout, onMyPage }) {
   const [orders,    setOrders]   = useState([]);
@@ -10820,6 +10985,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
   const [showComp,    setShowComp]    = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
   const [showStaff,   setShowStaff]   = useState(false);
+  const [showUpcoming, setShowUpcoming] = useState(false);   // まもなく施工（4日前確認）パネル
   const [checkedIds,  setCheckedIds]  = useState([]);
   const [unreadCounts,     setUnreadCounts]     = useState({});
   const [mentionCounts,    setMentionCounts]    = useState({});
@@ -11528,6 +11694,19 @@ function AdminApp({ role, onLogout, onMyPage }) {
           )}
         </div>
 
+        {/* まもなく施工（4日前確認）。admin/manager のみ。顧客側には出さない */}
+        {["admin","manager"].includes(role) && (
+          <div title="まもなく施工（4日前確認）"
+            onClick={()=>{ setShowNotif(false); setShowComp(false); setShowStaff(false);
+                           setShowDeleted(false); setShowUpcoming(v=>!v); }}
+            style={{ width:36, height:36,
+              background:showUpcoming?"rgba(41,82,200,0.4)":"rgba(255,255,255,0.08)",
+              borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
+              fontSize:18, cursor:"pointer", flexShrink:0 }}>
+            📅
+          </div>
+        )}
+
         {role === "admin" && (
           <div title="企業ID管理"
             style={{ width:36, height:36, background:"rgba(255,255,255,0.08)",
@@ -11549,7 +11728,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
             style={{ width:36, height:36,
               background:showDeleted?"rgba(255,100,100,0.35)":"rgba(255,255,255,0.08)",
               borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center",
-              fontSize:18, cursor:"pointer" }} onClick={()=>setShowDeleted(d=>!d)}>
+              fontSize:18, cursor:"pointer" }} onClick={()=>{ setShowUpcoming(false); setShowDeleted(d=>!d); }}>
             🗑️
           </div>
         )}
@@ -11586,6 +11765,8 @@ function AdminApp({ role, onLogout, onMyPage }) {
       {showDeleted ? (
         <DeletedPanel onClose={()=>setShowDeleted(false)}
           onRestore={handleRestore} onHardDelete={handleHardDelete} />
+      ) : showUpcoming ? (
+        <AdUpcomingPanel onClose={()=>setShowUpcoming(false)} />
       ) : (<>
         <OrderList role={role} orders={sorted} selected={selected} onSelect={setSelected}
           filter={filter} setFilter={setFilter} search={search} setSearch={setSearch}
