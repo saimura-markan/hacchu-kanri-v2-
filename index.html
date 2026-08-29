@@ -10835,6 +10835,37 @@ function adUpcomingTargetDate() {
   return { date: adLocalDateAfter(4), overridden: false };
 }
 
+// YYYY-MM-DD → 「9月2日(水)」（wide=true なら全角括弧「9月2日（水）」）
+// ★曜日はローカル日付から出す。getUTC* / toISOString は使わない（日付が1日ずれる）。
+//   new Date(y, m-1, d) はローカル 00:00 を作るので UTC 変換を一切経由しない。
+//   adLocalDateAfter・自動完了ループと同じローカル方式で揃えている。
+// ★日付ロジックを2箇所に持つと片方だけ直して食い違うため、ここ1本に集約する。
+function adJpDate(dateStr, wide) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const w = ['日','月','火','水','木','金','土'][new Date(y, m - 1, d).getDay()];
+  return wide ? `${m}月${d}日（${w}）` : `${m}月${d}日(${w})`;
+}
+
+// 段階2: 4日前確認の定型文（差し込み済み下書き）。
+// ★表示のみ。編集UI・チェックボックス・一斉送信は次段階なので作らない。
+// ★新規クエリはゼロ。段階1で取得済みの schedules 行 r と orders 埋め込み o だけから組む。
+// ★サービスは orders.service の日本語文字列をそのまま使う（DB に日本語ラベルが直接入っている）。
+// ★start_time は insert が空文字を書きうる（sch.startTime || ''）ため、
+//   素通しすると「（～）」という壊れた文になる。空は「時刻未定」で埋め、
+//   段階3で送る前に人が気づけるようにする。
+function adUpcomingMessage(r, o) {
+  const jp   = adJpDate(r.work_date);
+  const svc  = (o.service || '').trim() || '（サービス未設定）';
+  const time = (r.start_time || '').slice(0, 5) || '時刻未定';
+  return [
+    'いつもお世話になっております。',
+    `${jp}の${svc}（${time}～）のお日にちが近づいてまいりましたが、`
+      + 'その後ご変更などはございませんでしょうか？何かございましたら事前にご連絡いただければと思います。',
+    'どうぞよろしくお願いいたします。',
+  ].join('\n');
+}
+
 const AD_UPCOMING_DAYS = 4;
 
 function AdUpcomingPanel({ onClose }) {
@@ -10867,12 +10898,7 @@ function AdUpcomingPanel({ onClose }) {
   useEffect(() => { load(); }, []);
 
   const fmtTime = t => (t || '').slice(0, 5);   // 'HH:MM:SS' でも 'HH:MM' でも表示は HH:MM
-  const fmtDate = d => {
-    if (!d) return '';
-    const [y, m, dd] = d.split('-').map(Number);
-    const w = ['日','月','火','水','木','金','土'][new Date(y, m - 1, dd).getDay()];
-    return `${m}月${dd}日（${w}）`;
-  };
+  const fmtDate = d => adJpDate(d, true);   // カード左のラベルは従来どおり全角括弧
   const fmtStamp = dt => dt
     ? `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`
     : '';
@@ -10948,22 +10974,40 @@ function AdUpcomingPanel({ onClose }) {
           return (
             <div key={`${r.order_id}-${i}`}
               style={{ background:C.white, border:"1px solid "+C.grayL, borderRadius:12,
-                padding:"12px 14px", marginBottom:10, display:"flex", gap:12, alignItems:"center" }}>
-              <div style={{ flexShrink:0, textAlign:"center", minWidth:64 }}>
-                <div style={{ fontSize:16, fontWeight:900, color:C.blue }}>
-                  {fmtTime(r.start_time) || '—'}
+                padding:"12px 14px", marginBottom:10 }}>
+              {/* 1段目: 段階1からの行（中身は不変） */}
+              <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                <div style={{ flexShrink:0, textAlign:"center", minWidth:64 }}>
+                  <div style={{ fontSize:16, fontWeight:900, color:C.blue }}>
+                    {fmtTime(r.start_time) || '—'}
+                  </div>
+                  <div style={{ fontSize:11, color:C.gray }}>{fmtDate(r.work_date)}</div>
                 </div>
-                <div style={{ fontSize:11, color:C.gray }}>{fmtDate(r.work_date)}</div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:3 }}>
+                    {AD_SVC_ICON[o.service]} {o.site || '（現場名なし）'}
+                  </div>
+                  <div style={{ fontSize:12, color:C.gray }}>
+                    {o.companies?.name || '（会社名なし）'}　{o.service || ''}　{o.id}
+                  </div>
+                </div>
+                <ADStatusBadge status={o.status} />
               </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:800, color:C.navy, marginBottom:3 }}>
-                  {AD_SVC_ICON[o.service]} {o.site || '（現場名なし）'}
+
+              {/* 2段目: 差し込み済みの定型文（読み取り専用・未送信） */}
+              {/* ★textarea / contentEditable は使わない。段階2は表示のみ。 */}
+              {/* ★「下書き・未送信」を必ず明示する。表示だけの段階で
+                     「もう送られた」と誤読されるのが最も危険なため。 */}
+              <div style={{ marginTop:10, paddingTop:10, borderTop:"1px dashed "+C.grayL }}>
+                <div style={{ fontSize:11, fontWeight:800, color:C.gray, marginBottom:5 }}>
+                  📝 送信予定の文面（下書き・未送信）
                 </div>
-                <div style={{ fontSize:12, color:C.gray }}>
-                  {o.companies?.name || '（会社名なし）'}　{o.service || ''}　{o.id}
+                <div style={{ fontSize:12.5, color:C.navy, lineHeight:1.85,
+                  background:C.grayPale, borderLeft:"3px solid "+C.blue, borderRadius:"0 8px 8px 0",
+                  padding:"10px 12px", whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
+                  {adUpcomingMessage(r, o)}
                 </div>
               </div>
-              <ADStatusBadge status={o.status} />
             </div>
           );
         })}
