@@ -10835,6 +10835,18 @@ function adUpcomingTargetDate() {
   return { date: adLocalDateAfter(4), overridden: false };
 }
 
+// 段階3b: 一斉送信ボタンの表示ゲート。?upcoming_send=on のときだけ描画する。
+// ★判定はここ1箇所だけ。他所で location.search を読まない。
+// ★「出さない」を disabled ではなく DOM ごと非描画にしている理由:
+//   押せないボタンが見えていると「壊れている」と読まれるうえ、将来 disabled を
+//   外す改修で誤って開通しうる。存在しなければ誤操作の経路そのものが無い。
+// ★ELI_DIAG_ON と同じ即時評価にはしない。パネルのマウント時に1度だけ確定させる
+//   （AdUpcomingPanel 側で useState の初期化に使う）。
+function adUpcomingSendEnabled() {
+  try { return new URLSearchParams(location.search).get('upcoming_send') === 'on'; }
+  catch (e) { return false; }
+}
+
 // YYYY-MM-DD → 「9月2日(水)」（wide=true なら全角括弧「9月2日（水）」）
 // ★曜日はローカル日付から出す。getUTC* / toISOString は使わない（日付が1日ずれる）。
 //   new Date(y, m-1, d) はローカル 00:00 を作るので UTC 変換を一切経由しない。
@@ -10976,6 +10988,50 @@ function AdUpcomingPanel({ onClose }) {
     return { ...prev, [k]: next };
   });
 
+  // ── 段階3b: 一斉送信 ───────────────────────────────
+  // ★ゲートはマウント時に1度だけ確定させる。描画のたびに location を読むと、
+  //   履歴操作で URL が変わった瞬間にボタンが現れることになる。
+  const [sendEnabled] = useState(() => adUpcomingSendEnabled());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [sending,     setSending]     = useState(false);
+  const [sendResult,  setSendResult]  = useState(null);
+  const [sendError,   setSendError]   = useState(null);
+
+  // ★送るのは「画面がいま持っている行」だけ。確認のための追加クエリは打たない。
+  //   除外規則は sendCount と同一の式（!offIds.has && !isBlank）を使う。
+  //   2つの式に分けると、片方だけ直したときに表示件数と送信件数が食い違う。
+  // ★表示件数と実送信件数のズレ（他の管理者が先に送った等）は許容する。
+  //   最終的な担保は RPC 側の claim（UPDATE ... WHERE upcoming_notified_at IS NULL）で、
+  //   ズレたぶんは already_notified として結果に出る。
+  const buildItems = () => rows
+    .filter(r => !offIds.has(r.id) && !isBlank(r))
+    .map(r => ({ schedule_id: r.id, text: draftOf(r) }));
+
+  const handleSend = async () => {
+    // ★見た目の多重発火防止のみ。冪等性はサーバ側の claim が担保している。
+    setSending(true); setSendError(null); setSendResult(null);
+    let res;
+    try {
+      res = await sb.rpc('eli_send_upcoming', {
+        p_items:     buildItems(),
+        p_work_date: target.date,
+      });
+    } catch (e) {
+      // ★通信断など rpc 自体が throw した場合。ここを握り潰すと
+      //   「送信中」のまま固まって、送れたのかどうか分からなくなる。
+      setSending(false);
+      setSendError(String(e && e.message ? e.message : e));
+      return;
+    }
+    setSending(false);
+    // ★error を握り潰さない。load() の error と同じ扱いで、成功と区別できる形で出す。
+    if (res.error) { setSendError(res.error.message); return; }
+    setSendResult(res.data);
+    // ★ここで load() は呼ばない。送信済みフラグは一覧の select に含めておらず
+    //   画面の見た目が変わらないため、クエリを1本増やすだけになる。
+    //   二度押しは RPC 側が already_notified で弾き、結果欄にそう出る。
+  };
+
   return (
     <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:C.bg }}>
       <div style={{ background:"linear-gradient(135deg,#1a5fbf,#0a3f8f)",
@@ -11036,9 +11092,23 @@ function AdUpcomingPanel({ onClose }) {
             style={{ padding:"5px 12px", fontSize:12, fontWeight:800, borderRadius:8,
               border:"1px solid "+C.grayL, background:C.white, color:C.gray,
               cursor:"pointer", fontFamily:"inherit" }}>☐ 全解除</button>
-          <div style={{ fontSize:11, fontWeight:800, color:C.gray }}>
-            ※まだ送信しません（下書きのみ）
-          </div>
+          {/* ★ゲート OFF なら DOM ごと出さない（disabled のボタンすら置かない） */}
+          {sendEnabled ? (
+            <button onClick={()=>{ setSendResult(null); setSendError(null); setConfirmOpen(true); }}
+              disabled={sendCount === 0 || sending}
+              title={sendCount === 0 ? "送信予定が0件です" : `${sendCount}件に確認通知を送ります`}
+              style={{ padding:"6px 16px", fontSize:13, fontWeight:900, borderRadius:8,
+                border:"none", background:(sendCount === 0 || sending) ? C.grayL : C.blue,
+                color:(sendCount === 0 || sending) ? C.gray : C.white,
+                cursor:(sendCount === 0 || sending) ? "default" : "pointer",
+                fontFamily:"inherit" }}>
+              📨 {sendCount}件に送信
+            </button>
+          ) : (
+            <div style={{ fontSize:11, fontWeight:800, color:C.gray }}>
+              ※まだ送信しません（下書きのみ）
+            </div>
+          )}
         </div>
       )}
 
@@ -11172,6 +11242,112 @@ function AdUpcomingPanel({ onClose }) {
           );
         })}
       </div>
+
+      {/* ── 段階3b: 送信確認モーダル ────────────────────────── */}
+      {/* ★sendEnabled が false のときは開く手段が無い（ボタン自体が無い）が、
+             条件に入れておく。将来ボタンを別の場所へ移しても穴が開かない。 */}
+      {sendEnabled && confirmOpen && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(10,31,92,0.55)",
+          display:"flex", alignItems:"flex-start", justifyContent:"center",
+          zIndex:300, padding:"20px 16px", overflowY:"auto" }}>
+          <div style={{ background:C.white, borderRadius:20, width:"100%", maxWidth:480,
+            boxShadow:"0 8px 40px rgba(0,0,0,0.25)", marginTop:40, marginBottom:20 }}>
+            <div style={{ background:"linear-gradient(135deg,#0a1f5c,#1a3a8f)",
+              borderRadius:"20px 20px 0 0", padding:"16px 20px" }}>
+              <div style={{ fontSize:17, fontWeight:800, color:C.white }}>
+                📨 施工日4日前 一斉確認送信
+              </div>
+            </div>
+
+            <div style={{ padding:"20px" }}>
+              {/* ── 送信前 ──────────────────────────────── */}
+              {!sendResult && !sendError && (
+                <React.Fragment>
+                  <div style={{ fontSize:14, color:C.navy, lineHeight:1.9 }}>
+                    対象 <span style={{ fontSize:20, fontWeight:900, color:C.blue }}>{sendCount}</span> 件に確認通知を送信します。<br />
+                    送信済みの案件は自動的に除外されます。よろしいですか？
+                  </div>
+                  <div style={{ fontSize:12, color:C.gray, marginTop:10, lineHeight:1.7 }}>
+                    対象日：{target.date}（{fmtDate(target.date)}）
+                  </div>
+                </React.Fragment>
+              )}
+
+              {/* ── 送信後（成功）★実送信件数はサーバの戻りで確定させる ── */}
+              {sendResult && (
+                <div>
+                  <div style={{ fontSize:15, fontWeight:900, color:C.green, marginBottom:12 }}>
+                    ✅ 送信しました
+                  </div>
+                  <div style={{ fontSize:14, color:C.navy, lineHeight:2 }}>
+                    送信：<b style={{ fontSize:18, color:C.blue }}>{sendResult.sent}</b> 件<br />
+                    {sendResult.already_notified > 0 && (
+                      <span>送信済みのため除外：<b>{sendResult.already_notified}</b> 件<br /></span>
+                    )}
+                    {sendResult.status_not_fixed > 0 && (
+                      <span>ステータスが「日程確定」でないため除外：<b>{sendResult.status_not_fixed}</b> 件<br /></span>
+                    )}
+                    {sendResult.blank_text > 0 && (
+                      <span>文面が空のため除外：<b>{sendResult.blank_text}</b> 件<br /></span>
+                    )}
+                  </div>
+                  {/* ★Push が落ちてもチャット投稿は成功している。両者を混同させない */}
+                  {sendResult.push && sendResult.push !== 'queued' && (
+                    <div style={{ marginTop:12, fontSize:12, color:C.orange, background:"#fff3e8",
+                      border:"1px solid #f0b070", borderRadius:8, padding:"10px 12px", lineHeight:1.7 }}>
+                      ⚠️ チャットへの投稿は成功しましたが、Push 通知は送れていません。<br />
+                      <span style={{ fontFamily:"monospace", wordBreak:"break-all" }}>{sendResult.push}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── 送信後（失敗）★load() のエラー表示とそろえる ────── */}
+              {sendError && (
+                <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:12,
+                  padding:"14px 16px" }}>
+                  <div style={{ fontSize:15, fontWeight:900, color:C.red, marginBottom:8 }}>
+                    ⚠️ 送信に失敗しました
+                  </div>
+                  <div style={{ fontSize:13, color:C.navy, marginBottom:10, lineHeight:1.7 }}>
+                    送れた件数は「不明」です。0件とは限りません。<br />
+                    もう一度押しても、送信済みの案件は二重に送られません。
+                  </div>
+                  <div style={{ fontSize:12, color:C.red, background:C.white, border:"1px solid #f0b0b0",
+                    borderRadius:8, padding:"10px 12px", fontFamily:"monospace", wordBreak:"break-all" }}>
+                    {sendError}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display:"flex", gap:10, marginTop:20, justifyContent:"flex-end" }}>
+                {/* 送信前だけ2ボタン。送信後は閉じるだけ */}
+                {!sendResult && !sendError ? (
+                  <React.Fragment>
+                    <button onClick={()=>setConfirmOpen(false)} disabled={sending}
+                      style={{ padding:"10px 18px", fontSize:13, fontWeight:800, borderRadius:10,
+                        border:"1px solid "+C.grayL, background:C.white, color:C.gray,
+                        cursor:sending?"default":"pointer", opacity:sending?0.5:1,
+                        fontFamily:"inherit" }}>キャンセル</button>
+                    {/* ★押下直後に disabled。戻りが来るまで解除しない */}
+                    <button onClick={handleSend} disabled={sending || sendCount === 0}
+                      style={{ padding:"10px 22px", fontSize:13, fontWeight:900, borderRadius:10,
+                        border:"none", background:sending ? C.gray : C.blue, color:C.white,
+                        cursor:sending?"default":"pointer", fontFamily:"inherit" }}>
+                      {sending ? "送信中…" : "送信する"}
+                    </button>
+                  </React.Fragment>
+                ) : (
+                  <button onClick={()=>{ setConfirmOpen(false); setSendResult(null); setSendError(null); }}
+                    style={{ padding:"10px 22px", fontSize:13, fontWeight:900, borderRadius:10,
+                      border:"none", background:C.blue, color:C.white,
+                      cursor:"pointer", fontFamily:"inherit" }}>閉じる</button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
