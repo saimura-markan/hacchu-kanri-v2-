@@ -101,6 +101,12 @@ const PUSH_TEXT: Record<string, { title: string; body: string }> = {
   //   誰にメンションされたかも書かない（ロック画面に人名を出さないため）。
   //   title は「メンション」ではなく「メッセージ」。顧客に確実に通じる語にする。
   mention:          { title: 'E-Li メッセージ', body: 'あなた宛のメッセージがあります' },
+  // ★4日前確認の一斉送信（2026-08-30・段階3b）。宛先は各案件の発注者本人だけ。
+  //   案件情報も施工日も載せない。対象が複数案件でも Push は案件ごとに1通で
+  //   （tag が `chat-${order_id}`）、本文は全案件で同じ文字列になる。
+  //   ★mention と文面を分ける理由：あちらは「あなた宛」に届いた個別の連絡、
+  //     こちらは当社発の一斉確認。同じ body にすると受け手が区別できない。
+  upcoming:         { title: 'E-Li メッセージ', body: 'ご確認のメッセージがあります' },
 };
 
 // リンク注記に出すドメイン。APP_URL から導出する。
@@ -354,7 +360,14 @@ type PushOutcome = {
 async function deliverToSubs(
   admin: ReturnType<typeof createClient>,
   subs: Array<Record<string, unknown>>,
-  payload: string,
+  // ★string を渡すと全端末に同じ payload（既存2経路。従来と同一の道を通る）。
+  //   関数を渡すと端末ごとに組み立てる（③一斉送信・2026-08-30 追加）。
+  //   ★③だけ宛先が複数案件にまたがる。sw.js は payload の id から
+  //     /?order= と tag=`${kind}-${id}` を作るので、id を1つに固定すると
+  //     全員が同じ案件に飛ぶ。
+  //   ★案件ごとに deliverToSubs を呼び分けなかったのは、404/410 の DELETE を
+  //     全体で1クエリのまま保つため（この関数に1箇所だけ置く原則を崩さない）。
+  payload: string | ((sub: Record<string, unknown>) => string),
 ): Promise<PushOutcome> {
   // ── ★動的 import ────────────────────────────────────
   //   静的 import が失敗すると関数自体が起動できず、
@@ -373,7 +386,7 @@ async function deliverToSubs(
           //   COMMENT（auth 列があると RLS 内の auth.uid() の解決が壊れうる）。
           keys: { p256dh: row.p256dh as string, auth: row.auth_key as string },
         },
-        payload,
+        typeof payload === 'function' ? payload(row) : payload,
       )
     )
   );
@@ -550,6 +563,118 @@ async function handleMention(
   }
 }
 
+// ----------------------------------------------------------------
+// 4日前確認の一斉送信 Push（2026-08-30・段階3b ステップ4）
+// ----------------------------------------------------------------
+//   送信RPC eli_send_upcoming が { event:'upcoming', order_ids:[...] } を
+//   投げてくる。チャットへの本文投入は RPC 側で bulk INSERT 済みで、
+//   ここは Push を配るだけ。
+//
+//   ★メールは送らない。この経路から Resend は呼ばない。
+//   ★宛先は get_push_targets_customers だけで解決する。
+//     既存の get_push_targets は「発注者 ∪ 社内 admin/manager/staff 全員」の
+//     UNION で、一斉送信に流用すると社内全員のロック画面に出る
+//     （2026-08-30 に実データで確認。既存版=6 に対し customers版=3）。
+//     ★このファイルで get_push_targets を呼ぶのは sendPush の1箇所だけ。
+//       ここに増やさないこと。
+//   ★DBへの往復は RPC 1回 ＋ ログ1行 ＋（死端末があれば）DELETE 1回。
+//     対象案件数 N に依存しない。案件ごとにループしない。
+//   ★エラーでも 200 を返す（pg_net にエラーを積まない。既存経路と同じ）。
+//     invalid payload だけ 400。
+const UPCOMING_MAX = 200;   // ★1呼び出しの上限。対象日の件数が想定外に
+                            //   膨らんだとき無制限に走らないための歯止め。
+
+async function handleUpcoming(
+  admin: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  // ★ログは1呼び出しにつき1行。案件ごとに書くと N 行になる。
+  //   order_id は単数で特定できないので null（mention の失敗時と同じ扱い）。
+  const done = async (result: 'sent' | 'skipped' | 'error', detail: string) => {
+    await writeLog(admin, {
+      order_id: null, event: 'upcoming', result, detail, to_domain: null,
+    });
+    return json({ [result]: detail }, 200);
+  };
+
+  const bad = async (detail: string) => {
+    await writeLog(admin, {
+      order_id: null, event: 'upcoming',
+      result: 'error', detail, to_domain: null,
+    });
+    return json({ error: 'invalid payload' }, 400);
+  };
+
+  // ── 入力の検証 ────────────────────────────────────────
+  const raw = body?.order_ids;
+  if (!Array.isArray(raw)) return await bad('order_ids is not an array');
+
+  // ★文字列だけ残して重複を畳む。RPC 側も DISTINCT するが、ここで畳むと
+  //   unnest に渡る配列そのものが短くなる。
+  const orderIds = [...new Set(
+    raw.filter((v): v is string => typeof v === 'string' && v.length > 0),
+  )];
+
+  if (orderIds.length > UPCOMING_MAX) {
+    return await bad(`too many order_ids: ${orderIds.length}`);
+  }
+
+  try {
+    // ★0件は正常系。対象日に該当案件が無い日は普通にある。
+    if (orderIds.length === 0) return await done('skipped', 'no order_ids');
+
+    if (!VAPID_PUBLIC || !VAPID_PRIVATE || !VAPID_SUBJECT) {
+      return await done('skipped', 'vapid secrets missing');
+    }
+
+    const text = PUSH_TEXT['upcoming'];
+    if (!text) return await done('skipped', 'no push text for upcoming');
+
+    // ── 宛先の解決（往復1回・案件数に依存しない）──────────────
+    //   返るのは endpoint / p256dh / auth_key / order_id の4列。
+    //   宛先の判定と除外（is_system / eli_notification_excluded）の適用は
+    //   RPC の責務で、ここでは判定しない（同じ規則を2箇所に持たない）。
+    const { data: subs, error: subsErr } = await admin
+      .rpc('get_push_targets_customers', { p_order_ids: orderIds });
+
+    if (subsErr) return await done('error', `subs select: ${subsErr.message}`);
+
+    // ★0件は正常系。対象の発注者が誰も購読していない場合もここに来る。
+    //   購読が0件という意味ではない。
+    if (!subs || subs.length === 0) {
+      return await done('skipped', `no push targets (orders=${orderIds.length})`);
+    }
+
+    // ★order_id を持たない行は落とす（RPC は必ず返すので多層防御）。
+    //   id が無い payload は sw.js が '/' に倒すため、届いても案件が開かない。
+    const targets = (subs as Array<Record<string, unknown>>)
+      .filter((s) => typeof s.order_id === 'string' && s.order_id);
+    if (targets.length === 0) return await done('error', 'rpc returned no order_id');
+
+    // ── payload は端末ごとに組み立てる ────────────────────────
+    //   ★その端末の order_id を id に差す。1つに固定すると全員が同じ案件へ飛ぶ。
+    //   ★url も tag も送らない。url を送ると &kind= が付かず②経路（openWindow）が
+    //     chat に倒れて①経路（postMessage）と非対称になる（2026-08-15 確定）。
+    //     tag は sw.js が `${kind}-${id}` を導出する。
+    const payloadOf = (sub: Record<string, unknown>) => JSON.stringify({
+      title: text.title,
+      body:  text.body,
+      kind:  'chat',   // 本文はチャットに入っているのでチャットタブへ
+      id:    sub.order_id as string,
+    });
+
+    const out = await deliverToSubs(admin, targets, payloadOf);
+    return await done(
+      out.result,
+      `${out.detail} orders=${orderIds.length} sent=${out.sent} removed=${out.removed}`,
+    );
+
+  } catch (e) {
+    console.error('[upcoming] unexpected:', e);
+    return await done('error', String(e).slice(0, 200));
+  }
+}
+
 Deno.serve(async (req) => {
   // ── 1. メソッド制限（CORS は付けない。サーバ間専用） ──────────
   if (req.method !== 'POST') {
@@ -578,6 +703,16 @@ Deno.serve(async (req) => {
   const peek = await req.clone().json().catch(() => ({}));
   if (peek?.event === 'mention') {
     return await handleMention(admin, peek);
+  }
+
+  // ── 2-c. ★4日前確認の一斉送信（2026-08-30・段階3b ステップ4）──────
+  //   送信RPC eli_send_upcoming が
+  //   { event:'upcoming', order_ids:[...] } を pg_net で投げてくる。
+  //   order_id（単数）は来ないので、mention と同じくここで返す。
+  //   以降の既存メール経路（order_id 必須・EVENTS 照合・status 再確認）には
+  //   一切入らない。既存経路のコードは1行も変えていない。
+  if (peek?.event === 'upcoming') {
+    return await handleUpcoming(admin, peek);
   }
 
   let orderId: string | null = null;
