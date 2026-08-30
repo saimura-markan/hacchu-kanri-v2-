@@ -10847,21 +10847,38 @@ function adJpDate(dateStr, wide) {
   return wide ? `${m}月${d}日（${w}）` : `${m}月${d}日(${w})`;
 }
 
-// 段階2: 4日前確認の定型文（差し込み済み下書き）。
-// ★表示のみ。編集UI・チェックボックス・一斉送信は次段階なので作らない。
+// 段階3a: トグルで足す追記文。定義はここ1箇所だけ。
+// ★文中の順序（鍵 → 駐車場）＝この配列の順序。並べ替えたければここを入れ替える。
+// ★追記を増やすときもこの配列に1行足すだけでよい（state も UI も配列から導出している）。
+const AD_UPCOMING_ADDONS = [
+  { key:'key',     label:'鍵情報',     text:'当日の鍵の設置場所（キーボックスの場合は番号）について、事前にお教えいただけますでしょうか。' },
+  { key:'parking', label:'駐車場情報', text:'作業車両の駐車場所についてもご確認いただけますと幸いです。' },
+];
+// ★接続詞は「ON のうち何番目か」で決まる。定義側の並び順ではない。
+//   駐車場だけ ON のときも先頭は「あわせて、」になる。
+//   `|| 'また、'` は3つ目の追記を足したときに「undefined、」を出さないためのフォールバック。
+const AD_UPCOMING_CONJ = ['あわせて、', 'また、'];
+
+// 段階2: 4日前確認の定型文（差し込み済み下書き）。段階3a で追記トグルに対応。
 // ★新規クエリはゼロ。段階1で取得済みの schedules 行 r と orders 埋め込み o だけから組む。
 // ★サービスは orders.service の日本語文字列をそのまま使う（DB に日本語ラベルが直接入っている）。
 // ★start_time は insert が空文字を書きうる（sch.startTime || ''）ため、
 //   素通しすると「（～）」という壊れた文になる。空は「時刻未定」で埋め、
 //   段階3で送る前に人が気づけるようにする。
-function adUpcomingMessage(r, o) {
+// ★追記は「文字列を検索して締めの直前に insert / 削除」ではなく、行の配列の
+//   締めの手前に push する形で入れる。締めは常に配列の最後なので位置がずれない。
+//   文字列手術にすると、手編集や全角ゆらぎで検索が外れた瞬間に文面が壊れる。
+// ★opts は省略可（{} 扱い）。opts なしの呼び出しは段階2 と完全に同じ文面を返す。
+function adUpcomingMessage(r, o, opts) {
   const jp   = adJpDate(r.work_date);
   const svc  = (o.service || '').trim() || '（サービス未設定）';
   const time = (r.start_time || '').slice(0, 5) || '時刻未定';
+  const on   = AD_UPCOMING_ADDONS.filter(a => opts && opts[a.key]);
   return [
     'いつもお世話になっております。',
     `${jp}の${svc}（${time}～）のお日にちが近づいてまいりましたが、`
       + 'その後ご変更などはございませんでしょうか？何かございましたら事前にご連絡いただければと思います。',
+    ...on.map((a, i) => (AD_UPCOMING_CONJ[i] || 'また、') + a.text),
     'どうぞよろしくお願いいたします。',
   ].join('\n');
 }
@@ -10875,6 +10892,24 @@ function AdUpcomingPanel({ onClose }) {
   const [fetchedAt, setFetchedAt] = useState(null);
   const [target,   setTarget]   = useState(() => adUpcomingTargetDate());
 
+  // ── 段階3a: チェック状態と編集済み文面（ブラウザのメモリのみ。DB にも localStorage にも書かない）
+  // ★どちらも「例外だけ」を持つ差分方式。全行ぶんの初期化はしない。
+  //   全行を列挙して初期化する方式だと、🔄 再読込で増えた行の初期化を書き忘れたときに
+  //   その行が黙って OFF（＝送られない）になる。差分方式ならその事故が構造的に起きない。
+  //   offIds に入っていない＝ON（送る） / edits に無い＝段階2の自動生成文のまま。
+  // ★キーは schedules.id。order_id + work_date + start_time では、同じ案件が同じ日に
+  //   同時刻で2枠あると衝突する（start_time は insert が空文字を書きうる: index.html:3396）。
+  //   配列インデックスも不可。再読込で並びが変わると編集文が別の行に付く。
+  const [offIds, setOffIds] = useState(() => new Set());
+  const [edits,  setEdits]  = useState({});
+  // ★追記トグル。{ key: Set<schedules.id>, parking: Set<schedules.id> } を1つの state で持つ。
+  //   入っていない＝OFF。ここも差分方式で、全行の初期化はしない。
+  //   Set を追記ごとに別 state にすると、追記を1つ増やすたびに state 定義・トグル処理・
+  //   リセット処理を三重に足すことになるため、追記キーで束ねて1つにしている。
+  //   初期値は AD_UPCOMING_ADDONS から作るので、追記を足してもここは無改修でよい。
+  const [addonIds, setAddonIds] = useState(() =>
+    AD_UPCOMING_ADDONS.reduce((acc, a) => { acc[a.key] = new Set(); return acc; }, {}));
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -10882,13 +10917,16 @@ function AdUpcomingPanel({ onClose }) {
     setTarget(t);
     const { data, error } = await sb
       .from('schedules')
-      .select('order_id, work_date, start_time, end_time, orders!inner(id, service, status, site, company_id, companies(name))')
+      .select('id, order_id, work_date, start_time, end_time, orders!inner(id, service, status, site, company_id, companies(name))')
       .eq('work_date', t.date)
       .eq('orders.status', '日程確定')
       .is('orders.deleted_at', null)
       .order('start_time');
     setFetchedAt(new Date());
     setLoading(false);
+    // ★offIds / edits / addonIds はここでクリアしない。schedules.id は再読込しても
+    //   変わらないので、チェック・編集・追記トグルはそのまま残る。
+    //   消えた行の id が残っても描画も件数も rows を回すので影響しない。
     // ★error を握り潰すと、RLS 拒否や列名ミスが画面上「0件」に化ける。
     //   「4日後に施工なし」と「クエリが壊れている」が区別できなくなる。
     if (error) { setError(error.message); setRows([]); return; }
@@ -10902,6 +10940,41 @@ function AdUpcomingPanel({ onClose }) {
   const fmtStamp = dt => dt
     ? `${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}:${String(dt.getSeconds()).padStart(2,'0')}`
     : '';
+
+  // ★表示値は state に持たず描画のたびに導出する。自動生成文を state にコピーすると、
+  //   再読込でサービス名や時刻が変わっても未編集の行が古い文面のまま固まる。
+  // ★トグル状態 → 文面。トグルは edits に一切書かない。だから ON→OFF で必ず元に戻り、
+  //   順序と接続詞も毎回ゼロから決まり直す。手編集がある行だけ手編集を優先する。
+  const optsOf  = r => AD_UPCOMING_ADDONS.reduce(
+    (acc, a) => { acc[a.key] = addonIds[a.key].has(r.id); return acc; }, {});
+  const draftOf = r => (edits[r.id] !== undefined
+    ? edits[r.id]
+    : adUpcomingMessage(r, r.orders || {}, optsOf(r)));
+  // ★導出した文面は必ず挨拶と締めを含むので空にならない。空になりうるのは手編集した行だけで、
+  //   そこはトグル無効。つまり「空文面 ⊂ 手編集行」なので、下の空判定は無改修で成立する。
+  const isBlank = r => !draftOf(r).trim();
+  // ★件数は必ず rows を回して数える。offIds に残った「消えた行の id」（orphan）が混ざらない。
+  const sendCount  = rows.filter(r => !offIds.has(r.id) && !isBlank(r)).length;
+  // ★空文面はカウントから外すだけで、チェックは強制 OFF にしない（人が気づいて直せるように）。
+  //   実際に弾くのは 3b の送信側でも行う（二重防御）。
+  const blankOnCount = rows.filter(r => !offIds.has(r.id) && isBlank(r)).length;
+
+  const toggleRow = id => setOffIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const resetDraft = id => setEdits(prev => {
+    const next = { ...prev };
+    delete next[id];
+    return next;
+  });
+  // ★該当の追記キーの Set だけ作り直す。他の追記の Set は同一参照のまま持ち回る。
+  const toggleAddon = (id, k) => setAddonIds(prev => {
+    const next = new Set(prev[k]);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return { ...prev, [k]: next };
+  });
 
   return (
     <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden", background:C.bg }}>
@@ -10941,6 +11014,34 @@ function AdUpcomingPanel({ onClose }) {
         )}
       </div>
 
+      {/* 段階3a: 送信予定の件数と全選択/全解除。★送信ボタンはまだ置かない（3b の山場） */}
+      {!loading && !error && rows.length > 0 && (
+        <div style={{ padding:"8px 20px", background:C.blueL, borderBottom:"1px solid "+C.grayL,
+          display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", flexShrink:0 }}>
+          <div style={{ fontSize:13, fontWeight:900, color:C.navy }}>
+            {rows.length}件中 <span style={{ color:C.blue }}>{sendCount}件</span>を送信予定
+          </div>
+          {blankOnCount > 0 && (
+            <div style={{ fontSize:12, fontWeight:800, color:C.red }}>
+              ⚠️ 文面が空の行が{blankOnCount}件あります（送信予定から除外中）
+            </div>
+          )}
+          <div style={{ flex:1 }} />
+          <button onClick={()=>setOffIds(new Set())}
+            style={{ padding:"5px 12px", fontSize:12, fontWeight:800, borderRadius:8,
+              border:"1px solid "+C.blue, background:C.white, color:C.blue,
+              cursor:"pointer", fontFamily:"inherit" }}>☑ 全選択</button>
+          {/* ★全解除は rows の id だけで作り直す。消えた行の id を持ち越さない */}
+          <button onClick={()=>setOffIds(new Set(rows.map(r=>r.id)))}
+            style={{ padding:"5px 12px", fontSize:12, fontWeight:800, borderRadius:8,
+              border:"1px solid "+C.grayL, background:C.white, color:C.gray,
+              cursor:"pointer", fontFamily:"inherit" }}>☐ 全解除</button>
+          <div style={{ fontSize:11, fontWeight:800, color:C.gray }}>
+            ※まだ送信しません（下書きのみ）
+          </div>
+        </div>
+      )}
+
       <div style={{ flex:1, overflowY:"auto", padding:16 }}>
         {loading ? (
           <div style={{ textAlign:"center", padding:40, color:C.gray }}>読み込み中…</div>
@@ -10969,14 +11070,24 @@ function AdUpcomingPanel({ onClose }) {
             <div>{target.date} に施工予定の案件はありません</div>
             <div style={{ fontSize:12, marginTop:6 }}>（ステータス「日程確定」のみを対象）</div>
           </div>
-        ) : rows.map((r, i) => {
+        ) : rows.map(r => {
           const o = r.orders || {};
+          // ★state は持たず毎回導出する（draft / checked / edited / blank）
+          const checked = !offIds.has(r.id);
+          const draft   = draftOf(r);
+          const edited  = edits[r.id] !== undefined;
+          const blank   = !draft.trim();
           return (
-            <div key={`${r.order_id}-${i}`}
-              style={{ background:C.white, border:"1px solid "+C.grayL, borderRadius:12,
-                padding:"12px 14px", marginBottom:10 }}>
-              {/* 1段目: 段階1からの行（中身は不変） */}
+            <div key={r.id}
+              style={{ background: checked ? C.white : C.grayPale,
+                border:"1px solid "+C.grayL, borderRadius:12,
+                padding:"12px 14px", marginBottom:10, opacity: checked ? 1 : 0.55 }}>
+              {/* 1段目: 段階1からの行＋送る/送らないのチェック */}
               <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+                {/* ★行全体を <label> にはしない。textarea 内のクリックで誤トグルするため */}
+                <input type="checkbox" checked={checked} onChange={()=>toggleRow(r.id)}
+                  title={checked ? "この案件に送る" : "この案件には送らない"}
+                  style={{ width:18, height:18, flexShrink:0, cursor:"pointer", accentColor:C.blue }} />
                 <div style={{ flexShrink:0, textAlign:"center", minWidth:64 }}>
                   <div style={{ fontSize:16, fontWeight:900, color:C.blue }}>
                     {fmtTime(r.start_time) || '—'}
@@ -10994,19 +11105,68 @@ function AdUpcomingPanel({ onClose }) {
                 <ADStatusBadge status={o.status} />
               </div>
 
-              {/* 2段目: 差し込み済みの定型文（読み取り専用・未送信） */}
-              {/* ★textarea / contentEditable は使わない。段階2は表示のみ。 */}
-              {/* ★「下書き・未送信」を必ず明示する。表示だけの段階で
-                     「もう送られた」と誤読されるのが最も危険なため。 */}
+              {/* 2段目: 差し込み済みの定型文（段階3a でその場編集可・未送信） */}
+              {/* ★「下書き・未送信」の明示は編集可能になった今のほうが重要。
+                     入力できると「もう送られた」と誤読されやすくなるため必ず残す。 */}
               <div style={{ marginTop:10, paddingTop:10, borderTop:"1px dashed "+C.grayL }}>
-                <div style={{ fontSize:11, fontWeight:800, color:C.gray, marginBottom:5 }}>
-                  📝 送信予定の文面（下書き・未送信）
+                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5, flexWrap:"wrap" }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:C.gray }}>
+                    📝 送信予定の文面（下書き・未送信 / 編集できます）
+                  </div>
+                  {edited && (
+                    <span style={{ fontSize:10, fontWeight:800, color:C.blue, background:C.blueL,
+                      border:"1px solid "+C.blue, borderRadius:6, padding:"1px 6px" }}>✏️ 編集済み</span>
+                  )}
+                  {edited && (
+                    /* ★ラベルは「自動文に戻す」ではなく「手編集を破棄」。戻る先はトグル状態込みの
+                         自動生成文で、トグルはリセットされないため（挙動は従来どおり edits の delete のみ） */
+                    <button onClick={()=>resetDraft(r.id)}
+                      style={{ fontSize:10, fontWeight:800, color:C.gray, background:"transparent",
+                        border:"1px solid "+C.grayL, borderRadius:6, padding:"1px 6px",
+                        cursor:"pointer", fontFamily:"inherit" }}>↩ 手編集を破棄</button>
+                  )}
+                  {!checked && (
+                    <span style={{ fontSize:10, fontWeight:800, color:C.gray }}>（送信しない）</span>
+                  )}
+                  {/* 段階3a: 追記トグル。★絵文字は使わずテキストのみ。
+                       手編集した行では disabled（手編集を優先）。ただし ON/OFF の見た目は
+                       維持する。どの状態から手編集を始めたかが読めないほうが危険なため。 */}
+                  <div style={{ flex:1 }} />
+                  <span style={{ fontSize:10, fontWeight:800, color:C.gray }}>追記：</span>
+                  {AD_UPCOMING_ADDONS.map(ad => {
+                    const on = addonIds[ad.key].has(r.id);
+                    return (
+                      <button key={ad.key} disabled={edited}
+                        onClick={()=>toggleAddon(r.id, ad.key)}
+                        title={edited
+                          ? '文面を手編集したためトグルは使えません。「↩ 手編集を破棄」で自動生成に戻すと使えます'
+                          : (on ? 'この一文を文面から外す' : 'この一文を締めの前に足す')}
+                        style={{ fontSize:11, fontWeight:800, borderRadius:6, padding:"2px 10px",
+                          fontFamily:"inherit",
+                          border:"1px solid "+(on ? C.blue : C.grayL),
+                          background: on ? C.blue  : C.white,
+                          color:      on ? C.white : C.gray,
+                          opacity: edited ? 0.4 : 1,
+                          cursor: edited ? "default" : "pointer" }}>{ad.label}</button>
+                    );
+                  })}
                 </div>
-                <div style={{ fontSize:12.5, color:C.navy, lineHeight:1.85,
-                  background:C.grayPale, borderLeft:"3px solid "+C.blue, borderRadius:"0 8px 8px 0",
-                  padding:"10px 12px", whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
-                  {adUpcomingMessage(r, o)}
-                </div>
+                {/* ★親 state で制御するので1文字ごとにパネル全体が再描画される。
+                       対象日1日ぶん（数件〜十数件）では体感差なしと判断。行数が増えたら
+                       行を React.memo のコンポーネントに切り出す。 */}
+                <textarea value={draft}
+                  onChange={e=>setEdits(prev => ({ ...prev, [r.id]: e.target.value }))}
+                  ref={el => { if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }}
+                  style={{ width:"100%", boxSizing:"border-box", display:"block",
+                    fontSize:12.5, color:C.navy, lineHeight:1.85, fontFamily:"inherit",
+                    background:C.grayPale, border:"1px solid "+(blank ? C.red : C.grayL),
+                    borderLeft:"3px solid "+(blank ? C.red : C.blue), borderRadius:"0 8px 8px 0",
+                    padding:"10px 12px", resize:"vertical", minHeight:80, overflow:"hidden" }} />
+                {blank && (
+                  <div style={{ fontSize:11, fontWeight:800, color:C.red, marginTop:4 }}>
+                    ⚠️ 文面が空です（送信予定の件数から除外されます）
+                  </div>
+                )}
               </div>
             </div>
           );
