@@ -10835,16 +10835,13 @@ function adUpcomingTargetDate() {
   return { date: adLocalDateAfter(4), overridden: false };
 }
 
-// 段階3b: 一斉送信ボタンの表示ゲート。?upcoming_send=on のときだけ描画する。
+// 段階8: 一斉送信ボタンの表示ゲート。?upcoming_send=on の限定を外し、常時表示にする。
 // ★判定はここ1箇所だけ。他所で location.search を読まない。
-// ★「出さない」を disabled ではなく DOM ごと非描画にしている理由:
-//   押せないボタンが見えていると「壊れている」と読まれるうえ、将来 disabled を
-//   外す改修で誤って開通しうる。存在しなければ誤操作の経路そのものが無い。
-// ★ELI_DIAG_ON と同じ即時評価にはしない。パネルのマウント時に1度だけ確定させる
-//   （AdUpcomingPanel 側で useState の初期化に使う）。
+// ★ゲート関数自体は残す。呼び出し側（sendEnabled / ボタン / 確認モーダル）を
+//   触らずに開通・封鎖を切り替えられる場所を1本残しておくため。
+//   再び限定に戻すときはこの return を元の URLSearchParams 判定に差し替える。
 function adUpcomingSendEnabled() {
-  try { return new URLSearchParams(location.search).get('upcoming_send') === 'on'; }
-  catch (e) { return false; }
+  return true;
 }
 
 // YYYY-MM-DD → 「9月2日(水)」（wide=true なら全角括弧「9月2日（水）」）
