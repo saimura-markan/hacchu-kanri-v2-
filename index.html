@@ -9344,16 +9344,14 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                 </div>
                 <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                   {[
-                    "日程の調整がつきました。よろしくお願いします📅",
-                    "ごめんなさい、ご希望の日程では予定がつきませんでした💦\nご希望に近い別日程でしたら対応できそうですが、いかがですか？",
-                    "工事が完了しました。ありがとうございました✅",
-                    "確認いたしました。担当者より折り返しご連絡いたします。",
+                    { label:"日程確認のご連絡",
+                      text:"いつもお世話になっております。\n【日程】のお日にちが近づいてまいりましたが、その後ご変更などはございませんでしょうか？何かございましたら事前にご連絡いただければと思います。\nどうぞよろしくお願いいたします。" },
                   ].map((t,i)=>(
-                    <button key={i} onClick={()=>setChatInput(t)}
+                    <button key={i} onClick={()=>setChatInput(t.text)}
                       style={{ padding:"6px 12px", borderRadius:8, fontSize:12, fontWeight:600,
                         border:"1px solid "+C.blue, background:C.blueL, color:C.blue,
                         cursor:"pointer" }}>
-                      {t.length>22?t.slice(0,22)+"…":t}
+                      {t.label}
                     </button>
                   ))}
                 </div>
