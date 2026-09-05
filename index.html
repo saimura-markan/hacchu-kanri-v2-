@@ -3142,6 +3142,30 @@ function ImageLightbox({ url, onClose }) {
   );
 }
 
+// 見積UI（STEP6）の表示ゲート。?estimate=on のときだけ全UIを出す。
+// ★判定はここ1箇所だけ。他所で location.search を読まない。
+//   顧客側（SiteInfoSection）と管理者側（DetailPanel）が同じ関数を見る。
+// ★外すときはこの return を true に差し替える（呼び出し側は触らない）。
+//   adUpcomingSendEnabled と同じ作法。
+function eliEstimateEnabled() {
+  try { return new URLSearchParams(location.search).get('estimate') === 'on'; }
+  catch (e) { return false; }   // location 不可の環境では出さない
+}
+
+// 上書き運用のファイルを開くときのキャッシュ回避（STEP6）。
+// ★見積は常に <order_id>/estimate.pdf の固定パスへ upsert で上書きするため、
+//   差し替えても前のPDFがキャッシュから返る余地がある。
+// ★フラグメント（#t=...）では効かない。# 以降はサーバに送られず、
+//   HTTPキャッシュのキーからも除外されるので同じキャッシュに当たる。
+//   クエリ文字列にすることでキャッシュキー自体が変わる。
+// ★署名の検証は token パラメータ（JWT）だけを見るため、
+//   別のクエリを足しても署名は壊れない。
+// ★顧客側・管理者側の両方がこの1本を使う（同じ規則を2箇所に持たない）。
+function eliBustCache(url) {
+  if (!url) return url;
+  return url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+}
+
 // Storageの署名付きURLで画像を表示（Public/Privateバケット両対応）
 // thumb=true: 表示は160px変換サムネ、クリックは原本（拡大用）
 function SignedImage({ path, onClickUrl, style, thumb = true }) {
@@ -3898,6 +3922,60 @@ function SiteAttachments({ paths, blobUrls }) {
   );
 }
 
+// 見積PDFの閲覧欄（STEP6）。閲覧専用。顧客はアップロードできない。
+//   ★既存の SignedImage は使えない。あれは order-images 決め打ちで
+//     <img> を返すため PDF を表示できない。
+//   ★表示形式は既存の PDF 添付（SiteAttachments / 管理者側 AdImgs）と
+//     同じ 📄タイル＋別タブに揃える。
+//     インライン iframe/object にしないのは、iOS Safari が PDF を
+//     インライン表示せず、スマホ主体の顧客に見積が見えなくなるため。
+//   ★署名URLはクリックされて初めて発行する。初期描画で発行すると
+//     詳細を開いた全員ぶんの Storage 往復が発生する。
+function EstimateView({ path }) {
+  const [busy, setBusy] = useState(false);
+  const [err,  setErr]  = useState("");
+
+  const open = async () => {
+    // ★window.open は【await より前】に呼ぶ。await のあとだとユーザー操作と
+    //   結び付かず、iOS Safari 等でポップアップブロックされる。
+    //   先に空タブを開いておき、URL が取れてから location を差し替える。
+    const w = window.open('', '_blank');
+    setBusy(true); setErr("");
+    const { data, error } = await sb.storage
+      .from('order-estimates').createSignedUrl(path, 3600);
+    setBusy(false);
+    // ★握り潰さない。開けなかったことが伝わらないと問い合わせになる。
+    if (error || !data?.signedUrl) {
+      if (w) w.close();
+      setErr("見積を開けませんでした。時間をおいて再度お試しください。");
+      return;
+    }
+    const url = eliBustCache(data.signedUrl);       // ★上書き運用なのでキャッシュを避ける
+    if (w) w.location.href = url;
+    else   window.location.href = url;              // ブロックされた場合の保険
+  };
+
+  return (
+    <>
+      <div style={{ display:"flex", gap:10, alignItems:"center", marginTop:4 }}>
+        <button onClick={open} disabled={busy}
+          style={{ width:80, height:80, border:"2px solid #f0c0c0", borderRadius:8,
+            display:"flex", flexDirection:"column", alignItems:"center",
+            justifyContent:"center", gap:3, background:"#fff5f5", color:C.red,
+            fontSize:9, fontWeight:700, cursor:busy?"default":"pointer",
+            opacity:busy?0.6:1, fontFamily:"inherit" }}>
+          <span style={{ fontSize:24 }}>📄</span>{busy ? "準備中" : "PDF"}
+        </button>
+        <div style={{ fontSize:13, color:C.navy, lineHeight:1.6 }}>
+          お見積りをお送りしました。<br />
+          <span style={{ fontSize:12, color:C.gray }}>タップすると別タブで開きます</span>
+        </div>
+      </div>
+      {err && <div style={{ color:C.red, fontSize:12, fontWeight:700, marginTop:8 }}>{err}</div>}
+    </>
+  );
+}
+
 function SiteTArea({ value, onChange, placeholder }) {
   return (
     <textarea value={value} onChange={e=>onChange(e.target.value)}
@@ -3941,7 +4019,7 @@ function BottomSheet({ children }) {
 
 // ── 案件情報セクション（viewOnly/edit 共通） ────────────────────
 // 行定義をここで一元管理。項目を追加・削除するにはこの関数内の ROW_DEFS だけ編集する。
-function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, pendingImages = {}, uploadingField, handleText, handleUpload, formData }) {
+function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, pendingImages = {}, uploadingField, handleText, handleUpload, formData, estimate = null }) {
   formData = formData || {};
 
   const keyText     = siteData.key_info     || order.key     || "";
@@ -3977,6 +4055,16 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
           {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
         </div>
       ),
+    },
+    {
+      // ★source は必ず "order"。"site" にすると siteRows が
+      //   show() を無視して source だけで拾うため、顧客の編集ブロックに
+      //   見積アップロード欄が出てしまう。見積は閲覧専用。
+      // ★editContent は定義しない（顧客はアップロード不可）。
+      // ★住所の直後に置くのは、source:"order" の行をまとめて並べるため。
+      id:"estimate", icon:"📄", label:"お見積り", source:"order",
+      show: () => !!estimate,
+      viewContent: () => <EstimateView path={estimate.path} />,
     },
     {
       id:"key_info", icon:"🔑", label:"鍵情報", source:"site",
@@ -4232,6 +4320,28 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       sb.from('profiles').select('company_id').eq('id', user.id).maybeSingle()
         .then(({ data }) => { if (data?.company_id) setCid(data.company_id); });
     });
+  }, []);
+
+  // ── 見積PDF（STEP6）★詳細を開いたときに1回だけ・軽く引く ─────────
+  //   ★一覧には一切乗せない。詳細を開いた案件だけ。
+  //   ★フラグOFFのときはクエリ自体を打たない（本数は0のまま）。
+  //   ★notified_at IS NOT NULL の条件は【サーバ側】に置く。社内が
+  //     「見積を通知」を押すまで顧客には見せない。JS側で判定すると、
+  //     未通知の見積の存在と通知時刻がレスポンスに載る（画面に出さなくても）。
+  //   ★取得するのは path の1列だけ。notified_at は条件に使うだけで返さない。
+  //   ★署名URLはここで発行しない（EstimateView のクリック時）。
+  const [estimate, setEstimate] = useState(null);
+  useEffect(() => {
+    if (!eliEstimateEnabled()) return;
+    sb.from('eli_order_estimates')
+      .select('path')
+      .eq('order_id', order.id)
+      .not('notified_at', 'is', null)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) { console.error('[estimate]', error.message); return; }
+        if (data?.path) setEstimate(data);
+      });
   }, []);
 
   const fetchSiteData = (resolvedCid) => {
@@ -5019,7 +5129,8 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             <SiteInfoSection viewOnly={true}
               order={order} siteName={siteName}
               siteData={siteData} imagePaths={imagePaths} blobUrls={blobUrls}
-              uploadingField={null} handleText={null} handleUpload={null} />
+              uploadingField={null} handleText={null} handleUpload={null}
+              estimate={estimate} />
 
             {/* ⑥ 関連する作業日程 */}
             {relatedOrders.length > 0 && (
@@ -5150,7 +5261,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               siteData={siteData} imagePaths={imagePaths} blobUrls={blobUrls}
               pendingImages={pendingImages}
               uploadingField={uploadingField} handleText={handleText} handleUpload={handleUpload}
-              formData={formData} />
+              formData={formData} estimate={estimate} />
 
             {saveError && (
               <div style={{ color:C.red, fontSize:13, fontWeight:700, marginBottom:8,
@@ -7994,6 +8105,210 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 }
 
 // ── 詳細パネル ───────────────────────────────────────────
+// 管理者側の見積UI（STEP6）。アップロード・プレビュー・通知を1箇所にまとめる。
+//   ★DetailPanel の state を増やさない。この中で完結させることで、
+//     既存の rows 配列・編集フォーム・saveSiteInfo に一切触れずに済む。
+//   ★取得は詳細を開いたとき1回だけ。一覧には乗せない。
+//     select は path と notified_at の2列のみ（select('*') は使わない）。
+//   ★顧客側（:4310）と違い notified_at の絞り込みはしない。
+//     社内は通知前の見積も見える必要がある（通知ボタンを押す前だから）。
+//   ★署名URLはクリック時に発行する。初期描画では発行しない。
+function AdEstimateBox({ order }) {
+  const [est,      setEst]      = useState(null);   // { path, notified_at } | null
+  const [loading,  setLoading]  = useState(true);
+  const [upBusy,   setUpBusy]   = useState(false);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [msg,      setMsg]      = useState(null);   // { kind:'ok'|'warn'|'err', text }
+  const fileRef = useRef(null);
+
+  // ── 遅延取得（開いたとき1回）────────────────────────────
+  useEffect(() => {
+    let alive = true;
+    sb.from('eli_order_estimates')
+      .select('path, notified_at')
+      .eq('order_id', order.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!alive) return;
+        setLoading(false);
+        if (error) { console.error('[adEstimate]', error.message); return; }
+        if (data) setEst(data);
+      });
+    return () => { alive = false; };
+  }, [order.id]);
+
+  // ── アップロード（★Storage → DB の順）──────────────────
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';                 // 同じファイルを再選択できるようにする
+    if (!file) return;
+
+    // ★PDF以外を弾く。バケットに MIME 制限を付けていないため、
+    //   ここで止めないと estimate.pdf という名前の別形式が入る。
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
+      setMsg({ kind:'err', text:'PDFファイルを選んでください。' });
+      return;
+    }
+    // ★サイズ上限。egress は返したバイト数で課金されるため、
+    //   顧客が開くたびにこのサイズが流れることを意識する。
+    if (file.size > 10 * 1024 * 1024) {
+      setMsg({ kind:'err', text:'10MB を超えています。圧縮してからアップロードしてください。' });
+      return;
+    }
+
+    setUpBusy(true); setMsg(null);
+    const path = `${order.id}/estimate.pdf`;
+
+    // ① Storage に先に上げる（upsert で上書き）
+    const up = await sb.storage.from('order-estimates')
+      .upload(path, file, { upsert:true, contentType:'application/pdf' });
+    if (up.error) {
+      // ★Storage が失敗したら DB は触らない。
+      //   逆順にすると「行はあるがファイルが無い」状態になり、
+      //   顧客側の署名URLが 404 を踏む。
+      setUpBusy(false);
+      setMsg({ kind:'err', text:'アップロードに失敗しました: ' + up.error.message });
+      return;
+    }
+
+    // ② 成功したら行を upsert。★notified_at は明示的に null に戻す。
+    //   省略すると PostgREST はその列を更新せず、前回の通知済みが残る。
+    const { error } = await sb.from('eli_order_estimates').upsert({
+      order_id:    order.id,
+      path,
+      uploaded_at: new Date().toISOString(),
+      notified_at: null,
+    }, { onConflict: 'order_id' });
+    setUpBusy(false);
+
+    if (error) {
+      // ★ファイルは上がっている。もう一度アップロードすれば復旧する。
+      setMsg({ kind:'err', text:'ファイルは保存できましたが記録に失敗しました。もう一度アップロードしてください: ' + error.message });
+      return;
+    }
+    setEst({ path, notified_at: null });
+    setMsg({ kind:'warn', text:'差し替えました。通知するまで顧客には表示されません。' });
+  };
+
+  // ── 通知（★冪等性はサーバ側の claim が担保。ここは多重発火の抑止のみ）──
+  const handleNotify = async () => {
+    setSendBusy(true); setMsg(null);
+    let res;
+    try {
+      res = await sb.rpc('eli_send_estimate', { p_order_id: order.id });
+    } catch (e) {
+      // ★通信断など rpc 自体が throw した場合。握り潰すと
+      //   「送信中」のまま固まって送れたか分からなくなる。
+      setSendBusy(false);
+      setMsg({ kind:'err', text:'通信に失敗しました: ' + String(e && e.message ? e.message : e) });
+      return;
+    }
+    setSendBusy(false);
+    if (res.error) { setMsg({ kind:'err', text:res.error.message }); return; }
+
+    const d = res.data || {};
+    if (d.result === 'sent') {
+      // ★notified_at の再取得はしない（クエリを1本増やすだけ）。
+      //   表示用にクライアント時刻を入れる。正確な値は次に開いたとき DB から来る。
+      setEst(p => ({ ...(p || { path:`${order.id}/estimate.pdf` }), notified_at: new Date().toISOString() }));
+      setMsg({ kind:'ok', text:'通知しました。お客様の端末にお知らせが届きます。' });
+    } else if (d.result === 'already_notified') {
+      setEst(p => ({ ...(p || {}), notified_at: d.notified_at || (p && p.notified_at) }));
+      setMsg({ kind:'warn', text:'すでに通知済みです。もう一度送るには見積を差し替えてください。' });
+    } else if (d.result === 'no_estimate') {
+      setMsg({ kind:'err', text:'見積がアップロードされていません。' });
+    } else if (d.result === 'order_deleted') {
+      setMsg({ kind:'err', text:'この案件は削除されています。' });
+    } else {
+      setMsg({ kind:'err', text:'想定外の応答: ' + JSON.stringify(d) });
+    }
+  };
+
+  const BTN = (bg) => ({ padding:"9px 14px", fontSize:13, fontWeight:800, border:"none",
+    borderRadius:9, color:C.white, background:bg, fontFamily:"inherit" });
+  const MSG_COLOR = { ok:"#0a7d3a", warn:"#a06000", err:C.red };
+
+  return (
+    <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8",
+      padding:"12px 16px", marginTop:12 }}>
+      <div style={{ fontSize:11, color:"#a08060", fontWeight:700, marginBottom:8, letterSpacing:0.3 }}>
+        📄 お見積り（社内のみ）
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize:13, color:C.gray }}>読込中…</div>
+      ) : (
+        <>
+          <div style={{ fontSize:13, color:C.navy, marginBottom:10, lineHeight:1.7 }}>
+            {!est
+              ? "まだアップロードされていません。"
+              : est.notified_at
+                ? <>✅ 通知済み（{new Date(est.notified_at).toLocaleString("ja",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}）</>
+                : <>⏳ 未通知 — <b>顧客にはまだ表示されていません</b></>}
+          </div>
+
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <input ref={fileRef} type="file" accept="application/pdf"
+              onChange={handleFile} style={{ display:"none" }} />
+            <button onClick={()=>fileRef.current && fileRef.current.click()} disabled={upBusy}
+              style={{ ...BTN(C.blue), cursor:upBusy?"default":"pointer", opacity:upBusy?0.6:1 }}>
+              {upBusy ? "アップロード中…" : (est ? "📤 差し替える" : "📤 見積をアップロード")}
+            </button>
+
+            {est && <AdEstimatePreviewBtn path={est.path} />}
+
+            {est && (
+              <button onClick={handleNotify} disabled={sendBusy || !!est.notified_at}
+                style={{ ...BTN(est.notified_at ? C.gray : "#0a7d3a"),
+                  cursor:(sendBusy || est.notified_at) ? "default" : "pointer",
+                  opacity:(sendBusy || est.notified_at) ? 0.6 : 1 }}>
+                {sendBusy ? "送信中…" : (est.notified_at ? "通知済み" : "🔔 見積を通知")}
+              </button>
+            )}
+          </div>
+
+          {msg && (
+            <div style={{ marginTop:10, fontSize:12, fontWeight:700,
+              color:MSG_COLOR[msg.kind] || C.navy, lineHeight:1.6 }}>
+              {msg.text}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// 見積PDFのプレビュー（管理者側）。★署名URLはクリック時に発行する。
+//   顧客側 EstimateView と同じ作法だが、文言とサイズが違うので分けてある。
+//   ★window.open は await より前に呼ぶ（ポップアップブロック対策）。
+function AdEstimatePreviewBtn({ path }) {
+  const [busy, setBusy] = useState(false);
+  const open = async () => {
+    const w = window.open('', '_blank');
+    setBusy(true);
+    const { data, error } = await sb.storage
+      .from('order-estimates').createSignedUrl(path, 3600);
+    setBusy(false);
+    if (error || !data?.signedUrl) {
+      if (w) w.close();
+      alert('見積を開けませんでした: ' + (error ? error.message : 'URLを取得できません'));
+      return;
+    }
+    const url = eliBustCache(data.signedUrl);       // ★上書き運用なのでキャッシュを避ける
+    if (w) w.location.href = url;
+    else   window.location.href = url;
+  };
+  return (
+    <button onClick={open} disabled={busy}
+      style={{ padding:"9px 14px", fontSize:13, fontWeight:800, border:"1px solid "+C.grayL,
+        borderRadius:9, color:C.navy, background:C.white, fontFamily:"inherit",
+        cursor:busy?"default":"pointer", opacity:busy?0.6:1 }}>
+      {busy ? "準備中…" : "📄 プレビュー"}
+    </button>
+  );
+}
+
 function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm, onSiteHistorySeen, onChangeLogsConfirm, initialTab, tabSeq }) {
   const [tab, setTab]             = useState("detail");
   const [chatInput, setChatInput]   = useState("");
@@ -8969,6 +9284,11 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                       </VR>
                     ))}
                   </div>
+                  {/* 見積UI（STEP6）★フラグON かつ admin/manager のときだけ。
+                      既存の rows・編集フォーム・saveSiteInfo には触れていない。 */}
+                  {eliEstimateEnabled() && (role==="admin" || role==="manager") && (
+                    <AdEstimateBox order={order} />
+                  )}
                 </div>
               );
             })()}
