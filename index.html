@@ -3148,8 +3148,13 @@ function ImageLightbox({ url, onClose }) {
 // ★外すときはこの return を true に差し替える（呼び出し側は触らない）。
 //   adUpcomingSendEnabled と同じ作法。
 function eliEstimateEnabled() {
-  try { return new URLSearchParams(location.search).get('estimate') === 'on'; }
-  catch (e) { return false; }   // location 不可の環境では出さない
+  // ★フラグ解除: 全公開（2026-09-05）。本番で通し確認済み
+  //   （管理者アップロード → 見積を通知 → 顧客側で表示 → PDF取得まで成功）。
+  // ★戻すときは この return true を消すだけ。下2行のコメントを外せば元の限定に戻る。
+  //   呼び出し側（顧客側 ROW_DEFS / 管理者側 AdEstimateBox）は触らない。
+  return true;
+  // try { return new URLSearchParams(location.search).get('estimate') === 'on'; }
+  // catch (e) { return false; }   // location 不可の環境では出さない
 }
 
 // 上書き運用のファイルを開くときのキャッシュ回避（STEP6）。
