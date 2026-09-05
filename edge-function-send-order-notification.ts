@@ -107,6 +107,11 @@ const PUSH_TEXT: Record<string, { title: string; body: string }> = {
   //   ★mention と文面を分ける理由：あちらは「あなた宛」に届いた個別の連絡、
   //     こちらは当社発の一斉確認。同じ body にすると受け手が区別できない。
   upcoming:         { title: 'E-Li メッセージ', body: 'ご確認のメッセージがあります' },
+  // ★見積アップロード通知（2026-09-05・STEP4）。宛先は当該案件の発注者本人だけ。
+  //   金額も案件情報も載せない（既存6件と同じ規則）。
+  //   ★upcoming / mention と body を分ける理由：あちらは連絡・確認、
+  //     こちらは見積の到着。同じ body にすると受け手が区別できない。
+  estimate:         { title: 'E-Li お見積り',   body: 'お見積りをお送りしました' },
 };
 
 // リンク注記に出すドメイン。APP_URL から導出する。
@@ -675,6 +680,103 @@ async function handleUpcoming(
   }
 }
 
+// ----------------------------------------------------------------
+// 見積アップロード通知 Push（2026-09-05・STEP4）
+// ----------------------------------------------------------------
+//   送信RPC（STEP5）が { event:'estimate', order_id:'B-2026-XXX' } を投げてくる。
+//   status 遷移を伴わないため、既存メール経路（EVENTS 照合・status 再確認）には
+//   載らない。mention / upcoming と同じ早期リターン型。
+//
+//   ★二重送信の防止はここではやらない。
+//     STEP5 の送信RPC が eli_order_estimates.notified_at IS NULL の
+//     条件付き UPDATE で claim する。Edge は受け取った案件に配るだけ。
+//   ★メールは送らない。この経路から Resend は呼ばない。
+//   ★宛先は get_push_targets_customers だけで解決する。
+//     get_push_targets は「発注者 ∪ 社内 admin/manager/staff 全員」の UNION で、
+//     使うと社内全員のロック画面に見積通知が出る。
+//     ★このファイルで get_push_targets を呼ぶのは sendPush の1箇所だけ。
+//       ここに増やさないこと。
+//   ★upcoming と違い案件が1件に定まるので、ログに order_id を残せる。
+//   ★DBへの往復は RPC 1回 ＋ ログ1行 ＋（死端末があれば）DELETE 1回。
+//   ★エラーでも 200 を返す（pg_net にエラーを積まない。既存経路と同じ）。
+//     invalid payload だけ 400。
+async function handleEstimate(
+  admin: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const orderId = typeof body?.order_id === 'string' ? body.order_id : '';
+
+  // ★result は 'sent'/'skipped'/'error' の3値だけ。
+  //   eli_email_log.result の CHECK 制約に従う（event 列に制約は無い）。
+  const done = async (result: 'sent' | 'skipped' | 'error', detail: string) => {
+    await writeLog(admin, {
+      order_id: orderId || null, event: 'estimate', result, detail, to_domain: null,
+    });
+    return json({ [result]: detail }, 200);
+  };
+
+  const bad = async (detail: string) => {
+    await writeLog(admin, {
+      order_id: orderId || null, event: 'estimate',
+      result: 'error', detail, to_domain: null,
+    });
+    return json({ error: 'invalid payload' }, 400);
+  };
+
+  // ── 入力の検証 ────────────────────────────────────────
+  if (!orderId) return await bad('order_id is not a non-empty string');
+
+  try {
+    if (!VAPID_PUBLIC || !VAPID_PRIVATE || !VAPID_SUBJECT) {
+      return await done('skipped', 'vapid secrets missing');
+    }
+
+    const text = PUSH_TEXT['estimate'];
+    if (!text) return await done('skipped', 'no push text for estimate');
+
+    // ── 宛先の解決（往復1回）──────────────────────────────
+    //   RPC の引数は text[]。1件でも配列で渡す（単一版の関数は作らない。
+    //   同じ規則を2箇所に持たないため）。
+    //   宛先の判定と除外（is_system / eli_notification_excluded / deleted_at）の
+    //   適用は RPC の責務で、ここでは判定しない。
+    const { data: subs, error: subsErr } = await admin
+      .rpc('get_push_targets_customers', { p_order_ids: [orderId] });
+
+    if (subsErr) return await done('error', `subs select: ${subsErr.message}`);
+
+    // ★0件は正常系。発注者が未購読 / is_system / 通知除外 / 案件が論理削除、
+    //   のいずれでもここに来る。購読が0件という意味ではない。
+    if (!subs || subs.length === 0) return await done('skipped', 'no push targets');
+
+    // ── ★payload は文字列1本。url も tag も送らない ──────────────
+    //   全端末が同じ1案件なので端末ごとの組み立ては不要
+    //   （deliverToSubs の関数形は、複数案件にまたがる upcoming 専用）。
+    //   ★kind は 'change'（案件詳細タブへ）。
+    //     index.html:11578 / :11605 の判定は `kind === 'change' ? 'change' : 'chat'` で、
+    //     'estimate' など未知の値を入れるとエラーにならず静かに chat へ倒れる。
+    //   ★url を送ると &kind= が付かず②経路（openWindow）が chat に倒れて
+    //     ①経路（postMessage）と非対称になる（2026-08-15 確定）。
+    //     tag は sw.js が `${kind}-${id}` を導出する。
+    const payload = JSON.stringify({
+      title: text.title,
+      body:  text.body,
+      kind:  'change',
+      id:    orderId,
+    });
+
+    // 送信と後片付けは deliverToSubs に集約（string 引数の既存分岐をそのまま通る）。
+    const out = await deliverToSubs(admin, subs as Array<Record<string, unknown>>, payload);
+    return await done(
+      out.result,
+      `${out.detail} sent=${out.sent} removed=${out.removed}`,
+    );
+
+  } catch (e) {
+    console.error('[estimate] unexpected:', e);
+    return await done('error', String(e).slice(0, 200));
+  }
+}
+
 Deno.serve(async (req) => {
   // ── 1. メソッド制限（CORS は付けない。サーバ間専用） ──────────
   if (req.method !== 'POST') {
@@ -713,6 +815,17 @@ Deno.serve(async (req) => {
   //   一切入らない。既存経路のコードは1行も変えていない。
   if (peek?.event === 'upcoming') {
     return await handleUpcoming(admin, peek);
+  }
+
+  // ── 2-d. ★見積アップロード通知（2026-09-05・STEP4）─────────────
+  //   送信RPC が { event:'estimate', order_id:'B-...' } を投げてくる。
+  //   order_id は来るが EVENTS には無いイベントなので、ここで返す。
+  //   ★この分岐は EVENTS 照合（下の `EVENTS[eventKey]`）より必ず手前に置くこと。
+  //     後ろに置くと 'estimate' が invalid payload で 400 になり通知が飛ばない。
+  //   ★status 遷移を伴わないため、既存経路の expectedStatus 判定には載らない。
+  //   既存経路のコードは1行も変えていない。
+  if (peek?.event === 'estimate') {
+    return await handleEstimate(admin, peek);
   }
 
   let orderId: string | null = null;
