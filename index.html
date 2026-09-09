@@ -312,7 +312,7 @@
     }, 30000);
   </script>
   <script id="jsx-source" type="text/jsx-source">
-    const { useState, useRef, useEffect } = React;
+    const { useState, useRef, useEffect, useCallback, memo } = React;
 
     // ── Supabase 初期化 ─────────────────────────────────────
     const SUPABASE_URL      = 'https://wxjmqrxaqrujsvgzknwy.supabase.co';
@@ -3897,7 +3897,7 @@ function SiteInfoCard({ icon, label, children }) {
   );
 }
 
-function SiteAttachments({ paths, blobUrls }) {
+const SiteAttachments = memo(function SiteAttachments({ paths, blobUrls }) {
   if (!paths || !paths.length) return null;
   return (
     <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:10 }}>
@@ -3925,7 +3925,7 @@ function SiteAttachments({ paths, blobUrls }) {
       })}
     </div>
   );
-}
+});
 
 // 見積PDFの閲覧欄（STEP6）。閲覧専用。顧客はアップロードできない。
 //   ★既存の SignedImage は使えない。あれは order-images 決め打ちで
@@ -3986,7 +3986,7 @@ function SiteTArea({ value, onChange, placeholder }) {
     <textarea value={value} onChange={e=>onChange(e.target.value)}
       placeholder={placeholder}
       style={{ width:"100%", minHeight:72, padding:"10px 12px", borderRadius:10,
-        border:"2px solid "+C.grayL, fontSize:14, fontFamily:"inherit",
+        border:"1px solid #e6d9c2", fontSize:14, fontFamily:"inherit",
         resize:"vertical", outline:"none", color:C.navy,
         boxSizing:"border-box", lineHeight:1.7 }} />
   );
@@ -3999,8 +3999,8 @@ function SiteAttachBtn({ imgField, isUploading, onUpload }) {
       <input ref={ref} type="file" accept="image/*,application/pdf" multiple
         style={{ display:"none" }} onChange={onUpload} />
       <button onClick={()=>ref.current?.click()} disabled={isUploading}
-        style={{ marginTop:10, padding:"8px 16px", background:C.white, color:C.navy,
-          border:"2px solid "+C.grayL, borderRadius:10, fontSize:13, fontWeight:700,
+        style={{ marginTop:10, padding:"8px 16px", background:"#fdf6ee", color:"#8a6d3b",
+          border:"1px solid #e6d9c2", borderRadius:10, fontSize:13, fontWeight:700,
           cursor:isUploading?"default":"pointer", fontFamily:"inherit",
           opacity:isUploading?0.6:1 }}>
         {isUploading ? "📤 アップロード中..." : "📎 写真/PDFを追加"}
@@ -4022,16 +4022,20 @@ function BottomSheet({ children }) {
   );
 }
 
-// ── 案件情報セクション（viewOnly/edit 共通） ────────────────────
-// 行定義をここで一元管理。項目を追加・削除するにはこの関数内の ROW_DEFS だけ編集する。
-function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, pendingImages = {}, uploadingField, handleText, handleUpload, formData, estimate = null }) {
-  formData = formData || {};
+// ── 統合カードの行コンポーネント（メモ化） ──────────────────────
+// ★DetailScreen は1,000行超の巨大コンポーネントで、1文字打つたびに全体が
+//   再レンダーされる。行を memo で包み「値が変わった行だけ」を描き直す。
+// ★props は文字列・配列参照・真偽値だけにする。関数は DetailScreen 側で
+//   useCallback([]) により識別子を固定して渡す（固定しないと memo は素通りする）。
+// ★特に効くのは SiteAttachments。画像1枚につき getPublicUrl を2回呼ぶため、
+//   memo が無いと1文字打つたびに全画像ぶん署名URLを組み立て直していた。
 
-  const keyText     = siteData.key_info     || order.key     || "";
-  const parkingText = siteData.parking_info || order.parking || "";
+const SITE_ROW_INPUT = { width:"100%", padding:"10px 12px", borderRadius:10,
+  border:"1px solid #e6d9c2", fontSize:14, fontFamily:"inherit", outline:"none",
+  color:C.navy, background:C.white, boxSizing:"border-box" };
 
-  // ── 閲覧用行ラッパー ───────────────────────────────────────
-  const ViewRow = ({ icon, label, isLast, children }) => (
+function SiteRowShell({ icon, label, isLast, children }) {
+  return (
     <div style={{ display:"flex", gap:12, padding:"12px 16px",
       borderBottom: isLast ? "none" : "1px solid #f0ebe0", alignItems:"flex-start" }}>
       <div style={{ fontSize:18, flexShrink:0, marginTop:1 }}>{icon}</div>
@@ -4042,134 +4046,178 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
       </div>
     </div>
   );
+}
+
+// テキスト＋写真PDF（鍵情報・駐車場・現場注意事項・入館情報・養生範囲）
+const SiteTextRow = memo(function SiteTextRow({ icon, label, isLast, field, value,
+  placeholder, imgField, paths, blobUrls, uploading, onText, onUpload }) {
+  return (
+    <SiteRowShell icon={icon} label={label} isLast={isLast}>
+      <SiteTArea value={value} onChange={v => onText(field, v)} placeholder={placeholder} />
+      <SiteAttachments paths={paths} blobUrls={blobUrls} />
+      <SiteAttachBtn imgField={imgField} isUploading={uploading}
+        onUpload={e => onUpload(imgField, e)} />
+    </SiteRowShell>
+  );
+});
+
+// 担当者様（担当者名・電話番号）
+const SiteContactRow = memo(function SiteContactRow({ icon, label, isLast,
+  name, phone, onText }) {
+  return (
+    <SiteRowShell icon={icon} label={label} isLast={isLast}>
+      <input value={name} onChange={e => onText('contact_name', e.target.value)}
+        placeholder="担当者名" type="text"
+        style={{ ...SITE_ROW_INPUT, marginBottom:8 }} />
+      <input value={phone} onChange={e => onText('contact_phone', e.target.value)}
+        placeholder="電話番号" type="tel" style={SITE_ROW_INPUT} />
+    </SiteRowShell>
+  );
+});
+
+// 住所（住所・番地・建物名の3列）
+// ★現場名(site_name)はここに含めない。sites の一意制約のキーであり、
+//   書き換えると既存の現場行ではなく別の現場行を新規作成してしまうため。
+const SiteAddressRow = memo(function SiteAddressRow({ icon, label, isLast,
+  address, addressNum, addressBldg, onText }) {
+  return (
+    <SiteRowShell icon={icon} label={label} isLast={isLast}>
+      <input value={address} onChange={e => onText('address', e.target.value)}
+        placeholder="都道府県・市区町村" type="text"
+        style={{ ...SITE_ROW_INPUT, marginBottom:8 }} />
+      <input value={addressNum} onChange={e => onText('address_num', e.target.value)}
+        placeholder="番地" type="text"
+        style={{ ...SITE_ROW_INPUT, marginBottom:8 }} />
+      <input value={addressBldg} onChange={e => onText('address_bldg', e.target.value)}
+        placeholder="建物名・部屋番号" type="text" style={SITE_ROW_INPUT} />
+    </SiteRowShell>
+  );
+});
+
+// ── 案件情報セクション（viewOnly/edit 共通） ────────────────────
+// 行定義をここで一元管理。項目を追加・削除するにはこの関数内の ROW_DEFS だけ編集する。
+//
+// ★2026-09-10: 表示専用の黄カード＋入力用の青カードという二重表示を廃止し、
+//   黄カード1枚に統合した。「下で打って上で確認する」往復を無くすのが目的。
+//   - 編集方法は edit 記述子（プレーンなオブジェクト）で宣言する。旧実装の
+//     editContent クロージャは毎レンダー識別子が変わり、行を memo 化しても
+//     素通りしてしまうため使わない。
+//   - edit を持つ行は値が空でもつねに表示する（入力できる場所を隠さない）。
+//     edit を持たない行（お見積り・備考・発注時の添付写真）は従来どおり
+//     show() に従う。顧客が何もできない空欄はノイズにしかならないため。
+//   - viewOnly=true（閲覧専用モード）の見た目と挙動は従来どおり。
+function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blobUrls, uploadingField, handleText, handleUpload, formData, estimate = null }) {
+  formData = formData || {};
+  // 編集モードでは入力中の値（formData）を、閲覧専用では保存済みの値（siteData）を見る。
+  const vals = viewOnly ? siteData : formData;
+
+  const addrText = [vals.address, vals.address_num, vals.address_bldg]
+    .filter(Boolean).join(' ');
+
+  // ── 閲覧用行ラッパー ───────────────────────────────────────
+  const ViewRow = ({ icon, label, isLast, children }) => (
+    <SiteRowShell icon={icon} label={label} isLast={isLast}>{children}</SiteRowShell>
+  );
+
+  const TextView = (v) => (
+    <div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{v}</div>
+  );
 
   // ── 行定義（追加・削除はここだけ） ──────────────────────────
-  // source:"order" → 常に読み取り専用（発注時データ）
-  // source:"site"  → viewOnly=false では編集可（sitesテーブルデータ）
+  // show() … 値が無いときに行ごと隠すか（edit を持つ行では無視される）
+  // edit   … 編集方法の宣言。無い行は読み取り専用
   const ROW_DEFS = [
     {
-      id:"site_name", icon:"🏠", label:"現場名", source:"order",
+      id:"site_name", icon:"🏠", label:"現場名",
       show: () => true,
       viewContent: () => <div style={{ fontSize:15, fontWeight:700, color:C.navy }}>{siteName||'—'}</div>,
     },
     {
-      id:"address", icon:"📍", label:"住所", source:"order",
+      id:"address", icon:"📍", label:"住所",
       show: () => true,
+      edit: { kind:"address" },
       viewContent: () => (
-        <div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>
-          {[order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ')||'—'}
-        </div>
+        <div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>{addrText||'—'}</div>
       ),
     },
     {
-      // ★source は必ず "order"。"site" にすると siteRows が
-      //   show() を無視して source だけで拾うため、顧客の編集ブロックに
-      //   見積アップロード欄が出てしまう。見積は閲覧専用。
-      // ★editContent は定義しない（顧客はアップロード不可）。
-      // ★住所の直後に置くのは、source:"order" の行をまとめて並べるため。
-      id:"estimate", icon:"📄", label:"お見積り", source:"order",
+      // ★見積は閲覧専用。顧客はアップロードできないので edit を持たせない。
+      id:"estimate", icon:"📄", label:"お見積り",
       show: () => !!estimate,
       viewContent: () => <EstimateView path={estimate.path} />,
     },
     {
-      id:"key_info", icon:"🔑", label:"鍵情報", source:"site",
-      show: () => !!(keyText || imagePaths.key_images.length),
+      id:"key_info", icon:"🔑", label:"鍵情報",
+      show: () => !!(vals.key_info || imagePaths.key_images.length),
+      edit: { kind:"text", field:"key_info", imgField:"key_images",
+              placeholder:"鍵の場所・受取方法を入力..." },
       viewContent: () => (
-        <>{keyText&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{keyText}</div>}
+        <>{vals.key_info && TextView(vals.key_info)}
         <SiteAttachments paths={imagePaths.key_images} blobUrls={blobUrls} /></>
       ),
-      editContent: () => (
-        <><SiteTArea value={formData.key_info||''} onChange={v=>handleText('key_info',v)} placeholder="鍵の場所・受取方法を入力..." />
-        <SiteAttachments paths={pendingImages.key_images||[]} blobUrls={blobUrls} />
-        <SiteAttachBtn imgField="key_images" isUploading={uploadingField==="key_images"} onUpload={e=>handleUpload("key_images",e)} /></>
-      ),
     },
     {
-      id:"parking_info", icon:"🚗", label:"駐車場", source:"site",
-      show: () => !!(parkingText || imagePaths.parking_images.length),
+      id:"parking_info", icon:"🚗", label:"駐車場",
+      show: () => !!(vals.parking_info || imagePaths.parking_images.length),
+      edit: { kind:"text", field:"parking_info", imgField:"parking_images",
+              placeholder:"駐車場所・台数・注意事項を入力..." },
       viewContent: () => (
-        <>{parkingText&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{parkingText}</div>}
+        <>{vals.parking_info && TextView(vals.parking_info)}
         <SiteAttachments paths={imagePaths.parking_images} blobUrls={blobUrls} /></>
       ),
-      editContent: () => (
-        <><SiteTArea value={formData.parking_info||''} onChange={v=>handleText('parking_info',v)} placeholder="駐車場所・台数・注意事項を入力..." />
-        <SiteAttachments paths={pendingImages.parking_images||[]} blobUrls={blobUrls} />
-        <SiteAttachBtn imgField="parking_images" isUploading={uploadingField==="parking_images"} onUpload={e=>handleUpload("parking_images",e)} /></>
-      ),
     },
     {
-      id:"contact", icon:"👤", label:"担当者様", source:"site",
-      show: () => !!(siteData.contact_name || siteData.contact_phone),
+      id:"contact", icon:"👤", label:"担当者様",
+      show: () => !!(vals.contact_name || vals.contact_phone),
+      edit: { kind:"contact" },
       viewContent: () => (
-        <>{siteData.contact_name&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7 }}>{siteData.contact_name}</div>}
-        {siteData.contact_phone&&(
-          <a href={"tel:"+siteData.contact_phone}
+        <>{vals.contact_name && TextView(vals.contact_name)}
+        {vals.contact_phone && (
+          <a href={"tel:"+vals.contact_phone}
             style={{ fontSize:14, color:C.blue, textDecoration:"none", fontWeight:700, display:"block" }}>
-            📞 {siteData.contact_phone}
+            📞 {vals.contact_phone}
           </a>
         )}</>
       ),
-      editContent: () => (
-        <><input value={formData.contact_name||''} onChange={e=>handleText('contact_name',e.target.value)}
-          placeholder="担当者名" type="text"
-          style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #d0d8ef",
-            fontSize:14, fontFamily:"inherit", outline:"none", color:C.navy, background:C.white,
-            boxSizing:"border-box", marginBottom:8 }} />
-        <input value={formData.contact_phone||''} onChange={e=>handleText('contact_phone',e.target.value)}
-          placeholder="電話番号" type="tel"
-          style={{ width:"100%", padding:"10px 12px", borderRadius:10, border:"1px solid #d0d8ef",
-            fontSize:14, fontFamily:"inherit", outline:"none", color:C.navy, background:C.white,
-            boxSizing:"border-box" }} /></>
-      ),
     },
     {
-      id:"note", icon:"📝", label:"備考", source:"order",
+      id:"note", icon:"📝", label:"備考",
       show: () => !!order.note,
-      viewContent: () => <div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{order.note}</div>,
+      viewContent: () => TextView(order.note),
     },
     {
-      id:"memo", icon:"⚠️", label:"現場注意事項", source:"site",
-      show: () => !!(siteData.memo || imagePaths.images.length),
+      id:"memo", icon:"⚠️", label:"現場注意事項",
+      show: () => !!(vals.memo || imagePaths.images.length),
+      edit: { kind:"text", field:"memo", imgField:"images",
+              placeholder:"注意事項・特記事項を入力..." },
       viewContent: () => (
-        <>{siteData.memo&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.memo}</div>}
+        <>{vals.memo && TextView(vals.memo)}
         <SiteAttachments paths={imagePaths.images} blobUrls={blobUrls} /></>
       ),
-      editContent: () => (
-        <><SiteTArea value={formData.memo||''} onChange={v=>handleText('memo',v)} placeholder="注意事項・特記事項を入力..." />
-        <SiteAttachments paths={pendingImages.images||[]} blobUrls={blobUrls} />
-        <SiteAttachBtn imgField="images" isUploading={uploadingField==="images"} onUpload={e=>handleUpload("images",e)} /></>
-      ),
     },
     {
-      id:"entry_info", icon:"🚪", label:"入館情報", source:"site",
-      show: () => !!(siteData.entry_info || imagePaths.entry_images.length),
+      id:"entry_info", icon:"🚪", label:"入館情報",
+      show: () => !!(vals.entry_info || imagePaths.entry_images.length),
+      edit: { kind:"text", field:"entry_info", imgField:"entry_images",
+              placeholder:"入館方法・インターフォン番号を入力..." },
       viewContent: () => (
-        <>{siteData.entry_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.entry_info}</div>}
+        <>{vals.entry_info && TextView(vals.entry_info)}
         <SiteAttachments paths={imagePaths.entry_images} blobUrls={blobUrls} /></>
       ),
-      editContent: () => (
-        <><SiteTArea value={formData.entry_info||''} onChange={v=>handleText('entry_info',v)} placeholder="入館方法・インターフォン番号を入力..." />
-        <SiteAttachments paths={pendingImages.entry_images||[]} blobUrls={blobUrls} />
-        <SiteAttachBtn imgField="entry_images" isUploading={uploadingField==="entry_images"} onUpload={e=>handleUpload("entry_images",e)} /></>
-      ),
     },
     {
-      id:"yosei_info", icon:"📦", label:"養生範囲", source:"site",
-      show: () => !!(siteData.yosei_info || imagePaths.yosei_images.length),
+      id:"yosei_info", icon:"📦", label:"養生範囲",
+      show: () => !!(vals.yosei_info || imagePaths.yosei_images.length),
+      edit: { kind:"text", field:"yosei_info", imgField:"yosei_images",
+              placeholder:"養生が必要な範囲・使用材料を入力..." },
       viewContent: () => (
-        <>{siteData.yosei_info&&<div style={{ fontSize:14, color:C.navy, lineHeight:1.7, whiteSpace:"pre-wrap" }}>{siteData.yosei_info}</div>}
+        <>{vals.yosei_info && TextView(vals.yosei_info)}
         <SiteAttachments paths={imagePaths.yosei_images} blobUrls={blobUrls} /></>
-      ),
-      editContent: () => (
-        <><SiteTArea value={formData.yosei_info||''} onChange={v=>handleText('yosei_info',v)} placeholder="養生が必要な範囲・使用材料を入力..." />
-        <SiteAttachments paths={pendingImages.yosei_images||[]} blobUrls={blobUrls} />
-        <SiteAttachBtn imgField="yosei_images" isUploading={uploadingField==="yosei_images"} onUpload={e=>handleUpload("yosei_images",e)} /></>
       ),
     },
     {
       id:"images", icon:"📷",
       label: order.images?.length ? `添付写真（${order.images.length}枚）` : "添付写真",
-      source:"order",
       show: () => !!(order.images?.length),
       viewContent: () => (
         <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:4 }}>
@@ -4183,73 +4231,53 @@ function SiteInfoSection({ viewOnly, order, siteName, siteData, imagePaths, blob
     },
   ];
 
-  const GoldHeader = () => (
+  const GoldHeader = ({ hint }) => (
     <div style={{ background:"#d4a017", borderRadius:14, padding:"12px 18px",
       marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
       <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
         padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏠</div>
-      <div style={{ fontSize:15, fontWeight:800, color:C.white }}>案件情報</div>
+      <div style={{ fontSize:15, fontWeight:800, color:C.white, flex:1 }}>案件情報</div>
+      {hint && (
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.85)", fontWeight:600 }}>{hint}</div>
+      )}
     </div>
   );
 
-  // ── viewOnly=true: 全行を1つのゴールドブロックに表示 ──────────
-  if (viewOnly) {
-    const rows = ROW_DEFS.filter(r => r.show());
-    return (
-      <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px" }}>
-        <GoldHeader />
-        <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
-          {rows.map((row, i) => (
-            <ViewRow key={row.id} icon={row.icon} label={row.label} isLast={i===rows.length-1}>
-              {row.viewContent()}
-            </ViewRow>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // 表示する行。編集できる行は値が空でもつねに出す。
+  const rows = ROW_DEFS.filter(r => (viewOnly ? r.show() : (r.edit ? true : r.show())));
 
-  // ── viewOnly=false: ゴールドブロック（値あり全行・読み取り専用） + ブルーブロック（site行・編集） ──
-  const goldRows = ROW_DEFS.filter(r => r.show());
-  const siteRows = ROW_DEFS.filter(r => r.source === "site");
   return (
-    <>
-      {goldRows.length > 0 && (
-      <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px", marginBottom:14 }}>
-        <GoldHeader />
-        <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
-          {goldRows.map((row, i) => (
-            <ViewRow key={row.id} icon={row.icon} label={row.label} isLast={i===goldRows.length-1}>
+    <div style={{ background:"#fdf6ee", borderRadius:16, padding:"14px", marginBottom: viewOnly ? 0 : 14 }}>
+      <GoldHeader hint={viewOnly ? null : "自動保存"} />
+      <div style={{ background:C.white, borderRadius:12, border:"1px solid #ecdcc8", overflow:"hidden" }}>
+        {rows.map((row, i) => {
+          const isLast = i === rows.length - 1;
+          const ed = viewOnly ? null : row.edit;
+          if (ed && ed.kind === "text") return (
+            <SiteTextRow key={row.id} icon={row.icon} label={row.label} isLast={isLast}
+              field={ed.field} value={vals[ed.field] || ''} placeholder={ed.placeholder}
+              imgField={ed.imgField} paths={imagePaths[ed.imgField]} blobUrls={blobUrls}
+              uploading={uploadingField === ed.imgField}
+              onText={handleText} onUpload={handleUpload} />
+          );
+          if (ed && ed.kind === "contact") return (
+            <SiteContactRow key={row.id} icon={row.icon} label={row.label} isLast={isLast}
+              name={vals.contact_name || ''} phone={vals.contact_phone || ''}
+              onText={handleText} />
+          );
+          if (ed && ed.kind === "address") return (
+            <SiteAddressRow key={row.id} icon={row.icon} label={row.label} isLast={isLast}
+              address={vals.address || ''} addressNum={vals.address_num || ''}
+              addressBldg={vals.address_bldg || ''} onText={handleText} />
+          );
+          return (
+            <ViewRow key={row.id} icon={row.icon} label={row.label} isLast={isLast}>
               {row.viewContent()}
             </ViewRow>
-          ))}
-        </div>
+          );
+        })}
       </div>
-      )}
-
-      <div style={{ background:"#1a6fb5", borderRadius:14, padding:"12px 18px",
-        marginBottom:12, display:"flex", alignItems:"center", gap:10 }}>
-        <div style={{ background:"rgba(255,255,255,0.2)", borderRadius:8,
-          padding:"4px 10px", fontSize:14, fontWeight:800, color:C.white }}>🏗️</div>
-        <div style={{ fontSize:15, fontWeight:800, color:C.white, flex:1 }}>現場情報</div>
-        <div style={{ fontSize:11, color:"rgba(255,255,255,0.75)", fontWeight:600 }}>自動保存</div>
-      </div>
-
-      <div style={{ background:"#f0f4ff", borderRadius:16, padding:"14px", marginBottom:14 }}>
-        <div style={{ background:C.white, borderRadius:12, border:"1px solid #d0d8ef", overflow:"hidden" }}>
-          {siteRows.map((row, i) => (
-            <div key={row.id} style={{ padding:"14px 16px",
-              borderBottom: i<siteRows.length-1 ? "1px solid #edf0f8":"none" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-                <span style={{ fontSize:16 }}>{row.icon}</span>
-                <span style={{ fontSize:12, color:"#5a7aaa", fontWeight:700 }}>{row.label}</span>
-              </div>
-              {row.editContent()}
-            </div>
-          ))}
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 
@@ -4273,19 +4301,27 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [addStep,       setAddStep]       = useState(null); // null | "service" | "form"
   const [addServiceId,  setAddServiceId]  = useState("");
 
-  const [siteData, setSiteData] = useState({
-    key_info:'', parking_info:'',
+  // ★sites の編集対象フィールド。住所3列（address / address_num / address_bldg）は
+  //   2026-09-10 のインライン編集化で追加した。現場名(site_name)は一意制約
+  //   (company_id, site_name) のキーなのでここには入れない。
+  const SITE_INIT = {
+    key_info:      order.key     || '',
+    parking_info:  order.parking || '',
     contact_name:  order.siteContactName  || '',
     contact_phone: order.siteContactPhone || '',
     memo:'', entry_info:'', yosei_info:'',
-  });
-  const FORM_BLANK = { key_info:'', parking_info:'', contact_name:'', contact_phone:'', memo:'', entry_info:'', yosei_info:'' };
-  const PENDING_BLANK = { key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[] };
-  const [formData, setFormData] = useState(FORM_BLANK);
+    address:       order.address     || '',
+    address_num:   order.addressNum  || '',
+    address_bldg:  order.addressBldg || '',
+  };
+  const [siteData, setSiteData] = useState(SITE_INIT);
+  // ★表示欄がそのまま入力欄になったので、formData は空ではなく既存値で始める。
+  //   旧実装は空オブジェクト固定だったため、青フォームが常に空で表示され、
+  //   「下で打って上で確認する」往復が発生していた。
+  const [formData, setFormData] = useState(SITE_INIT);
   const [imagePaths, setImagePaths] = useState({
     key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[],
   });
-  const [pendingImages,  setPendingImages]  = useState(PENDING_BLANK);
   const [blobUrls,       setBlobUrls]       = useState({}); // アップロード直後のblob URL（セッション中保持）
   const [saving,         setSaving]         = useState(false);
   const [manualSaving,   setManualSaving]   = useState(false);
@@ -4296,12 +4332,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [expandedRelated, setExpandedRelated] = useState({});
   const saveTimer           = useRef(null);
   const blobUrlsRef         = useRef({});
-  const originalSiteDataRef = useRef({
-    key_info:'', parking_info:'',
-    contact_name:  order.siteContactName  || '',
-    contact_phone: order.siteContactPhone || '',
-    memo:'', entry_info:'', yosei_info:'',
-  });
+  const originalSiteDataRef = useRef(SITE_INIT);
 
   useEffect(() => {
     return () => {
@@ -4312,6 +4343,23 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
   const [cid, setCid] = useState(order.companyId || '');
   const siteName = order.site;
+
+  // ★行の React.memo を効かせるための参照。
+  //   handleText / handleUpload を useCallback([]) で識別子固定にするため、
+  //   可変値は state ではなく ref から読む。識別子が毎回変わると memo は
+  //   素通りし、1文字打つたびに全行が再描画される（＝memo 化の意味が消える）。
+  const formDataRef   = useRef(SITE_INIT);
+  const imagePathsRef = useRef({ key_images:[], parking_images:[], images:[], entry_images:[], yosei_images:[] });
+  const cidRef        = useRef(order.companyId || '');
+  const siteNameRef   = useRef(order.site || '');
+  const orderIdRef    = useRef(order.id);
+  // 一度でも編集したら fetchSiteData で入力中の値を上書きしない（打鍵中の巻き戻し防止）
+  const dirtyRef      = useRef(false);
+  useEffect(() => { formDataRef.current   = formData;   }, [formData]);
+  useEffect(() => { imagePathsRef.current = imagePaths; }, [imagePaths]);
+  useEffect(() => { cidRef.current        = cid;        }, [cid]);
+  useEffect(() => { siteNameRef.current   = siteName;   }, [siteName]);
+  useEffect(() => { orderIdRef.current    = order.id;   }, [order.id]);
   const st       = HI_STATUS[order.status] || HI_STATUS["調整中"];
   const noReq    = ["完了","キャンセル","キャンセル相談中"];
   const canCancel     = role !== "admin" && !noReq.includes(order.status);
@@ -4352,7 +4400,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const fetchSiteData = (resolvedCid) => {
     if (!resolvedCid || !siteName) return;
     sb.from('sites')
-      .select('key_info,key_images,parking_info,parking_images,contact_name,contact_phone,memo,images,entry_info,entry_images,yosei_info,yosei_images')
+      .select('key_info,key_images,parking_info,parking_images,contact_name,contact_phone,memo,images,entry_info,entry_images,yosei_info,yosei_images,address,address_num,address_bldg')
       .eq('company_id', resolvedCid).eq('site_name', siteName)
       .limit(1)
       .then(({ data: rows, error }) => {
@@ -4361,16 +4409,23 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         if (!data) return;
         // テキスト情報のみ更新（blobUrlsは一切触らない）
         const freshSiteData = {
-          key_info:     data.key_info     || '',
-          parking_info: data.parking_info || '',
+          key_info:     data.key_info     || order.key     || '',
+          parking_info: data.parking_info || order.parking || '',
           contact_name: data.contact_name  || order.siteContactName  || '',
           contact_phone:data.contact_phone || order.siteContactPhone || '',
           memo:         data.memo         || '',
           entry_info:   data.entry_info   || '',
           yosei_info:   data.yosei_info   || '',
+          address:      data.address      || order.address     || '',
+          address_num:  data.address_num  || order.addressNum  || '',
+          address_bldg: data.address_bldg || order.addressBldg || '',
         };
         setSiteData(freshSiteData);
         originalSiteDataRef.current = freshSiteData;
+        // ★入力欄にも反映する。ただし編集中は上書きしない。
+        //   handleText 内の setCid で cid が変わると本 effect が再発火するため、
+        //   ガードが無いと打鍵中に入力内容が巻き戻る。
+        if (!dirtyRef.current) { formDataRef.current = freshSiteData; setFormData(freshSiteData); }
         // 画像パスはDBパスを優先しつつ、未DB保存の新規パスを保持
         const mergeImgs = (dbImgs, prevImgs) => {
           const dbSet = new Set(dbImgs);
@@ -4421,47 +4476,56 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       });
   }, [cid, siteName, viewOnly]);
 
-  const handleText = (field, value) => {
-    const nextForm = { ...formData, [field]: value };
-    setFormData(nextForm);
+  // ★useCallback([]) で識別子を固定する。行の React.memo に渡す関数の識別子が
+  //   毎レンダー変わると memo が素通りするため。可変値はすべて ref から読む。
+  const handleText = useCallback((field, value) => {
+    dirtyRef.current = true;
+    setFormData(prev => { const next = { ...prev, [field]: value }; formDataRef.current = next; return next; });
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
-      if (!siteName) return;
-      let timerCid = cid;
+      const sName = siteNameRef.current;
+      if (!sName) return;
+      let timerCid = cidRef.current;
       if (!timerCid) {
         const { data: { user } } = await sb.auth.getUser();
         if (user) {
           const { data: prof } = await sb.from('profiles')
             .select('company_id').eq('id', user.id).maybeSingle();
-          if (prof?.company_id) { timerCid = prof.company_id; setCid(timerCid); }
+          if (prof?.company_id) { timerCid = prof.company_id; cidRef.current = timerCid; setCid(timerCid); }
         }
       }
       if (!timerCid) return;
       setSaving(true);
-      const merged = { ...siteData };
-      Object.entries(nextForm).forEach(([k,v]) => { if (v !== '') merged[k] = v; });
+      // ★formData をそのまま保存する。旧実装の「空文字の項目は上書きしない」
+      //   合成は撤廃した。表示欄がそのまま入力欄になった以上、消した内容が
+      //   保存されないと画面と DB が食い違うため。
+      const next = formDataRef.current;
       const { error } = await sb.from('sites').upsert({
         company_id:    timerCid,
-        site_name:     siteName,
-        key_info:      merged.key_info,
-        parking_info:  merged.parking_info,
-        contact_name:  merged.contact_name,
-        contact_phone: merged.contact_phone,
-        memo:          merged.memo,
-        entry_info:    merged.entry_info,
-        yosei_info:    merged.yosei_info,
+        site_name:     sName,
+        key_info:      next.key_info,
+        parking_info:  next.parking_info,
+        contact_name:  next.contact_name,
+        contact_phone: next.contact_phone,
+        memo:          next.memo,
+        entry_info:    next.entry_info,
+        yosei_info:    next.yosei_info,
+        address:       next.address,
+        address_num:   next.address_num,
+        address_bldg:  next.address_bldg,
       }, { onConflict: 'company_id,site_name' });
-      if (!error) setSiteData(merged);
+      if (!error) setSiteData(next);
       else console.error('[handleText upsert]', error.message);
       setSaving(false);
     }, 1000);
-  };
+  }, []);
 
-  const handleUpload = async (imgField, e) => {
+  const handleUpload = useCallback(async (imgField, e) => {
     const files = Array.from(e.target.files);
+    const siteName  = siteNameRef.current;
     if (!files.length || !siteName) return;
-    const activeCid = cid;
-    const preExistingPaths = imagePaths[imgField] || [];
+    const activeCid = cidRef.current;
+    const preExistingPaths = imagePathsRef.current[imgField] || [];
 
     setUploadingField(imgField);
     const savedPaths = [];
@@ -4480,7 +4544,6 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         setBlobUrls(prev => ({ ...prev, [path]: blobUrl }));
       }
       setImagePaths(prev => ({ ...prev, [imgField]: [...(prev[imgField] || []), path] }));
-      setPendingImages(prev => ({ ...prev, [imgField]: [...(prev[imgField] || []), path] }));
 
       if (!activeCid) { savedPaths.push(path); continue; }
 
@@ -4492,7 +4555,6 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
       if (error) {
         // アップロード失敗時のみ除去
         setImagePaths(prev => ({ ...prev, [imgField]: (prev[imgField] || []).filter(p => p !== path) }));
-        setPendingImages(prev => ({ ...prev, [imgField]: (prev[imgField] || []).filter(p => p !== path) }));
         setBlobUrls(prev => { const n = { ...prev }; delete n[path]; return n; });
         if (blobUrlsRef.current[path]) { URL.revokeObjectURL(blobUrlsRef.current[path]); delete blobUrlsRef.current[path]; }
       } else {
@@ -4515,14 +4577,14 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         console.error('[sites upsert 失敗]', e.message);
       }
       // 写真追加を site_history に記録
-      if (order?.id) {
+      if (orderIdRef.current) {
         const SITE_IMG_FL = {
           key_images:'鍵情報（写真）', parking_images:'駐車場（写真）',
           images:'現場注意事項（写真）', entry_images:'入館情報（写真）', yosei_images:'養生範囲（写真）',
         };
         sb.auth.getUser().then(({ data: { user } }) => {
           sb.from('site_history').insert({
-            order_id:    order.id,
+            order_id:    orderIdRef.current,
             company_id:  activeCid,
             site_name:   siteName,
             changed_by:  user?.email || 'unknown',
@@ -4534,7 +4596,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
           });
           if (user?.id) {
             sb.from('order_change_logs').insert({
-              order_id:   order.id,
+              order_id:   orderIdRef.current,
               changed_by: user.id,
               field_name: SITE_IMG_FL[imgField] || imgField,
               old_value:  null,
@@ -4547,7 +4609,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
     setUploadingField(null);
     e.target.value = '';
-  };
+  }, []);
 
   const handleSave = async () => {
     if (manualSaving) return;
@@ -4572,8 +4634,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     clearTimeout(saveTimer.current);
     setManualSaving(true);
     try {
-      const merged = { ...siteData };
-      Object.entries(formData).forEach(([k,v]) => { if (v !== '') merged[k] = v; });
+      // ★formData が唯一の正。旧実装の「空文字は上書きしない」合成は撤廃した
+      //   （撤廃しないと、インライン編集で消した内容を保存できない）。
+      const merged = { ...formData };
       const { error } = await sb.from('sites').upsert({
         company_id:     activeCid,
         site_name:      siteName,
@@ -4589,6 +4652,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         entry_images:   imagePaths.entry_images,
         yosei_info:     merged.yosei_info,
         yosei_images:   imagePaths.yosei_images,
+        address:        merged.address,
+        address_num:    merged.address_num,
+        address_bldg:   merged.address_bldg,
       }, { onConflict: 'company_id,site_name' });
       if (error) {
         console.error('[handleSave upsert]', error.message);
@@ -4598,9 +4664,12 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         const SITE_FL = {
           key_info:'鍵情報', parking_info:'駐車場', contact_name:'担当者名',
           contact_phone:'担当者電話', memo:'現場注意事項', entry_info:'入館情報', yosei_info:'養生範囲',
+          address:'住所', address_num:'番地', address_bldg:'建物名',
         };
+        // ★末尾の「空でないこと」条件は外した。インライン編集では項目を空に
+        //   できるようになったので、消したことも履歴に残す必要がある。
         const changedFields = Object.keys(SITE_FL).filter(f =>
-          (originalSiteDataRef.current[f]||'') !== (merged[f]||'') && (merged[f]||'') !== ''
+          (originalSiteDataRef.current[f]||'') !== (merged[f]||'')
         );
         if (changedFields.length > 0 && order?.id) {
           sb.auth.getUser().then(({ data: { user } }) => {
@@ -4632,8 +4701,11 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
         }
         setSiteData(merged);
         originalSiteDataRef.current = merged;
-        setFormData(FORM_BLANK);
-        setPendingImages(PENDING_BLANK);
+        // ★空に戻してはいけない。表示欄がそのまま入力欄なので、
+        //   空に戻すと保存した内容が画面から消えたように見える。
+        formDataRef.current = merged;
+        setFormData(merged);
+        dirtyRef.current = false;
         setSaveError('');
         setSavedMsg(true);
         setTimeout(() => setSavedMsg(false), 2000);
@@ -5264,7 +5336,6 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             <SiteInfoSection viewOnly={false}
               order={order} siteName={siteName}
               siteData={siteData} imagePaths={imagePaths} blobUrls={blobUrls}
-              pendingImages={pendingImages}
               uploadingField={uploadingField} handleText={handleText} handleUpload={handleUpload}
               formData={formData} estimate={estimate} />
 
@@ -8414,7 +8485,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     setAdSiteData({});
     if (!order?.companyId || !order?.site) return;
     sb.from('sites')
-      .select('key_info,key_images,parking_info,parking_images,contact_name,contact_phone,memo,images,entry_info,entry_images,yosei_info,yosei_images')
+      .select('key_info,key_images,parking_info,parking_images,contact_name,contact_phone,memo,images,entry_info,entry_images,yosei_info,yosei_images,address,address_num,address_bldg')
       .eq('company_id', order.companyId).eq('site_name', order.site)
       .limit(1)
       .then(({ data }) => { if (data?.[0]) setAdSiteData(data[0]); });
@@ -9131,7 +9202,11 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
               const isRowUpdated = label => (LABEL_FIELD_KEYS[label]||[]).some(k=>updatedFieldSet.has(k));
               const keyText     = adSiteData.key_info     || order.key     || "";
               const parkingText = adSiteData.parking_info || order.parking || "";
-              const addrText    = [order.address,order.addressNum,order.addressBldg].filter(Boolean).join(' ');
+              // ★顧客が案件詳細で住所を編集すると sites 側が新しい。鍵情報・駐車場と
+              //   同じく sites を優先し、無ければ発注時の値にフォールバックする。
+              const addrText    = [adSiteData.address      || order.address,
+                                   adSiteData.address_num  || order.addressNum,
+                                   adSiteData.address_bldg || order.addressBldg].filter(Boolean).join(' ');
               const rows = [
                 { show:true, icon:"🏠", label:"現場名", content:
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
