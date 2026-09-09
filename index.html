@@ -5855,7 +5855,6 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
   const [userId,          setUserId]          = useState(null);
   const [unreadCounts,    setUnreadCounts]    = useState({});
   const [mentionCounts,   setMentionCounts]   = useState({});   // 自分宛メンションの未読件数（order_id別）
-  const [showUnreadBubble,setShowUnreadBubble]= useState(false);
   const [userName,        setUserName]        = useState("");
 
   const fetchOrders = async () => {
@@ -5891,7 +5890,6 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         });
         setUnreadCounts(counts);
         setMentionCounts(mentCounts);
-        setShowUnreadBubble(Object.values(counts).some(c => c > 0));
       }
     }
   };
@@ -5921,7 +5919,6 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         });
         setUnreadCounts(counts);
         setMentionCounts(mentCounts);
-        setShowUnreadBubble(Object.values(counts).some(c => c > 0));
       }
     };
     const id = setInterval(pollUnread, 3000);
@@ -6250,23 +6247,6 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
         </div>
       </div>
 
-      {/* 右下固定E-Li ＋ 未読吹き出し */}
-      <div style={{ position:"fixed", bottom:24, right:16, zIndex:100,
-        display:"flex", flexDirection:"column", alignItems:"flex-end", pointerEvents:"none" }}>
-        {showUnreadBubble&&(
-          <div onClick={()=>setShowUnreadBubble(false)}
-            style={{ background:C.white, border:"2px solid "+C.red,
-              borderRadius:"12px 12px 4px 12px", padding:"8px 14px",
-              fontSize:13, fontWeight:700, color:C.red, marginBottom:8,
-              cursor:"pointer", boxShadow:"0 2px 12px rgba(230,57,70,0.2)",
-              whiteSpace:"nowrap", pointerEvents:"auto" }}>
-            新しいメッセージがあるよ！
-          </div>
-        )}
-        <img src={ELI_IMG} alt="E-Li" className="libot-float"
-          style={{ height:64, width:"auto", pointerEvents:"none",
-            filter:"drop-shadow(0 4px 12px rgba(10,31,92,0.18))" }} />
-      </div>
     </div>
   );
 }
