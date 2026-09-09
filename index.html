@@ -3450,7 +3450,7 @@ function OrderApp({ onDone, onBack }) {
         const { error: msgError } = await sb.from('messages').insert({
           order_id:  newOrder.id,
           from_role: 'eli',
-          text:      '受け付けました！\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。',
+          text:      'ご依頼いただきありがとうございます。\n受け付けました！\n24時間以内に担当者よりご連絡いたします。\nしばらくお待ちください。',
           is_read:   false,
         });
         if (msgError) console.error('[E-Li自動メッセージ失敗]', msgError.message);
