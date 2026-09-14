@@ -3561,10 +3561,227 @@ function OrderApp({ onDone, onBack }) {
 }
 
     // ═══════════════════════════════════════════════════════
+    // 見積依頼（2026-09-14・段3a）  プレフィックス: Es
+    // ═══════════════════════════════════════════════════════
+
+// 4項目だけの軽い専用フォーム。orders 1行を status='見積依頼中' で作る。
+// ★現場名は「仮名（KJ-123）」。case_code は cases の INSERT トリガーが採番する全体一意の値なので、
+//   sites の UNIQUE(company_id, site_name) に当たらず、実在の現場を上書きすることもない。
+// ★期日は orders.note の末尾に1行（「期日：YYYY-MM-DD」）。schedules.work_date には入れない
+//   （入れると「日程確定」の日付必須ガードを希望日のまま通れてしまう）。
+// ★Supabase：開いたときの読み取り2本（profiles / user_companies）、送信時の書き込み5本。
+function EsLabel({ children, required }) {
+  return (
+    <div style={{ fontSize:15, fontWeight:700, color:C.navy, margin:"14px 0 6px" }}>
+      {children}{" "}
+      {required
+        ? <span style={{ color:C.red, fontSize:13 }}>※必須</span>
+        : <span style={{ fontSize:13, color:C.gray, fontWeight:400 }}>任意</span>}
+    </div>
+  );
+}
+
+function EsRequestApp({ onDone, onBack }) {
+  const [caseName,   setCaseName]   = useState("");
+  const [address,    setAddress]    = useState("");
+  const [content,    setContent]    = useState("");
+  const [dueDate,    setDueDate]    = useState("");
+  const [profile,    setProfile]    = useState(null);
+  const [companies,  setCompanies]  = useState([]); // [{id, name, is_primary}]
+  const [companyId,  setCompanyId]  = useState(null);
+  const [showErrors, setShowErrors] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [doneId,     setDoneId]     = useState(null);
+
+  // 所属会社は発注フォームと同じ優先順（user_companies の主所属 → profiles.company_id）
+  useEffect(() => {
+    sb.auth.getSession().then(async ({ data: { session } }) => {
+      const uid = session?.user?.id;
+      if (!uid) return;
+      const [{ data: prof }, { data: ucRows }] = await Promise.all([
+        sb.from('profiles').select('name, name_kana, phone, company_id').eq('id', uid).maybeSingle(),
+        sb.from('user_companies').select('company_id, is_primary, companies(name)')
+          .eq('user_id', uid).order('is_primary', { ascending: false }),
+      ]);
+      setProfile(prof || null);
+      const list = (ucRows || []).filter(uc => uc.companies)
+        .map(uc => ({ id: uc.company_id, name: uc.companies.name || uc.company_id, is_primary: uc.is_primary }));
+      setCompanies(list);
+      setCompanyId((list.find(c => c.is_primary) || list[0])?.id || prof?.company_id || null);
+    });
+  }, []);
+
+  const errs = [];
+  if (!caseName.trim()) errs.push("仮の案件名を入力してください");
+  if (!address.trim())  errs.push("住所を入力してください");
+  if (!content.trim())  errs.push("見積内容を入力してください");
+
+  const handleSubmit = async () => {
+    setShowErrors(true);
+    if (errs.length > 0 || submitting) return;
+    setSubmitting(true);
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) throw new Error('ログインセッションが切れています。再度ログインしてください。');
+      const name = caseName.trim();
+      const addr = address.trim();
+
+      // ① 案件。case_code は INSERT トリガーが採番する
+      const { data: newCase, error: caseErr } = await sb.from('cases')
+        .insert({ company_id: companyId, site_id: null, case_name: name })
+        .select('id, case_code').single();
+      if (caseErr) throw caseErr;
+      const siteName = `${name}（${newCase.case_code}）`;
+
+      // ② 現場（名前は案件番号付きで一意）
+      const { error: siteErr } = await sb.from('sites').insert({
+        company_id: companyId, site_name: siteName, address: addr,
+        address_num: '', address_bldg: '', zip_code: '',
+        site_contact_name: '', site_contact_phone: '',
+      });
+      if (siteErr) throw siteErr;
+
+      // ③ 受注。status を明示して見積依頼トリガー（estimate_requested）に載せる
+      const note = content.trim() + (dueDate ? `\n\n期日：${dueDate}` : '');
+      const { data: newOrder, error: orderErr } = await sb.from('orders').insert({
+        user_id:     uid,
+        company_id:  companyId,
+        person:      profile?.name      || '',
+        person_kana: profile?.name_kana || '',
+        phone:       profile?.phone     || '',
+        case_id:     newCase.id,
+        service:     '見積依頼',
+        site:        siteName,
+        address:     addr,
+        note,
+        status:      '見積依頼中',
+      }).select('id').single();
+      if (orderErr) throw orderErr;
+
+      // ④ 日程の空行。一覧カードは schedules[0] を前提にしているため必ず1行作る
+      const { error: schErr } = await sb.from('schedules').insert({
+        order_id: newOrder.id, work_date: null, start_time: '', end_time: '',
+        workers: '', details: [], sort_order: 0,
+      });
+      if (schErr) console.error('[見積依頼 schedules]', schErr.message);
+
+      // ⑤ E-Li 自動メッセージ（失敗しても依頼自体は成立している）
+      const { error: msgErr } = await sb.from('messages').insert({
+        order_id:  newOrder.id,
+        from_role: 'eli',
+        text:      'お見積りのご依頼ありがとうございます。\n受け付けました！\n担当者よりお見積りをお送りしますので、しばらくお待ちください。',
+        is_read:   false,
+      });
+      if (msgErr) console.error('[見積依頼 E-Li自動メッセージ]', msgErr.message);
+
+      setDoneId(newOrder.id);
+    } catch (e) {
+      alert('送信エラーが発生しました。\n\n' + (e?.message || e));
+      console.error(e);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const FONT = "'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif";
+
+  if (doneId) return (
+    <div style={{ background:C.bg, minHeight:"100vh", fontFamily:FONT }}>
+      <OrTopBar title="見積依頼完了"/>
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"20px 16px" }}>
+        <Card>
+          <div style={{ padding:"32px 24px", textAlign:"center" }}>
+            <img src={ELI_IMG} className="libot-float" style={{ height:100, width:"auto",
+              filter:"drop-shadow(0 8px 20px rgba(10,31,92,0.15))", marginBottom:16 }} />
+            <div style={{ fontSize:24, fontWeight:900, color:C.navy, marginBottom:8 }}>見積を依頼しました！🧾</div>
+            <div style={{ fontSize:15, color:C.gray, lineHeight:1.9, marginBottom:24 }}>
+              お見積りのご依頼ありがとうございます。<br />担当者よりお見積りをお送りします。
+            </div>
+            <div style={{ background:"#e6f7f5", border:"2px solid #14b8a6", borderRadius:16,
+              padding:"16px", marginBottom:28, fontSize:15, color:"#0f766e", lineHeight:1.9 }}>
+              受付番号：<b style={{ fontSize:20 }}>{doneId}</b><br />
+              <span style={{ fontSize:13, color:C.gray }}>注文履歴からご確認いただけます</span>
+            </div>
+            <OrBigBtn onClick={onDone} color="yellow">📋 注文履歴を見る</OrBigBtn>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ background:C.bg, minHeight:"100vh", fontFamily:FONT }}>
+      <OrTopBar title="見積依頼" onBack={onBack}/>
+      <div style={{ maxWidth:480, margin:"0 auto", padding:"0 16px 40px" }}>
+        <EliTalk size={60}>お見積りの内容を教えてください🧾<br />金額と作業日は、お見積りと一緒にご案内します</EliTalk>
+
+        {/* 複数会社に所属している場合のみ（発注フォームと同じ） */}
+        {companies.length > 1 && (
+          <div style={{ margin:"0 0 14px", padding:"12px 16px", background:"#f0f5ff",
+            borderRadius:12, border:"1px solid #c0d0f0" }}>
+            <div style={{ fontSize:13, fontWeight:700, color:C.navy, marginBottom:8 }}>🏢 依頼元の会社</div>
+            <select value={companyId || ''} onChange={e => setCompanyId(e.target.value)}
+              style={{ width:"100%", fontSize:15, padding:"10px 12px", borderRadius:8,
+                border:"1px solid #c0d0f0", background:"white", color:C.navy,
+                fontFamily:"inherit", cursor:"pointer" }}>
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>{c.name}（{c.id}）{c.is_primary ? " ★" : ""}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <Card>
+          <CardTitle icon="🧾">見積の内容</CardTitle>
+          <div style={{ padding:"0 18px 18px" }}>
+            <EsLabel required>仮の案件名</EsLabel>
+            <OrTxtInput value={caseName} onChange={e=>setCaseName(e.target.value)}
+              placeholder="例：〇〇様邸 リフォーム" hasError={showErrors&&!caseName.trim()} />
+
+            <EsLabel required>住所</EsLabel>
+            <OrTxtInput value={address} onChange={e=>setAddress(e.target.value)}
+              placeholder="例：大阪府堺市北区〇〇町（ざっくりで大丈夫です）" hasError={showErrors&&!address.trim()} />
+
+            <EsLabel required>見積内容</EsLabel>
+            <TextArea value={content} onChange={e=>setContent(e.target.value)} rows={5}
+              placeholder="例：作業の範囲・数量・ご希望など、分かる範囲でご記入ください"
+              hasError={showErrors&&!content.trim()} />
+
+            <EsLabel>期日</EsLabel>
+            <input type="date" value={dueDate}
+              min={new Date().toISOString().split("T")[0]}
+              onChange={e=>setDueDate(e.target.value)}
+              style={{ width:"100%", fontSize:14, padding:"12px 10px", borderRadius:12,
+                border:"2px solid "+C.grayL, boxSizing:"border-box", outline:"none",
+                color:C.navy, background:C.white, fontFamily:"inherit" }} />
+          </div>
+        </Card>
+
+        {showErrors && errs.length > 0 && (
+          <div style={{ background:"#fff0f0", border:"2px solid "+C.red, borderRadius:14,
+            padding:"12px 16px", marginBottom:14 }}>
+            {errs.map((e,i)=>(
+              <div key={i} style={{ fontSize:14, color:C.red, fontWeight:700 }}>• {e}</div>
+            ))}
+          </div>
+        )}
+
+        <OrBigBtn onClick={handleSubmit} color="green" disabled={submitting}>
+          {submitting ? "送信中…" : "✉️ この内容で見積を依頼する"}
+        </OrBigBtn>
+        <OrSubBtn onClick={onBack}>← 注文履歴にもどる</OrSubBtn>
+      </div>
+    </div>
+  );
+}
+
+    // ═══════════════════════════════════════════════════════
     // 注文履歴
     // ═══════════════════════════════════════════════════════
 
 const HI_STATUS = {
+  "見積依頼中":     { bg:"#e6f7f5", text:"#0f766e", border:"#14b8a6", icon:"🧾", desc:"お見積りを準備しています" },
   "調整中":         { bg:"#fff8e0", text:"#b07800", border:"#f5c800", icon:"🆕", desc:"24時間以内に返答します" },
   "日程確定":       { bg:"#eef3ff", text:"#2952c8", border:"#2952c8", icon:"📅", desc:"日程が確定しました" },
   "日程相談中":     { bg:"#fff3e8", text:"#c05000", border:"#f0a050", icon:"💬", desc:"日程を調整中です" },
@@ -3603,7 +3820,9 @@ function HiStatusBadge({ status, large }) {
 
 function hiGetTimer(order, nowMs) {
   if (order.status === "調整中") {
-    const elapsedH = (nowMs - order.createdAt) / 3600000;
+    // 起点は status が今の値になった時刻。見積依頼から昇格した案件が即「期限超過」にならないように。
+    // 通常の新規発注は status_changed_at が空で created_at に置き換わる（mapOrder）ため従来と同じ。
+    const elapsedH = (nowMs - (order.statusChangedAt || order.createdAt)) / 3600000;
     const remainH  = 24 - elapsedH;
     if (remainH > 12) return null;
     if (remainH <= 3) return { bg:"#e63946", col:"#fff", blink:true,  label:`残り${Math.max(0,Math.ceil(remainH))}h` };
@@ -3627,6 +3846,7 @@ function HiBigBtn({ children, onClick, color, disabled }) {
   const bg = disabled ? "#c8d0e0"
     : color==="yellow" ? "linear-gradient(135deg,#f5c800,#ffe033)"
     : color==="green"  ? "linear-gradient(135deg,#2eaa72,#1a7a50)"
+    : color==="teal"   ? "linear-gradient(135deg,#14b8a6,#0f766e)"
     : "linear-gradient(135deg,#2952c8,#0a1f5c)";
   return (
     <button onClick={onClick} disabled={disabled}
@@ -3647,6 +3867,7 @@ function HiBigBtn({ children, onClick, color, disabled }) {
 function EliMessage({ orders, totalUnread=0 }) {
   const adjCount    = orders.filter(o=>o.status==="調整中").length;
   const soudanCount = orders.filter(o=>o.status==="日程相談中").length;
+  const estCount    = orders.filter(o=>o.status==="見積依頼中").length;
   const unreadCount = totalUnread;
 
   let msgs = [];
@@ -3654,6 +3875,8 @@ function EliMessage({ orders, totalUnread=0 }) {
     text:`新しいメッセージが${unreadCount}件届いています！\nチャットを確認してください📩` });
   if (soudanCount>0)  msgs.push({ accent:"#ffa94d",
     text:`日程相談中の案件が${soudanCount}件あります。\nチャットでご確認・ご返答をお願いします💬` });
+  if (estCount>0)     msgs.push({ accent:"#14b8a6",
+    text:`見積依頼中の案件が${estCount}件あります。\nお見積りの準備ができたらお知らせします🧾` });
   if (adjCount>0)     msgs.push({ accent:"#ffd43b",
     text:`調整中の案件が${adjCount}件あります。\n24時間以内に返答しますのでお待ちください😊` });
   if (msgs.length===0) msgs.push({ accent:"rgba(255,255,255,0.35)",
@@ -3732,7 +3955,7 @@ function HiOrderCard({ role, order, unreadCount, mentionCount, onClick, onDetail
         </div>
         <div style={{ fontSize:14, color:"#444", lineHeight:2.0 }}>
           <div>📍 {order.site}</div>
-          <div>📅 {sch.date}　{sch.start}〜{sch.end}</div>
+          <div>📅 {sch?.date ? <>{sch.date}　{sch.start}〜{sch.end}</> : "日程未定"}</div>
         </div>
       </button>
 
@@ -4363,7 +4586,10 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const st       = HI_STATUS[order.status] || HI_STATUS["調整中"];
   const noReq    = ["完了","キャンセル","キャンセル相談中"];
   const canCancel     = role !== "admin" && !noReq.includes(order.status);
-  const canReschedule = role !== "admin" && !noReq.includes(order.status) && order.status !== "日程変更相談中";
+  // 日付の無い案件（見積依頼中・見積から昇格した直後）には出さない。日程変更フローは sch.date.split を呼ぶため。
+  // キャンセル依頼は残す。
+  const canReschedule = role !== "admin" && !noReq.includes(order.status) && order.status !== "日程変更相談中"
+    && order.status !== "見積依頼中" && !!order.schedules?.[0]?.date;
 
   // order.companyId が空の場合、ログイン中ユーザーのプロフィールから取得
   useEffect(() => {
@@ -5191,7 +5417,10 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             })}
             </div>{/* /f0f4ff wrapper */}
 
-            {/* ④ 追加依頼ボタン */}
+            {/* ④ 追加依頼ボタン
+                ★見積依頼中では出さない。追加依頼は status '調整中' で INSERT するため、
+                  見積の段階で発注扱いの行ができてしまう。 */}
+            {order.status !== "見積依頼中" && (
             <button onClick={()=>setAddStep("service")}
               style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10,
                 width:"100%", background:"#0a1f5c",
@@ -5201,6 +5430,7 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               <span style={{ fontSize:20, color:C.white, fontWeight:300 }}>＋</span>
               <span style={{ fontSize:15, fontWeight:800, color:C.white }}>作業日を追加依頼する</span>
             </button>
+            )}
 
             {/* ⑤ 案件情報セクション（SiteInfoSection で一元管理） */}
             <SiteInfoSection viewOnly={true}
@@ -5904,7 +6134,7 @@ function ChatScreen({ role, order, onBack }) {
 }
 
 // ── メイン ───────────────────────────────────────────────
-function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDetailView, onGoChat }) {
+function HistoryApp({ role, onNewOrder, onNewEstimate, onMyPage, onLogout, onGoDetail, onGoDetailView, onGoChat }) {
   // ★初回だけ通知オンボを出す。判定は localStorage と Notification.permission
   //   だけで完結し、Supabase へは1本も出ない。role では絞らない。
   const [showNotifyOnboard, setShowNotifyOnboard] = useState(false);
@@ -6042,6 +6272,7 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
 
   const counts = {
     全て:       orders.length,
+    見積依頼中: orders.filter(o=>o.status==="見積依頼中").length,
     調整中:     orders.filter(o=>o.status==="調整中").length,
     日程確定:   orders.filter(o=>o.status==="日程確定").length,
     日程相談中: orders.filter(o=>o.status==="日程相談中").length,
@@ -6137,6 +6368,10 @@ function HistoryApp({ role, onNewOrder, onMyPage, onLogout, onGoDetail, onGoDeta
           })}
         </div>
 
+        {/* 見積を頼む（2026-09-14）。青緑は黄（本業の発注）・紺と被らない第3色 */}
+        <div style={{ marginBottom:10 }}>
+          <HiBigBtn color="teal" onClick={onNewEstimate}>🧾 見積を頼む</HiBigBtn>
+        </div>
         <div style={{ display:"flex", gap:10, marginBottom:14 }}>
           <div style={{ flex:1 }}>
             <HiBigBtn color="yellow" onClick={onNewOrder}>➕ 新しく工事を頼む</HiBigBtn>
@@ -6828,9 +7063,10 @@ function MyPageApp({ onBack, onLogout }) {
     // 管理者画面
     // ═══════════════════════════════════════════════════════
 
-const AD_STATUS_LIST = ["調整中","日程確定","日程相談中","キャンセル相談中","日程変更相談中","完了","キャンセル"];
+const AD_STATUS_LIST = ["見積依頼中","調整中","日程確定","日程相談中","キャンセル相談中","日程変更相談中","完了","キャンセル"];
 const AD_STATUS_CHANGE_LIST = ["調整中","日程確定","日程相談中","完了","キャンセル"];
 const AD_STATUS = {
+  "見積依頼中":     { bg:"#e6f7f5", text:"#0f766e", border:"#14b8a6", icon:"🧾" },
   "調整中":         { bg:"#fff8e0", text:"#b07800", border:"#f5c800", icon:"🆕" },
   "日程確定":       { bg:"#eef3ff", text:"#2952c8", border:"#2952c8", icon:"📅" },
   "日程相談中":     { bg:"#fff3e8", text:"#c05000", border:"#f0a050", icon:"💬" },
@@ -7877,7 +8113,7 @@ const NEG_STYLES = {
 
 function getOrderTimer(order) {
   if (order.status === "調整中") {
-    const info = getAdjustingLevel(order.createdAt);
+    const info = getAdjustingLevel(order.statusChangedAt || order.createdAt); // 起点は hiGetTimer と同じ
     const st = ADJ_STYLES[info.level];
     const label = info.remaining <= 0
       ? `⏰ 期限超過 ${formatMs(info.remaining)}`
@@ -8008,7 +8244,7 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
         </div>
         <div style={{ fontSize:11, color:C.gray, lineHeight:1.7, marginBottom: timer.show?4:0 }}>
           <div>{order.company}</div>
-          <div>{order.schedules[0].date}　{order.id}</div>
+          <div>{order.schedules[0]?.date}　{order.id}</div>
         </div>
         {timer.show && (
           <span style={{ display:"inline-block", background:timer.badgeBg,
@@ -8056,12 +8292,14 @@ function AdOrderCard({ order, isSelected, isChecked, showCheckbox, onClick, onTo
 function OrderList({ role, orders, selected, onSelect, filter, setFilter, search, setSearch,
                       checkedIds, onToggleCheck, onDeleteSelected, unreadCounts, mentionCounts, siteChangeCounts, changeLogCounts }) {
   useTimer();
+  const estCount   = orders.filter(o=>o.status==="見積依頼中").length;
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
   const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
   const reqCount   = orders.filter(o=>o.status==="キャンセル相談中"||o.status==="日程変更相談中").length;
   const overAdj    = orders.filter(o=>{
     if (o.status!=="調整中") return false;
-    return getAdjustingLevel(o.createdAt).level==="over"||getAdjustingLevel(o.createdAt).level==="danger";
+    const lv = getAdjustingLevel(o.statusChangedAt || o.createdAt).level; // 起点は hiGetTimer と同じ
+    return lv==="over"||lv==="danger";
   }).length;
   const overSoud = orders.filter(o=>{
     if (o.status!=="日程相談中") return false;
@@ -8076,6 +8314,12 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
         <div style={{ fontSize:11, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>E-Li 管理者画面</div>
         <div style={{ fontSize:17, fontWeight:900, color:C.white }}>受注一覧</div>
         <div style={{ display:"flex", gap:6, marginTop:8, flexWrap:"wrap" }}>
+          {estCount>0 && (
+            <div style={{ background:"rgba(20,184,166,0.2)", border:"1px solid rgba(20,184,166,0.5)",
+              borderRadius:7, padding:"4px 8px", fontSize:11, color:"#99f6e4", fontWeight:700 }}>
+              🧾 見積依頼 {estCount}件
+            </div>
+          )}
           {adjCount>0 && (
             <div style={{ background:"rgba(230,57,70,0.2)", border:"1px solid rgba(230,57,70,0.5)",
               borderRadius:7, padding:"4px 8px", fontSize:11, color:"#ffaaaa", fontWeight:700 }}>
@@ -8631,6 +8875,12 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
     if (!error) setAdSiteData(d => ({ ...d, [imgField]: newPaths }));
   };
   const saveEdit = async () => {
+    // ★日付の無い日程のまま「日程確定」で保存させない（見積依頼など）。
+    //   handleEdit 側で止めると、呼び出し後にここで編集モードが閉じて入力が消えるため、保存前に止める。
+    if (editData.status === "日程確定" && !editData.schedules?.[0]?.date) {
+      alert("日付が未設定のため「日程確定」で保存できません。\n日程1の日付を入れてから保存してください。");
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -12065,7 +12315,8 @@ function AdminApp({ role, onLogout, onMyPage }) {
       let changed = false;
       for (const id of ids) {
         const sch = firstSch[id];
-        if (!sch) continue;
+        // 日付・終了時刻の無い日程は判定しない（split で例外になり、全管理者の端末で60秒ごとに落ちるため）
+        if (!sch || !sch.work_date || !sch.end_time) continue;
         const [y, mo, d] = sch.work_date.split("-").map(Number);
         const [h, m] = sch.end_time.split(":").map(Number);
         if (now > new Date(y, mo - 1, d, h, m)) {
@@ -12088,14 +12339,20 @@ function AdminApp({ role, onLogout, onMyPage }) {
       o.id.includes(search) || o.person.includes(search));
 
   const sorted = [...filtered].sort((a, b) => {
-    const priority = { "調整中":0, "キャンセル相談中":1, "日程変更相談中":1, "日程相談中":2, "日程確定":3, "完了":4, "キャンセル":5 };
+    const priority = { "見積依頼中":0, "調整中":0, "キャンセル相談中":1, "日程変更相談中":1, "日程相談中":2, "日程確定":3, "完了":4, "キャンセル":5 };
     if ((priority[a.status] ?? 9) !== (priority[b.status] ?? 9)) return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
-    if (a.status === "調整中") return a.createdAt - b.createdAt;
+    if (a.status === "調整中") return (a.statusChangedAt || a.createdAt) - (b.statusChangedAt || b.createdAt);
     if (a.status === "日程相談中") return a.statusChangedAt - b.statusChangedAt;
     return 0;
   });
 
   const handleStatusChange = async (id, newStatus) => {
+    // ★日付の無い案件は日程確定にしない（見積依頼など）。確定メッセージが「（未定）」になり、
+    //   自動完了ループの判定対象にもなるため。日付は編集で入れてから確定する。
+    if (newStatus === "日程確定" && !orders.find(o => o.id === id)?.schedules?.[0]?.date) {
+      alert("日付が未設定のため「日程確定」にできません。\n編集で日付を入れてから確定してください。");
+      return;
+    }
     const nowIso = new Date().toISOString();
     const nowMs  = Date.now();
     const oldStatus = orders.find(o => o.id === id)?.status || "";
@@ -12200,7 +12457,9 @@ function AdminApp({ role, onLogout, onMyPage }) {
     for (const sch of editData.schedules) {
       if (sch.id) {
         const orig = order?.schedules.find(s => s.id === sch.id);
-        const dateChanged = orig && (orig.date !== sch.date || orig.start !== sch.start || orig.end !== sch.end);
+        // 変更前の日付が空（見積依頼など日付の無い案件に初めて日付を入れた）なら履歴を残さない。
+        // 残すと顧客画面に「変更あり」バッジが誤って出る。
+        const dateChanged = orig && orig.date && (orig.date !== sch.date || orig.start !== sch.start || orig.end !== sch.end);
         if (dateChanged) {
           const nowIso = new Date().toISOString();
           await sb.from('schedule_history').insert({
@@ -12636,10 +12895,11 @@ function AdminApp({ role, onLogout, onMyPage }) {
       if (screen === "resetpassword") return <ResetPasswordScreen onDone={async () => { await sb.auth.signOut(); setScreen("login"); }} />;
       if (screen === "login")    return <LoginApp onLogin={handleLogin} onRegister={() => setScreen("register")} />;
       if (screen === "register") return <RegisterApp onDone={() => setScreen("login")} onBack={() => setScreen("login")} />;
-      if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onMyPage={() => { setMypageBackTo("history"); setScreen("mypage"); }} onLogout={() => setScreen("login")} onGoDetail={handleGoDetail} onGoDetailView={handleGoDetailView} onGoChat={handleGoChat} />;
+      if (screen === "history")  return <HistoryApp role={userRole} onNewOrder={() => setScreen("order")} onNewEstimate={() => setScreen("estimate")} onMyPage={() => { setMypageBackTo("history"); setScreen("mypage"); }} onLogout={() => setScreen("login")} onGoDetail={handleGoDetail} onGoDetailView={handleGoDetailView} onGoChat={handleGoChat} />;
       if (screen === "detail" && detailOrder) return <DetailScreen role={userRole} order={detailOrder} onBack={() => setScreen("history")} onOpenChat={handleDetailOpenChat} onStatusChange={handleDetailStatusChange} onChat={() => {}} viewOnly={detailViewOnly} />;
       if (screen === "chat" && detailOrder) return <ChatScreen role={userRole} order={detailOrder} onBack={() => setScreen(chatBackTo)} />;
       if (screen === "order")    return <OrderApp onDone={() => setScreen("history")} onBack={() => setScreen("history")} />;
+      if (screen === "estimate") return <EsRequestApp onDone={() => setScreen("history")} onBack={() => setScreen("history")} />;
       if (screen === "mypage")   return <MyPageApp onBack={() => setScreen(mypageBackTo)} onLogout={() => setScreen("login")} />;
       if (screen === "admin")    return <AdminApp role={userRole} onLogout={() => setScreen("login")} onMyPage={() => { setMypageBackTo("admin"); setScreen("mypage"); }} />;
       return null;
