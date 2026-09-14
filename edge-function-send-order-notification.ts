@@ -112,6 +112,10 @@ const PUSH_TEXT: Record<string, { title: string; body: string }> = {
   //   ★upcoming / mention と body を分ける理由：あちらは連絡・確認、
   //     こちらは見積の到着。同じ body にすると受け手が区別できない。
   estimate:         { title: 'E-Li お見積り',   body: 'お見積りをお送りしました' },
+  // ★見積依頼の受付（2026-09-14・①見積を頼む）。宛先は order_received と同じ
+  //   get_push_targets（発注者本人＋社内）。社内がロック画面で通常の発注と
+  //   見分けられるよう title を分ける。案件情報は載せない（既存と同じ規則）。
+  estimate_requested: { title: 'E-Li 見積依頼', body: 'お見積りのご依頼を受け付けました' },
 };
 
 // リンク注記に出すドメイン。APP_URL から導出する。
@@ -207,6 +211,22 @@ const EVENTS: Record<string, {
     lines: [
       'ご希望の日程について、担当者よりご相談させていただきたい件がございます。',
       'お手数ですが、下のボタンから E-Li にてご確認のうえ、ご返信いただけますと幸いです。',
+    ],
+  },
+
+  // 見積依頼の受付。AFTER INSERT 起点（trg_eli_notify_estimate_requested）。
+  //   ★ index.html の見積モードは status='見積依頼中' を明示して INSERT する。
+  //     order_received のトリガーは IS DISTINCT FROM '見積依頼中' で除外済み。
+  //   ★ status 遷移ではなく INSERT 時点の値を照合する点は order_received と同じ。
+  estimate_requested: {
+    expectedStatus: '見積依頼中',
+    subject: 'お見積りのご依頼を受け付けました',
+    heading: 'お見積りのご依頼を受け付けました',
+    emoji: '📝',
+    lines: [
+      'この度はお見積りのご依頼をいただき、ありがとうございます。無事に受け付けいたしました。',
+      '担当者より追ってご連絡いたしますので、今しばらくお待ちください。',
+      '内容は下のボタンから E-Li にてご確認いただけます。',
     ],
   },
 };
