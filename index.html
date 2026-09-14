@@ -3782,6 +3782,7 @@ function EsRequestApp({ onDone, onBack }) {
 
 const HI_STATUS = {
   "見積依頼中":     { bg:"#e6f7f5", text:"#0f766e", border:"#14b8a6", icon:"🧾", desc:"お見積りを準備しています" },
+  "見積提出済み":   { bg:"#d5f0ec", text:"#115e59", border:"#0d9488", icon:"📄", desc:"お見積りをお送りしました。内容をご確認ください" },
   "調整中":         { bg:"#fff8e0", text:"#b07800", border:"#f5c800", icon:"🆕", desc:"24時間以内に返答します" },
   "日程確定":       { bg:"#eef3ff", text:"#2952c8", border:"#2952c8", icon:"📅", desc:"日程が確定しました" },
   "日程相談中":     { bg:"#fff3e8", text:"#c05000", border:"#f0a050", icon:"💬", desc:"日程を調整中です" },
@@ -3868,6 +3869,7 @@ function EliMessage({ orders, totalUnread=0 }) {
   const adjCount    = orders.filter(o=>o.status==="調整中").length;
   const soudanCount = orders.filter(o=>o.status==="日程相談中").length;
   const estCount    = orders.filter(o=>o.status==="見積依頼中").length;
+  const subCount    = orders.filter(o=>o.status==="見積提出済み").length;
   const unreadCount = totalUnread;
 
   let msgs = [];
@@ -3875,6 +3877,8 @@ function EliMessage({ orders, totalUnread=0 }) {
     text:`新しいメッセージが${unreadCount}件届いています！\nチャットを確認してください📩` });
   if (soudanCount>0)  msgs.push({ accent:"#ffa94d",
     text:`日程相談中の案件が${soudanCount}件あります。\nチャットでご確認・ご返答をお願いします💬` });
+  if (subCount>0)     msgs.push({ accent:"#0d9488",
+    text:`お見積りをお送りした案件が${subCount}件あります。\nご確認のうえ、施工のご依頼をお願いします📄` });
   if (estCount>0)     msgs.push({ accent:"#14b8a6",
     text:`見積依頼中の案件が${estCount}件あります。\nお見積りの準備ができたらお知らせします🧾` });
   if (adjCount>0)     msgs.push({ accent:"#ffd43b",
@@ -4523,6 +4527,12 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const [addDone,       setAddDone]       = useState(false);
   const [addStep,       setAddStep]       = useState(null); // null | "service" | "form"
   const [addServiceId,  setAddServiceId]  = useState("");
+  // 施工依頼（3b）
+  const [ctFrom,        setCtFrom]        = useState("");
+  const [ctTo,          setCtTo]          = useState("");
+  const [ctErr,         setCtErr]         = useState("");
+  const [ctSending,     setCtSending]     = useState(false);
+  const [ctDone,        setCtDone]        = useState(false);
 
   // ★sites の編集対象フィールド。住所3列（address / address_num / address_bldg）は
   //   2026-09-10 のインライン編集化で追加した。現場名(site_name)は一意制約
@@ -4586,10 +4596,12 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
   const st       = HI_STATUS[order.status] || HI_STATUS["調整中"];
   const noReq    = ["完了","キャンセル","キャンセル相談中"];
   const canCancel     = role !== "admin" && !noReq.includes(order.status);
-  // 日付の無い案件（見積依頼中・見積から昇格した直後）には出さない。日程変更フローは sch.date.split を呼ぶため。
-  // キャンセル依頼は残す。
+  // 日付の無い案件（見積依頼中・見積提出済み・見積から昇格した直後）には出さない。日程変更フローは sch.date.split を呼ぶため。
+  // キャンセル依頼は残す（見積提出済みでは「見積を断る」経路にもなる）。
   const canReschedule = role !== "admin" && !noReq.includes(order.status) && order.status !== "日程変更相談中"
-    && order.status !== "見積依頼中" && !!order.schedules?.[0]?.date;
+    && order.status !== "見積依頼中" && order.status !== "見積提出済み" && !!order.schedules?.[0]?.date;
+  // 施工依頼（3b）。見積提出済みのときだけ。管理者は顧客画面から依頼しない。
+  const canConstruct  = role !== "admin" && order.status === "見積提出済み";
 
   // order.companyId が空の場合、ログイン中ユーザーのプロフィールから取得
   useEffect(() => {
@@ -5083,6 +5095,71 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
     setModal(null); setReschedDate(""); setReschedTime(""); setReschedErr("");
   };
 
+  // ── 施工依頼（3b）──────────────────────────────────────
+  //   見積提出済み → 調整中。二度押し・状態の競合は .eq('status','見積提出済み') の更新行数で判定する。
+  //   ★.eq('status','見積提出済み') が二度押し・状態競合の唯一の防御。消さないこと。
+  //   ★通知は DB トリガー（trg_eli_notify_construction_requested）が送る。ここでは送らない。
+  //   ★開始希望は note 末尾に1行（見積依頼の期日と同じ流儀）。note は送信直前に読み直す
+  //     （画面の order.note は開いた時点の値。管理者の編集を上書きしないため）。
+  const localYmd = (d = new Date()) =>
+    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  const fmtMd = (ymd) => {
+    const [y, m, d] = ymd.split("-").map(Number);
+    const yobi = ["日","月","火","水","木","金","土"][new Date(y, m-1, d).getDay()];
+    return `${m}月${d}日（${yobi}）`;
+  };
+
+  const handleConstructionRequest = async () => {
+    if (ctSending) return;
+    const today = localYmd();
+    if (!ctFrom || !ctTo) { setCtErr("開始希望日の「はじめ」と「おわり」を両方選んでください"); return; }
+    if (ctFrom < today)   { setCtErr("「はじめ」は今日以降の日付を選んでください"); return; }
+    if (ctTo < ctFrom)    { setCtErr("「おわり」は「はじめ」と同じか、それより後の日付を選んでください"); return; }
+    setCtErr(""); setCtSending(true);
+    try {
+      // ① 入力途中の現場情報を先に保存（「💾 保存する」と同じ処理。変更履歴も残る）
+      if (dirtyRef.current) await handleSave();
+
+      // ② note を1列だけ読み直す
+      const { data: cur, error: curErr } = await sb.from('orders')
+        .select('note').eq('id', order.id).maybeSingle();
+      if (curErr) throw curErr;
+      const rangeLine = `開始希望：${ctFrom}〜${ctTo}`;
+      const newNote   = cur?.note ? `${cur.note}\n\n${rangeLine}` : rangeLine;
+
+      // ③ 条件付き UPDATE（更新行数で成否を判定する）
+      const { data: upd, error: updErr } = await sb.from('orders')
+        .update({ status:'調整中', status_changed_at:new Date().toISOString(), note:newNote })
+        .eq('id', order.id).eq('status', '見積提出済み')
+        .select('id');
+      if (updErr) throw updErr;
+      if (!upd || upd.length !== 1) {
+        setCtErr("すでに依頼済みか、状態が変わっています。一覧にもどって開き直してください。");
+        return;
+      }
+
+      // ④ E-Li メッセージ（失敗しても依頼自体は成立している）
+      const { error: msgErr } = await sb.from('messages').insert({
+        order_id:  order.id,
+        from_role: 'eli',
+        text:      `【施工のご依頼】\n施工のご依頼を受け付けました。\n開始希望：${fmtMd(ctFrom)}〜${fmtMd(ctTo)}\n担当者より作業日程をご提案いたします。`,
+        is_read:   false,
+      });
+      if (msgErr) console.error('[施工依頼 E-Li自動メッセージ]', msgErr.message);
+
+      // ⑤ 画面を更新して閲覧モードへ
+      onStatusChange && onStatusChange(order.id, "調整中", { note: newNote });
+      setCtDone(true);
+      setViewOnly(true);
+      window.scrollTo(0, 0);
+    } catch (e) {
+      console.error('[handleConstructionRequest]', e);
+      setCtErr("送信に失敗しました。通信状況をご確認のうえ、もう一度お試しください。" + (e?.message ? `（${e.message}）` : ""));
+    } finally {
+      setCtSending(false);
+    }
+  };
+
 
   return (
     <div style={{ background:C.bg, minHeight:"100vh", fontFamily:"'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif" }}>
@@ -5280,6 +5357,29 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
               </div>
             </button>
 
+            {/* 施工依頼（3b）★見積提出済みのときだけ。押すと編集モードに切り替え、先頭の施工依頼パネルへ */}
+            {ctDone && (
+              <div style={{ background:"#e8f7f1", border:"2px solid #2eaa72", borderRadius:14,
+                padding:"14px 16px", marginBottom:12, fontSize:14, fontWeight:700, color:"#1a7a50", lineHeight:1.7 }}>
+                ✅ 施工のご依頼を受け付けました。担当者より作業日程をご提案いたします。
+              </div>
+            )}
+            {canConstruct && (
+              <button onClick={()=>{ setCtErr(""); setViewOnly(false); window.scrollTo(0, 0); }}
+                style={{ width:"100%", background:"linear-gradient(135deg,#0d9488,#115e59)",
+                  border:"none", borderRadius:16, padding:"16px 20px", cursor:"pointer",
+                  display:"flex", alignItems:"center", gap:14, marginBottom:12,
+                  boxShadow:"0 4px 16px rgba(13,148,136,0.35)", textAlign:"left", fontFamily:"inherit" }}>
+                <div style={{ width:44, height:44, background:"rgba(255,255,255,0.2)",
+                  borderRadius:"50%", display:"flex", alignItems:"center",
+                  justifyContent:"center", fontSize:24, flexShrink:0 }}>🔨</div>
+                <div>
+                  <div style={{ fontSize:16, fontWeight:900, color:C.white }}>この見積で施工を依頼する</div>
+                  <div style={{ fontSize:13, color:"rgba(255,255,255,0.85)", marginTop:2 }}>開始希望日を選んでご依頼ください</div>
+                </div>
+              </button>
+            )}
+
             {(canCancel || canReschedule) && (
               <div style={{ display:"flex", gap:10, marginBottom:16 }}>
                 {canReschedule && (
@@ -5418,9 +5518,9 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
             </div>{/* /f0f4ff wrapper */}
 
             {/* ④ 追加依頼ボタン
-                ★見積依頼中では出さない。追加依頼は status '調整中' で INSERT するため、
+                ★見積依頼中・見積提出済みでは出さない。追加依頼は status '調整中' で INSERT するため、
                   見積の段階で発注扱いの行ができてしまう。 */}
-            {order.status !== "見積依頼中" && (
+            {order.status !== "見積依頼中" && order.status !== "見積提出済み" && (
             <button onClick={()=>setAddStep("service")}
               style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10,
                 width:"100%", background:"#0a1f5c",
@@ -5562,6 +5662,63 @@ function DetailScreen({ role, order, onBack, onOpenChat, onStatusChange, onChat,
 
         {!viewOnly && (
           <>
+            {/* 施工依頼パネル（3b）★見積提出済みのときだけ。開始希望日は必須、現場情報の入力は促すだけ */}
+            {canConstruct && (() => {
+              const checks = [
+                { icon:"📍", label:"住所（番地まで）", ok: !!(formData.address && formData.address_num) },
+                { icon:"🔑", label:"鍵情報",           ok: !!(formData.key_info || imagePaths.key_images.length) },
+                { icon:"🚗", label:"駐車場",           ok: !!(formData.parking_info || imagePaths.parking_images.length) },
+                { icon:"👤", label:"担当者様",         ok: !!(formData.contact_name || formData.contact_phone) },
+              ];
+              const minDate = localYmd();
+              const dateStyle = (bad) => ({ width:"100%", fontSize:14, padding:"12px 10px", borderRadius:10,
+                border:"2px solid "+(bad?C.red:C.grayL), outline:"none", color:C.navy,
+                boxSizing:"border-box", fontFamily:"inherit" });
+              return (
+                <div style={{ background:C.white, border:"2px solid #0d9488", borderRadius:18,
+                  padding:"16px 18px", marginBottom:16, boxShadow:"0 4px 16px rgba(13,148,136,0.15)" }}>
+                  <div style={{ fontSize:17, fontWeight:900, color:"#115e59", marginBottom:4 }}>🔨 施工を依頼する</div>
+                  <div style={{ fontSize:13, color:C.gray, lineHeight:1.7, marginBottom:14 }}>
+                    作業を始めたい時期を「この期間のどこかで」という幅で選んでください。
+                  </div>
+                  <div style={{ display:"flex", gap:10, marginBottom:ctErr?8:14 }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>はじめ</div>
+                      <input type="date" value={ctFrom} min={minDate}
+                        onChange={e=>{ setCtFrom(e.target.value); setCtErr(""); }}
+                        style={dateStyle(ctErr && !ctFrom)} />
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:13, color:C.gray, fontWeight:700, marginBottom:6 }}>おわり</div>
+                      <input type="date" value={ctTo} min={ctFrom || minDate}
+                        onChange={e=>{ setCtTo(e.target.value); setCtErr(""); }}
+                        style={dateStyle(ctErr && !ctTo)} />
+                    </div>
+                  </div>
+                  {ctErr && <div style={{ color:C.red, fontSize:13, fontWeight:700, marginBottom:12 }}>⚠️ {ctErr}</div>}
+                  <div style={{ background:"#f0faf8", borderRadius:12, padding:"10px 14px", marginBottom:14 }}>
+                    <div style={{ fontSize:12, color:"#115e59", fontWeight:700, marginBottom:6 }}>
+                      下の「案件情報」もご確認ください（入力すると自動保存されます）
+                    </div>
+                    {checks.map(c => (
+                      <div key={c.label} style={{ display:"flex", alignItems:"center", gap:8, fontSize:13,
+                        color: c.ok ? C.navy : "#b45309", fontWeight: c.ok ? 400 : 700, lineHeight:1.9 }}>
+                        <span>{c.icon}</span><span style={{ flex:1 }}>{c.label}</span>
+                        <span>{c.ok ? "✓ 入力済み" : "未入力"}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={handleConstructionRequest} disabled={ctSending}
+                    style={{ display:"block", width:"100%", background:"linear-gradient(135deg,#0d9488,#115e59)",
+                      color:C.white, border:"none", borderRadius:14, fontSize:16, fontWeight:800,
+                      padding:"16px 0", cursor:ctSending?"default":"pointer", fontFamily:"inherit",
+                      opacity:ctSending?0.7:1 }}>
+                    {ctSending ? "送信中..." : "🔨 この内容で施工を依頼する"}
+                  </button>
+                </div>
+              );
+            })()}
+
             {/* 案件情報・現場情報（SiteInfoSection で一元管理） */}
             <SiteInfoSection viewOnly={false}
               order={order} siteName={siteName}
@@ -6273,6 +6430,7 @@ function HistoryApp({ role, onNewOrder, onNewEstimate, onMyPage, onLogout, onGoD
   const counts = {
     全て:       orders.length,
     見積依頼中: orders.filter(o=>o.status==="見積依頼中").length,
+    見積提出済み: orders.filter(o=>o.status==="見積提出済み").length,
     調整中:     orders.filter(o=>o.status==="調整中").length,
     日程確定:   orders.filter(o=>o.status==="日程確定").length,
     日程相談中: orders.filter(o=>o.status==="日程相談中").length,
@@ -7063,10 +7221,11 @@ function MyPageApp({ onBack, onLogout }) {
     // 管理者画面
     // ═══════════════════════════════════════════════════════
 
-const AD_STATUS_LIST = ["見積依頼中","調整中","日程確定","日程相談中","キャンセル相談中","日程変更相談中","完了","キャンセル"];
+const AD_STATUS_LIST = ["見積依頼中","見積提出済み","調整中","日程確定","日程相談中","キャンセル相談中","日程変更相談中","完了","キャンセル"];
 const AD_STATUS_CHANGE_LIST = ["調整中","日程確定","日程相談中","完了","キャンセル"];
 const AD_STATUS = {
   "見積依頼中":     { bg:"#e6f7f5", text:"#0f766e", border:"#14b8a6", icon:"🧾" },
+  "見積提出済み":   { bg:"#d5f0ec", text:"#115e59", border:"#0d9488", icon:"📄" },
   "調整中":         { bg:"#fff8e0", text:"#b07800", border:"#f5c800", icon:"🆕" },
   "日程確定":       { bg:"#eef3ff", text:"#2952c8", border:"#2952c8", icon:"📅" },
   "日程相談中":     { bg:"#fff3e8", text:"#c05000", border:"#f0a050", icon:"💬" },
@@ -8143,7 +8302,10 @@ function useTimer() {
 
 // ── 共通UI ──────────────────────────────────────────────
 function ADStatusBadge({ status }) {
-  const s = AD_STATUS[status]||STATUS["調整中"];
+  // ★知らない status でも落ちないよう、AD_STATUS の「調整中」にフォールバックする。
+  //   旧コードの STATUS は未定義で、知らない status を描画すると ReferenceError で
+  //   管理者一覧ごと落ちていた（2026-09-15 に B-2026-626 で発生）。
+  const s = AD_STATUS[status]||AD_STATUS["調整中"];
   return (
     <span style={{ background:s.bg, color:s.text, border:"2px solid "+s.border,
       borderRadius:6, padding:"3px 10px", fontSize:12, fontWeight:800 }}>
@@ -8293,6 +8455,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
                       checkedIds, onToggleCheck, onDeleteSelected, unreadCounts, mentionCounts, siteChangeCounts, changeLogCounts }) {
   useTimer();
   const estCount   = orders.filter(o=>o.status==="見積依頼中").length;
+  const subCount   = orders.filter(o=>o.status==="見積提出済み").length;
   const adjCount   = orders.filter(o=>o.status==="調整中").length;
   const soudCount  = orders.filter(o=>o.status==="日程相談中").length;
   const reqCount   = orders.filter(o=>o.status==="キャンセル相談中"||o.status==="日程変更相談中").length;
@@ -8318,6 +8481,12 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
             <div style={{ background:"rgba(20,184,166,0.2)", border:"1px solid rgba(20,184,166,0.5)",
               borderRadius:7, padding:"4px 8px", fontSize:11, color:"#99f6e4", fontWeight:700 }}>
               🧾 見積依頼 {estCount}件
+            </div>
+          )}
+          {subCount>0 && (
+            <div style={{ background:"rgba(13,148,136,0.2)", border:"1px solid rgba(13,148,136,0.5)",
+              borderRadius:7, padding:"4px 8px", fontSize:11, color:"#5eead4", fontWeight:700 }}>
+              📄 見積提出済み {subCount}件
             </div>
           )}
           {adjCount>0 && (
@@ -8413,7 +8582,7 @@ function OrderList({ role, orders, selected, onSelect, filter, setFilter, search
 //   ★顧客側（:4310）と違い notified_at の絞り込みはしない。
 //     社内は通知前の見積も見える必要がある（通知ボタンを押す前だから）。
 //   ★署名URLはクリック時に発行する。初期描画では発行しない。
-function AdEstimateBox({ order }) {
+function AdEstimateBox({ order, onStatusAdvanced }) {
   const [est,      setEst]      = useState(null);   // { path, notified_at } | null
   const [loading,  setLoading]  = useState(true);
   const [upBusy,   setUpBusy]   = useState(false);
@@ -8511,7 +8680,19 @@ function AdEstimateBox({ order }) {
       // ★notified_at の再取得はしない（クエリを1本増やすだけ）。
       //   表示用にクライアント時刻を入れる。正確な値は次に開いたとき DB から来る。
       setEst(p => ({ ...(p || { path:`${order.id}/estimate.pdf` }), notified_at: new Date().toISOString() }));
-      setMsg({ kind:'ok', text:'通知しました。お客様の端末にお知らせが届きます。' });
+      if (d.status_advanced) {
+        // ★3b: RPC が 見積依頼中→見積提出済み に進めた。status_logs は RPC ではなくここで記録する。
+        //   ★supabase-js v2 はクエリを then/await するまで送信しない。.then を外さないこと。
+        sb.auth.getUser().then(({ data: { user } }) => {
+          sb.from('status_logs').insert({ order_id: order.id, changed_by: user?.email || "unknown",
+            old_status: "見積依頼中", new_status: "見積提出済み" })
+            .then(({ error }) => { if (error) console.error('[status_logs 見積提出済み]', error.message); });
+        });
+        onStatusAdvanced && onStatusAdvanced(order.id, "見積提出済み");
+        setMsg({ kind:'ok', text:'通知しました。ステータスを「見積提出済み」に変更しました。' });
+      } else {
+        setMsg({ kind:'ok', text:'通知しました。お客様の端末にお知らせが届きます。' });
+      }
     } else if (d.result === 'already_notified') {
       setEst(p => ({ ...(p || {}), notified_at: d.notified_at || (p && p.notified_at) }));
       setMsg({ kind:'warn', text:'すでに通知済みです。もう一度送るには見積を差し替えてください。' });
@@ -8609,7 +8790,7 @@ function AdEstimatePreviewBtn({ path }) {
   );
 }
 
-function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm, onSiteHistorySeen, onChangeLogsConfirm, initialTab, tabSeq }) {
+function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, onDelete, onDeleteMsg, onMarkChatRead, onUpdateMsg, onRescheduleConfirm, onSiteHistorySeen, onChangeLogsConfirm, onStatusAdvanced, initialTab, tabSeq }) {
   const [tab, setTab]             = useState("detail");
   const [chatInput, setChatInput]   = useState("");
   const [chatReplyTo, setChatReplyTo] = useState(null);
@@ -9597,7 +9778,7 @@ function DetailPanel({ role, order, chats, onAddChat, onStatusChange, onEdit, on
                   {/* 見積UI（STEP6）★フラグON かつ admin/manager のときだけ。
                       既存の rows・編集フォーム・saveSiteInfo には触れていない。 */}
                   {eliEstimateEnabled() && (role==="admin" || role==="manager") && (
-                    <AdEstimateBox order={order} />
+                    <AdEstimateBox order={order} onStatusAdvanced={onStatusAdvanced} />
                   )}
                 </div>
               );
@@ -12339,12 +12520,21 @@ function AdminApp({ role, onLogout, onMyPage }) {
       o.id.includes(search) || o.person.includes(search));
 
   const sorted = [...filtered].sort((a, b) => {
-    const priority = { "見積依頼中":0, "調整中":0, "キャンセル相談中":1, "日程変更相談中":1, "日程相談中":2, "日程確定":3, "完了":4, "キャンセル":5 };
+    const priority = { "見積依頼中":0, "調整中":0, "見積提出済み":2, "キャンセル相談中":1, "日程変更相談中":1, "日程相談中":2, "日程確定":3, "完了":4, "キャンセル":5 };
     if ((priority[a.status] ?? 9) !== (priority[b.status] ?? 9)) return (priority[a.status] ?? 9) - (priority[b.status] ?? 9);
     if (a.status === "調整中") return (a.statusChangedAt || a.createdAt) - (b.statusChangedAt || b.createdAt);
     if (a.status === "日程相談中") return a.statusChangedAt - b.statusChangedAt;
     return 0;
   });
+
+  // ★3b: 見積の通知で RPC が status を進めたときの「画面反映だけ」を行う（DB は RPC が更新済み）。
+  //   realtime の fetchOrders は orders しか更新せず、開いている selected は古いままになるため。
+  //   ★handleStatusChange を流用しない（DB への二重 UPDATE と status_logs の二重記録になる）。
+  const handleStatusAdvanced = (id, newStatus) => {
+    const nowMs = Date.now();
+    setOrders(os => os.map(o => o.id === id ? { ...o, status:newStatus, statusChangedAt:nowMs } : o));
+    setSelected(s => (s && s.id === id) ? { ...s, status:newStatus, statusChangedAt:nowMs } : s);
+  };
 
   const handleStatusChange = async (id, newStatus) => {
     // ★日付の無い案件は日程確定にしない（見積依頼など）。確定メッセージが「（未定）」になり、
@@ -12799,6 +12989,7 @@ function AdminApp({ role, onLogout, onMyPage }) {
           onRescheduleConfirm={handleRescheduleConfirm}
           onSiteHistorySeen={handleSiteHistorySeen}
           onChangeLogsConfirm={handleChangeLogsConfirm}
+          onStatusAdvanced={handleStatusAdvanced}
           initialTab={detailInitialTab} tabSeq={detailTabSeq} />
       </>)}
 
@@ -12880,8 +13071,9 @@ function AdminApp({ role, onLogout, onMyPage }) {
         setScreen("chat");
       };
 
-      const handleDetailStatusChange = (_, newStatus) => {
-        setDetailOrder(prev => ({ ...prev, status: newStatus, statusChangedAt: Date.now() }));
+      // ★3b: 第3引数 patch で status 以外の列も画面に反映できる（施工依頼で note を渡す）。
+      const handleDetailStatusChange = (_, newStatus, patch) => {
+        setDetailOrder(prev => ({ ...prev, ...(patch || {}), status: newStatus, statusChangedAt: Date.now() }));
       };
 
       if (screen === null) return (
